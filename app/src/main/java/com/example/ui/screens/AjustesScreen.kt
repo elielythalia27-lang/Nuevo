@@ -138,7 +138,7 @@ fun AjustesScreen(
     isDarkTheme: Boolean,
     onDarkThemeChange: (Boolean) -> Unit,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    onThemeModeChange: (ThemeMode, Offset?) -> Unit = { _, _ -> },
+    onThemeModeChange: (ThemeMode) -> Unit = {},
     themeColor: AppThemeColor,
     onThemeColorChange: (AppThemeColor) -> Unit,
     defaultFilterType: String,
@@ -274,18 +274,14 @@ fun AjustesScreen(
                                         val isSelected = themeMode == mode
                                         val activeBg = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
                                         val activeText = if (isSelected) MaterialTheme.colorScheme.onPrimary else textSecondary
-                                        var buttonCenter by remember { mutableStateOf(Offset.Zero) }
 
                                         Row(
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(activeBg)
-                                                .onGloballyPositioned { coordinates ->
-                                                    buttonCenter = coordinates.boundsInRoot().center
-                                                }
                                                 .clickable {
-                                                    onThemeModeChange(mode, buttonCenter)
+                                                    onThemeModeChange(mode)
                                                 }
                                                 .padding(vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically,

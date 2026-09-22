@@ -1,16 +1,13 @@
 package com.example.ui.theme
 
 import android.app.Activity
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
@@ -72,49 +69,23 @@ fun MyApplicationTheme(
         onSurfaceVariant = LightTextSecondary
     )
 
-    val rawTargetScheme = if (darkTheme) darkColorScheme else lightColorScheme
-
-    val animSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
-    val animatedPrimary by animateColorAsState(rawTargetScheme.primary, animSpec, label = "theme_primary")
-    val animatedOnPrimary by animateColorAsState(rawTargetScheme.onPrimary, animSpec, label = "theme_onPrimary")
-    val animatedPrimaryContainer by animateColorAsState(rawTargetScheme.primaryContainer, animSpec, label = "theme_primaryContainer")
-    val animatedOnPrimaryContainer by animateColorAsState(rawTargetScheme.onPrimaryContainer, animSpec, label = "theme_onPrimaryContainer")
-    val animatedSecondary by animateColorAsState(rawTargetScheme.secondary, animSpec, label = "theme_secondary")
-    val animatedOnSecondary by animateColorAsState(rawTargetScheme.onSecondary, animSpec, label = "theme_onSecondary")
-    val animatedSecondaryContainer by animateColorAsState(rawTargetScheme.secondaryContainer, animSpec, label = "theme_secondaryContainer")
-    val animatedOnSecondaryContainer by animateColorAsState(rawTargetScheme.onSecondaryContainer, animSpec, label = "theme_onSecondaryContainer")
-    val animatedBackground by animateColorAsState(rawTargetScheme.background, animSpec, label = "theme_background")
-    val animatedOnBackground by animateColorAsState(rawTargetScheme.onBackground, animSpec, label = "theme_onBackground")
-    val animatedSurface by animateColorAsState(rawTargetScheme.surface, animSpec, label = "theme_surface")
-    val animatedOnSurface by animateColorAsState(rawTargetScheme.onSurface, animSpec, label = "theme_onSurface")
-    val animatedSurfaceVariant by animateColorAsState(rawTargetScheme.surfaceVariant, animSpec, label = "theme_surfaceVariant")
-    val animatedOnSurfaceVariant by animateColorAsState(rawTargetScheme.onSurfaceVariant, animSpec, label = "theme_onSurfaceVariant")
-
-    val colorScheme = rawTargetScheme.copy(
-        primary = animatedPrimary,
-        onPrimary = animatedOnPrimary,
-        primaryContainer = animatedPrimaryContainer,
-        onPrimaryContainer = animatedOnPrimaryContainer,
-        secondary = animatedSecondary,
-        onSecondary = animatedOnSecondary,
-        secondaryContainer = animatedSecondaryContainer,
-        onSecondaryContainer = animatedOnSecondaryContainer,
-        background = animatedBackground,
-        onBackground = animatedOnBackground,
-        surface = animatedSurface,
-        onSurface = animatedOnSurface,
-        surfaceVariant = animatedSurfaceVariant,
-        onSurfaceVariant = animatedOnSurfaceVariant
-    )
+    val colorScheme = if (darkTheme) darkColorScheme else lightColorScheme
 
     val view = LocalView.current
     if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as? Activity)?.window ?: return@SideEffect
-            val insetsController = WindowCompat.getInsetsController(window, view)
-            // isAppearanceLightStatusBars: true = dark icons (light theme), false = white icons (dark theme)
-            insetsController.isAppearanceLightStatusBars = !darkTheme
-            insetsController.isAppearanceLightNavigationBars = !darkTheme
+        DisposableEffect(darkTheme) {
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                // isAppearanceLightStatusBars: true = dark icons (light theme), false = white icons (dark theme)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+
+                // Sincronizar el color de la ventana nativa (decorView) exactamente con el fondo del tema
+                // para evitar cualquier destello o parpadeo del sistema Android
+                window.decorView.setBackgroundColor(colorScheme.background.toArgb())
+            }
+            onDispose { }
         }
     }
 

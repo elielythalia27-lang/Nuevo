@@ -161,12 +161,11 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Title (prominent and refined)
+                // Title (prominent and refined with clean typography from eliel font)
                 Text(
                     text = "Download Free",
-                    fontSize = 27.sp,
-                    lineHeight = 32.sp,
-                    fontWeight = FontWeight.Black,
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
                     fontFamily = ElielFont,
                     color = titleTextColor,
                     letterSpacing = 0.5.sp,
@@ -180,38 +179,56 @@ fun HomeScreen(
                     val isListVisible = !uiState.isLoading && uiState.allPeliculas.isNotEmpty()
 
                     if (isListVisible) {
-                        Box(
-                            modifier = Modifier
-                                .height(34.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(badgeBg)
-                                .padding(horizontal = 10.dp),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = badgeBg,
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1)
+                            ),
+                            modifier = Modifier.height(42.dp)
                         ) {
-                            Text(
-                                text = uiState.allPeliculas.size.toString(),
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = uiState.allPeliculas.size.toString(),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
 
-                    // Telegram Channel Button with official Telegram logo
-                    Box(
+                    // Telegram Channel Button with official Telegram logo and modern interactive container
+                    Surface(
+                        onClick = { showTelegramDialog = true },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isDark) Color(0xFF131D33) else Color.White,
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1)
+                        ),
+                        shadowElevation = if (isDark) 1.dp else 2.dp,
                         modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .clickable { showTelegramDialog = true }
-                            .testTag("telegram_button"),
-                        contentAlignment = Alignment.Center
+                            .size(42.dp)
+                            .testTag("telegram_button")
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.telegram),
-                            contentDescription = "Canal de Telegram",
-                            modifier = Modifier.size(34.dp)
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.telegram),
+                                contentDescription = "Canal de Telegram",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
             }
