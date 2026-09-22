@@ -1,0 +1,93 @@
+name: Build and Release Android APKs
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compilar APKs (Release y Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar código del repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Java 17 (Temurin) con caché Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Asignar permisos de ejecución a gradlew
+        run: chmod +x gradlew
+
+      - name: Preparar archivo .env para Secrets Gradle Plugin
+        run: |
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            touch .env
+          fi
+
+      - name: Preparar clave de firma base
+        run: |
+          if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=DownloadFree,O=Android,C=US"
+          fi
+
+      - name: Compilar APKs (Release y Debug)
+        run: ./gradlew assembleRelease assembleDebug --no-daemon --stacktrace
+
+      - name: Organizar archivos APK
+        run: |
+          mkdir -p build/dist
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} build/dist/DownloadFree-release.apk \; || true
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} build/dist/DownloadFree-debug.apk \; || true
+          ls -lh build/dist/
+
+      - name: Subir APK Release como Artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: DownloadFree-release
+          path: build/dist/DownloadFree-release.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Subir APK Debug como Artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: DownloadFree-debug
+          path: build/dist/DownloadFree-debug.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publicar GitHub Release con APKs
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/dist/DownloadFree-release.apk
+            build/dist/DownloadFree-debug.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

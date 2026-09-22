@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+
+    <!-- 1. Luxurious Dark Rounded Tile (Squircle Canvas) -->
+    <path
+        android:pathData="M36,8 L92,8 C112,8 120,16 120,36 L120,92 C120,112 112,120 92,120 L36,120 C16,120 8,112 8,92 L8,36 C8,16 16,8 36,8 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="12"
+                android:startY="10"
+                android:endX="116"
+                android:endY="118"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#141E33" />
+                <item android:offset="0.45" android:color="#0A1020" />
+                <item android:offset="1.0" android:color="#03060C" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 2. Subtle Precision Neon Border Rim -->
+    <path
+        android:pathData="M36,8 L92,8 C112,8 120,16 120,36 L120,92 C120,112 112,120 92,120 L36,120 C16,120 8,112 8,92 L8,36 C8,16 16,8 36,8 Z"
+        android:strokeWidth="1.8">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="8"
+                android:startY="8"
+                android:endX="120"
+                android:endY="120"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#5038BDF8" />
+                <item android:offset="0.4" android:color="#30E50914" />
+                <item android:offset="0.8" android:color="#40818CF8" />
+                <item android:offset="1.0" android:color="#15FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3. Ambient Volumetric Glow Core -->
+    <path
+        android:pathData="M64,64 m-46,0 a46,46 0 1,1 92,0 a46,46 0 1,1 -92,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="64"
+                android:centerY="60"
+                android:gradientRadius="48"
+                android:type="radial">
+                <item android:offset="0.0" android:color="#3AE50914" />
+                <item android:offset="0.55" android:color="#2200E5FF" />
+                <item android:offset="1.0" android:color="#00000000" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 4. Left Modern Vertical Film Strip Bar -->
+    <path
+        android:pathData="M24,32 C24,28 27,25 31,25 L39,25 C43,25 46,28 46,32 L46,86 C46,90 43,93 39,93 L31,93 C27,93 24,90 24,86 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="24"
+                android:startY="25"
+                android:endX="46"
+                android:endY="93"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF1744" />
+                <item android:offset="0.5" android:color="#9C27B0" />
+                <item android:offset="1.0" android:color="#1A237E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Sprocket Hole 1 -->
+    <path
+        android:pathData="M28,31 H36 V37 H28 Z"
+        android:fillColor="#080D18" />
+    <!-- Sprocket Hole 2 -->
+    <path
+        android:pathData="M28,45 H36 V51 H28 Z"
+        android:fillColor="#080D18" />
+    <!-- Sprocket Hole 3 -->
+    <path
+        android:pathData="M28,59 H36 V65 H28 Z"
+        android:fillColor="#080D18" />
+    <!-- Sprocket Hole 4 -->
+    <path
+        android:pathData="M28,73 H36 V79 H28 Z"
+        android:fillColor="#080D18" />
+
+    <!-- 5. 3D Glossy Ruby Play Triangle -->
+    <path
+        android:pathData="M48,34 C45.5,32.5 42,34.2 42,37.2 L42,82.8 C42,85.8 45.5,87.5 48,86.0 L86.5,63.2 C89.0,61.7 89.0,58.3 86.5,56.8 Z"
+        android:strokeWidth="2.5">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="42"
+                android:startY="32"
+                android:endX="89"
+                android:endY="87"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFAEB9" />
+                <item android:offset="0.3" android:color="#FF1744" />
+                <item android:offset="0.8" android:color="#B71C1C" />
+                <item android:offset="1.0" android:color="#7F0000" />
+            </gradient>
+        </aapt:attr>
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="42"
+                android:startY="34"
+                android:endX="88"
+                android:endY="86"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF2A55" />
+                <item android:offset="0.35" android:color="#E50914" />
+                <item android:offset="0.75" android:color="#A00015" />
+                <item android:offset="1.0" android:color="#5B000C" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Gloss Highlight Flare on Top Play Edge -->
+    <path
+        android:pathData="M45,39 L45,58 C52,53 62,51 72,56 L51,40 C48,38 45,39 45,39 Z"
+        android:fillColor="#55FFFFFF" />
+
+    <!-- 6. Downward High-Speed Download Arrow (Electric Cyan) -->
+    <!-- Arrow Stem -->
+    <path
+        android:pathData="M59,62 H69 V84 H59 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="59"
+                android:startY="62"
+                android:endX="69"
+                android:endY="84"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="1.0" android:color="#38BDF8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Arrow Head Pointer -->
+    <path
+        android:pathData="M50,82 L64,98 L78,82 H71 V82 H57 V82 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="50"
+                android:startY="82"
+                android:endX="78"
+                android:endY="98"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="0.5" android:color="#38BDF8" />
+                <item android:offset="1.0" android:color="#0284C7" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Sleek Neon Base Tray -->
+    <path
+        android:pathData="M52,104 H76"
+        android:strokeWidth="3.5"
+        android:strokeColor="#38BDF8"
+        android:strokeLineCap="round" />
+
+    <!-- Tech Speed Sparkle / Glint -->
+    <path
+        android:pathData="M96,38 L98,44 L104,46 L98,48 L96,54 L94,48 L88,46 L94,44 Z"
+        android:fillColor="#38BDF8" />
+</vector>
