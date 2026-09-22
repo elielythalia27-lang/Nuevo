@@ -243,448 +243,391 @@ fun AjustesScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Section 1: Ordenación del Catálogo
+            // Header Hero: Identidad de la App
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "ORDENAR POR", icon = Icons.Default.Sort)
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardBg),
-                        border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Criterio de ordenación para el catálogo de títulos",
-                                fontSize = 13.sp,
-                                color = textSecondary,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            SortOption.entries.forEach { option ->
-                                val isSelected = sortOption == option
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { onSortOptionChange(option) }
-                                        .padding(vertical = 6.dp, horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = isSelected,
-                                        onClick = { onSortOptionChange(option) },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = MaterialTheme.colorScheme.primary,
-                                            unselectedColor = textSecondary
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = option.displayName,
-                                        fontSize = 13.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) textPrimary else textSecondary
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Section: Diseño y Vista del Catálogo
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "VISTA DEL CATÁLOGO", icon = Icons.Default.GridView)
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardBg),
-                        border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                text = "Disposición de elementos en la pantalla principal",
-                                fontSize = 13.sp,
-                                color = textSecondary
-                            )
-
-                            val layoutOptions = listOf(
-                                Triple("GRID_2", "Cuadrícula (2 columnas)", Icons.Default.GridView),
-                                Triple("GRID_3", "Cuadrícula compacta (3 columnas)", Icons.Default.ViewModule),
-                                Triple("LIST", "Lista detallada", Icons.Default.ViewAgenda)
-                            )
-
-                            layoutOptions.forEach { (mode, label, icon) ->
-                                val isSelected = catalogLayoutMode == mode
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.12f)
-                                            else itemBg
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .clickable { onCatalogLayoutModeChange(mode) }
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else textSecondary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Text(
-                                            text = label,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) textPrimary else textSecondary
-                                        )
-                                    }
-                                    RadioButton(
-                                        selected = isSelected,
-                                        onClick = { onCatalogLayoutModeChange(mode) },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = MaterialTheme.colorScheme.primary,
-                                            unselectedColor = textSecondary
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Section 2: Modo Visual (Sistema / Oscuro / Claro)
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "TEMA", icon = Icons.Default.BrightnessAuto)
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardBg),
-                        border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                text = "Elige la apariencia visual de la interfaz",
-                                fontSize = 13.sp,
-                                color = textSecondary
-                            )
-
-                            val modes = listOf(
-                                Triple(ThemeMode.SYSTEM, "Predeterminado del sistema", Icons.Default.BrightnessAuto),
-                                Triple(ThemeMode.DARK, "Oscuro", Icons.Default.DarkMode),
-                                Triple(ThemeMode.LIGHT, "Claro", Icons.Default.LightMode)
-                            )
-
-                            modes.forEach { (mode, label, icon) ->
-                                val isSelected = themeMode == mode
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.12f)
-                                            else itemBg
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .clickable {
-                                            val newIsDark = when (mode) {
-                                                ThemeMode.SYSTEM -> isDarkTheme
-                                                ThemeMode.DARK -> true
-                                                ThemeMode.LIGHT -> false
-                                            }
-                                            onThemeModeChange(mode)
-                                        }
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else textSecondary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Text(
-                                            text = label,
-                                            fontSize = 14.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) textPrimary else textSecondary
-                                        )
-                                    }
-                                    RadioButton(
-                                        selected = isSelected,
-                                        onClick = {
-                                            onThemeModeChange(mode)
-                                        },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = MaterialTheme.colorScheme.primary,
-                                            unselectedColor = textSecondary
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Section 3: Color de Acento
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "COLOR DE ÉNFASIS", icon = Icons.Default.Palette)
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardBg),
-                        border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    border = BorderStroke(1.dp, cardBorder),
+                    elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showColorPickerDialog = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            shadowElevation = 3.dp,
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.size(54.dp)
                         ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.icono),
+                                    contentDescription = "Logo Download Free",
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                modifier = Modifier.weight(1f)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                val onPrimaryColor = remember(themeColor.primary) {
-                                    themeColor.primary.contrastingTextColor()
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            Brush.radialGradient(
-                                                colors = listOf(
-                                                    themeColor.primary,
-                                                    themeColor.primaryVariantForTheme(isDarkTheme)
-                                                )
-                                            )
-                                        )
-                                        .border(
-                                            2.dp,
-                                            if (isDarkTheme) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.2f),
-                                            CircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = onPrimaryColor,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    val currentHex = remember(themeColor.primary) {
-                                        val r = (themeColor.primary.red * 255).toInt().coerceIn(0, 255)
-                                        val g = (themeColor.primary.green * 255).toInt().coerceIn(0, 255)
-                                        val b = (themeColor.primary.blue * 255).toInt().coerceIn(0, 255)
-                                        String.format("#%02X%02X%02X", r, g, b)
-                                    }
-                                    Text(
-                                        text = "Color de énfasis",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = textPrimary
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = currentHex,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(10.dp))
-
-                            Button(
-                                onClick = { showColorPickerDialog = true },
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Elegir",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
+                                    text = "Download Free",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp,
+                                    color = textPrimary
                                 )
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.22f else 0.12f),
+                                    modifier = Modifier.padding(top = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "v1.0 Oficial",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "Catálogo multimedia, streaming y descargas",
+                                fontSize = 12.sp,
+                                color = textSecondary
+                            )
                         }
                     }
                 }
             }
 
-            // Section 4: Gestor de Descargas
+            // Section 1: Apariencia y Personalización
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "DESCARGAS", icon = Icons.Default.Download)
+                    SettingsCategoryHeader(title = "APARIENCIA Y TEMA", icon = Icons.Default.Palette)
                     Card(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
                         elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            // Wi-Fi Only
-                            SettingsSwitchRow(
-                                icon = Icons.Default.Wifi,
-                                title = "Transferencias únicamente por Wi-Fi",
-                                subtitle = "Restringe las descargas a redes Wi-Fi para optimizar los datos móviles.",
-                                checked = wifiOnlyDownloads,
-                                isDarkTheme = isDarkTheme,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
-                                onCheckedChange = {
-                                    wifiOnlyDownloads = it
-                                    AppToastManager.show(
-                                        if (it) "Descargas restringidas a redes Wi-Fi" else "Descargas permitidas en cualquier conexión",
-                                        ToastType.INFO
-                                    )
-                                }
-                            )
+                            // Selector de Tema Segmentado
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Modo de visualización",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textPrimary
+                                )
 
-                            HorizontalDivider(color = dividerColor)
-
-                            // Concurrent downloads limit (1 to 5) with professional Slider/Seekbar
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(38.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.2f else 0.12f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Download,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                        Column {
-                                            Text(
-                                                text = "Descargas simultáneas",
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 14.sp,
-                                                color = textPrimary
-                                            )
-                                            Text(
-                                                text = "Límite de descargas activas a la vez",
-                                                fontSize = 11.5.sp,
-                                                color = textSecondary
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Slider(
-                                    value = maxConcurrentDownloads.toFloat(),
-                                    onValueChange = { onMaxConcurrentDownloadsChange(it.toInt().coerceIn(1, 5)) },
-                                    valueRange = 1f..5f,
-                                    steps = 3,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = MaterialTheme.colorScheme.primary,
-                                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.2f else 0.15f),
-                                        activeTickColor = MaterialTheme.colorScheme.onPrimary,
-                                        inactiveTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(24.dp)
+                                val modes = listOf(
+                                    Triple(ThemeMode.SYSTEM, "Sistema", Icons.Default.BrightnessAuto),
+                                    Triple(ThemeMode.DARK, "Oscuro", Icons.Default.DarkMode),
+                                    Triple(ThemeMode.LIGHT, "Claro", Icons.Default.LightMode)
                                 )
 
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(itemBg)
+                                        .padding(4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    (1..5).forEach { num ->
-                                        val isSelected = num == maxConcurrentDownloads
-                                        Text(
-                                            text = "$num",
-                                            fontSize = 11.5.sp,
-                                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else textSecondary,
-                                            modifier = Modifier.clickable { onMaxConcurrentDownloadsChange(num) }
-                                        )
+                                    modes.forEach { (mode, label, icon) ->
+                                        val isSelected = themeMode == mode
+                                        val activeBg = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                        val activeText = if (isSelected) MaterialTheme.colorScheme.onPrimary else textSecondary
+
+                                        Row(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(activeBg)
+                                                .clickable {
+                                                    val newIsDark = when (mode) {
+                                                        ThemeMode.SYSTEM -> isDarkTheme
+                                                        ThemeMode.DARK -> true
+                                                        ThemeMode.LIGHT -> false
+                                                    }
+                                                    onThemeModeChange(mode)
+                                                }
+                                                .padding(vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = label,
+                                                tint = activeText,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = label,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = activeText
+                                            )
+                                        }
                                     }
                                 }
                             }
 
                             HorizontalDivider(color = dividerColor)
 
-                            // Carpeta de descargas
+                            // Color de Énfasis
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { showColorPickerDialog = true }
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    val onPrimaryColor = remember(themeColor.primary) {
+                                        themeColor.primary.contrastingTextColor()
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                Brush.radialGradient(
+                                                    colors = listOf(
+                                                        themeColor.primary,
+                                                        themeColor.primaryVariantForTheme(isDarkTheme)
+                                                    )
+                                                )
+                                            )
+                                            .border(
+                                                2.dp,
+                                                if (isDarkTheme) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.15f),
+                                                CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = onPrimaryColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        val currentHex = remember(themeColor.primary) {
+                                            val r = (themeColor.primary.red * 255).toInt().coerceIn(0, 255)
+                                            val g = (themeColor.primary.green * 255).toInt().coerceIn(0, 255)
+                                            val b = (themeColor.primary.blue * 255).toInt().coerceIn(0, 255)
+                                            String.format("#%02X%02X%02X", r, g, b)
+                                        }
+                                        Text(
+                                            text = "Color de énfasis",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = currentHex,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = textSecondary
+                                        )
+                                    }
+                                }
+
+                                Button(
+                                    onClick = { showColorPickerDialog = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Palette,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Elegir",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // Disposición del Catálogo
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    text = "Vista del catálogo principal",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textPrimary
+                                )
+
+                                val layoutOptions = listOf(
+                                    Triple("GRID_2", "Cuadrícula (2)", Icons.Default.GridView),
+                                    Triple("GRID_3", "Compacta (3)", Icons.Default.ViewModule),
+                                    Triple("LIST", "Lista", Icons.Default.ViewAgenda)
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    layoutOptions.forEach { (mode, label, icon) ->
+                                        val isSelected = catalogLayoutMode == mode
+                                        val activeBorder = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                        val activeBg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.12f) else itemBg
+
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(activeBg)
+                                                .border(1.dp, activeBorder, RoundedCornerShape(12.dp))
+                                                .clickable { onCatalogLayoutModeChange(mode) }
+                                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = label,
+                                                tint = if (isSelected) MaterialTheme.colorScheme.primary else textSecondary,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = label,
+                                                fontSize = 11.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) textPrimary else textSecondary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section 2: Criterio de Ordenación
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SettingsCategoryHeader(title = "ORDENAR CATÁLOGO", icon = Icons.Default.Sort)
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        border = BorderStroke(1.dp, cardBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Elige el criterio para listar títulos en pantalla",
+                                fontSize = 12.5.sp,
+                                color = textSecondary,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            SortOption.entries.forEach { option ->
+                                val isSelected = sortOption == option
+                                val activeBorder = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                val activeBg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.16f else 0.10f) else itemBg
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(activeBg)
+                                        .border(1.dp, activeBorder, RoundedCornerShape(12.dp))
+                                        .clickable { onSortOptionChange(option) }
+                                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = option.displayName,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) textPrimary else textSecondary
+                                    )
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section 3: Gestor de Descargas y Almacenamiento
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SettingsCategoryHeader(title = "DESCARGAS Y ALMACENAMIENTO", icon = Icons.Default.Download)
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        border = BorderStroke(1.dp, cardBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Ubicación de descargas
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable { showFolderDialog = true }
-                                    .padding(vertical = 4.dp),
+                                    .padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -695,9 +638,9 @@ fun AjustesScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.2f else 0.12f)),
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -734,17 +677,177 @@ fun AjustesScreen(
                                     Text("Cambiar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // Límite de descargas simultáneas
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Download,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Column {
+                                            Text(
+                                                text = "Descargas simultáneas",
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 14.sp,
+                                                color = textPrimary
+                                            )
+                                            Text(
+                                                text = "$maxConcurrentDownloads activas al mismo tiempo",
+                                                fontSize = 12.sp,
+                                                color = textSecondary
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Slider(
+                                    value = maxConcurrentDownloads.toFloat(),
+                                    onValueChange = { onMaxConcurrentDownloadsChange(it.toInt().coerceIn(1, 5)) },
+                                    valueRange = 1f..5f,
+                                    steps = 3,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.2f else 0.15f),
+                                        activeTickColor = MaterialTheme.colorScheme.onPrimary,
+                                        inactiveTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(24.dp)
+                                )
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    (1..5).forEach { num ->
+                                        val isSelected = num == maxConcurrentDownloads
+                                        Text(
+                                            text = "$num",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else textSecondary,
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .clickable { onMaxConcurrentDownloadsChange(num) }
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // Wi-Fi Only Switch
+                            SettingsSwitchRow(
+                                icon = Icons.Default.Wifi,
+                                title = "Transferencias únicamente por Wi-Fi",
+                                subtitle = "Restringe descargas a redes Wi-Fi para no consumir tus datos móviles.",
+                                checked = wifiOnlyDownloads,
+                                isDarkTheme = isDarkTheme,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                onCheckedChange = {
+                                    wifiOnlyDownloads = it
+                                    AppToastManager.show(
+                                        if (it) "Descargas restringidas a redes Wi-Fi" else "Descargas permitidas en cualquier conexión",
+                                        ToastType.INFO
+                                    )
+                                }
+                            )
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // Limpiar Caché
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CleaningServices,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Text(
+                                            text = "Memoria caché",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Text(
+                                            text = "Elimina archivos temporales y miniaturas",
+                                            fontSize = 12.sp,
+                                            color = textSecondary
+                                        )
+                                    }
+                                }
+
+                                Button(
+                                    onClick = { showClearCacheDialog = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0),
+                                        contentColor = textPrimary
+                                    )
+                                ) {
+                                    Text("Limpiar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Section 5: Reproductor de Video
+            // Section 4: Reproductor de Video
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsCategoryHeader(title = "REPRODUCTOR DE VIDEO", icon = Icons.Default.PlayCircleOutline)
                     Card(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
                         elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
@@ -754,23 +857,25 @@ fun AjustesScreen(
                             SettingsSwitchRow(
                                 icon = Icons.Default.Memory,
                                 title = "Aceleración por hardware",
-                                subtitle = "Mejora el rendimiento y reduce el uso de batería durante la reproducción.",
+                                subtitle = "Mejora fluidez y reduce consumo de batería en reproducción.",
                                 checked = hardwareAcceleration,
                                 isDarkTheme = isDarkTheme,
                                 textPrimary = textPrimary,
                                 textSecondary = textSecondary,
                                 onCheckedChange = { hardwareAcceleration = it }
                             )
+                            HorizontalDivider(color = dividerColor)
                             SettingsSwitchRow(
                                 icon = Icons.Default.TouchApp,
                                 title = "Gestos en pantalla",
-                                subtitle = "Control de brillo, volumen y avance rápido con deslizamientos y doble toque.",
+                                subtitle = "Control táctil de brillo, volumen y avance con doble toque.",
                                 checked = screenGestures,
                                 isDarkTheme = isDarkTheme,
                                 textPrimary = textPrimary,
                                 textSecondary = textSecondary,
                                 onCheckedChange = { screenGestures = it }
                             )
+                            HorizontalDivider(color = dividerColor)
                             SettingsSwitchRow(
                                 icon = Icons.Default.PlayCircleOutline,
                                 title = "Recordar posición",
@@ -786,64 +891,12 @@ fun AjustesScreen(
                 }
             }
 
-            // Section 6: Almacenamiento
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "ALMACENAMIENTO", icon = Icons.Default.CleaningServices)
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardBg),
-                        border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CleaningServices,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Borrar caché",
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp,
-                                        color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Libera espacio eliminando archivos temporales e imágenes en caché.",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = { showClearCacheDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(text = "Borrar caché", color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Section 7: Comunidad y Soporte
+            // Section 5: Comunidad y Soporte
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsCategoryHeader(title = "COMUNIDAD Y SOPORTE", icon = Icons.Default.Info)
                     Card(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
                         elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
@@ -853,13 +906,12 @@ fun AjustesScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            // Telegram Canal Oficial
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(itemBg)
-                                    .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                                    .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
                                     .clickable {
                                         try {
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/+cOVZ_V9JPTdjN2Ux"))
@@ -868,20 +920,20 @@ fun AjustesScreen(
                                             AppToastManager.show("No fue posible abrir el enlace en el navegador", ToastType.ERROR)
                                         }
                                     }
-                                    .padding(12.dp),
+                                    .padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 Image(
                                     painter = painterResource(id = R.drawable.telegram),
                                     contentDescription = "Telegram Oficial",
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(38.dp)
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Canal oficial",
+                                        text = "Canal Oficial de Telegram",
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
+                                        fontSize = 14.5.sp,
                                         color = textPrimary
                                     )
                                     Text(
@@ -890,6 +942,12 @@ fun AjustesScreen(
                                         color = textSecondary
                                     )
                                 }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
@@ -974,7 +1032,7 @@ private fun SettingsCategoryHeader(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(top = 8.dp, start = 4.dp)
+        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp)
     ) {
         Icon(
             imageVector = icon,
@@ -984,10 +1042,10 @@ private fun SettingsCategoryHeader(
         )
         Text(
             text = title,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.primary,
-            letterSpacing = 1.sp
+            letterSpacing = 1.1.sp
         )
     }
 }
@@ -1006,14 +1064,22 @@ private fun SettingsSwitchRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,

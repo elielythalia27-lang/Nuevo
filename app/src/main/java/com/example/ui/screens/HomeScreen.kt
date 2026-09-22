@@ -249,9 +249,10 @@ fun HomeScreen(
                 }
             }
 
-            // Main feed with Lottie-powered pull-to-refresh animation
+            // Main feed with pull-to-refresh (active only when items exist so it doesn't float over initial skeletons)
+            val isPullRefreshing = uiState.isLoading && uiState.allPeliculas.isNotEmpty()
             LottiePullToRefreshBox(
-                isRefreshing = uiState.isLoading,
+                isRefreshing = isPullRefreshing,
                 onRefresh = onRefresh,
                 isDarkTheme = isDark,
                 modifier = Modifier

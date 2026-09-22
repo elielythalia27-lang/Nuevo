@@ -26,8 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
-import androidx.compose.material3.pulltorefresh.pullToRefreshIndicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -71,16 +71,12 @@ fun LottiePullToRefreshBox(
         state = state,
         modifier = modifier,
         indicator = {
-            LottiePullToRefreshIndicator(
+            PullToRefreshDefaults.Indicator(
                 state = state,
                 isRefreshing = isRefreshing,
-                isDarkTheme = isDarkTheme,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .pullToRefreshIndicator(
-                        state = state,
-                        isRefreshing = isRefreshing
-                    )
+                modifier = Modifier.align(Alignment.TopCenter),
+                containerColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFFFFFFF),
+                color = MaterialTheme.colorScheme.primary
             )
         },
         content = content

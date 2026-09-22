@@ -3,12 +3,19 @@ package com.example
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.background
@@ -16,18 +23,17 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -197,23 +203,44 @@ fun MainAppNavigation(
             }
 
             composable("main") {
-                val pagerState = rememberPagerState(
-                    initialPage = 0,
-                    pageCount = { 3 }
-                )
+                var selectedPage by rememberSaveable { mutableIntStateOf(0) }
+
+                BackHandler(enabled = selectedPage != 0) {
+                    selectedPage = 0
+                }
 
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
                 ) {
-                    HorizontalPager(
-                        state = pagerState,
-                        beyondViewportPageCount = 1,
-                        flingBehavior = PagerDefaults.flingBehavior(
-                            state = pagerState,
-                            snapAnimationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
-                        ),
+                    AnimatedContent(
+                        targetState = selectedPage,
+                        transitionSpec = {
+                            val slideDistance = 320
+                            if (targetState > initialState) {
+                                (slideInHorizontally(
+                                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                                    initialOffsetX = { slideDistance }
+                                ) + fadeIn(animationSpec = tween(durationMillis = 280))).togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                                        targetOffsetX = { -slideDistance }
+                                    ) + fadeOut(animationSpec = tween(durationMillis = 220))
+                                )
+                            } else {
+                                (slideInHorizontally(
+                                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                                    initialOffsetX = { -slideDistance }
+                                ) + fadeIn(animationSpec = tween(durationMillis = 280))).togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                                        targetOffsetX = { slideDistance }
+                                    ) + fadeOut(animationSpec = tween(durationMillis = 220))
+                                )
+                            }
+                        },
+                        label = "screen_transition",
                         modifier = Modifier.fillMaxSize()
                     ) { pageIndex ->
                         when (pageIndex) {
@@ -238,12 +265,7 @@ fun MainAppNavigation(
                                     },
                                     onRefresh = { viewModel.loadPeliculas(forceRefresh = true) },
                                     onOpenSettings = {
-                                        coroutineScope.launch {
-                                            pagerState.animateScrollToPage(
-                                                page = 2,
-                                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                                            )
-                                        }
+                                        selectedPage = 2
                                     },
                                     onDismissContinueWatching = { viewModel.clearContinueWatching() },
                                     onLayoutModeChange = { viewModel.setCatalogLayoutMode(it) }
@@ -277,12 +299,7 @@ fun MainAppNavigation(
                                         viewModel.forceStartPendingDownload(download)
                                     },
                                     onExploreClick = {
-                                        coroutineScope.launch {
-                                            pagerState.animateScrollToPage(
-                                                page = 0,
-                                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                                            )
-                                        }
+                                        selectedPage = 0
                                     },
                                     isDarkTheme = isDark,
                                     onRequestPermissions = {
@@ -330,14 +347,9 @@ fun MainAppNavigation(
                     // Floating Modern Navigation Pill Bar over the content
                     val downCount = uiState.downloads.count { it.status == DownloadStatus.DOWNLOADING }
                     AppBottomNav(
-                        currentPage = pagerState.currentPage,
+                        currentPage = selectedPage,
                         onNavigate = { targetPage ->
-                            coroutineScope.launch {
-                                pagerState.animateScrollToPage(
-                                    page = targetPage,
-                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                                )
-                            }
+                            selectedPage = targetPage
                         },
                         downloadsCount = downCount,
                         isDarkTheme = isDark,
