@@ -224,31 +224,38 @@ fun FilterBar(
                 )
             )
 
-            val youtubeRed = Color(0xFFE50914)
+            val youtubeRed = Color(0xFFEF4444)
+            val isYouTubeSelected = selectedType == "VIDEO"
 
-            // Chip: YouTube - Always kept with red background and white text as requested by user
+            // Chip: YouTube - Dynamic styling matching YouTube branding (Red icon when unselected, full Red pill when selected)
             FilterChip(
-                selected = selectedType == "VIDEO",
+                selected = isYouTubeSelected,
                 onClick = { onTypeSelected("VIDEO") },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.PlayCircle,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = Color.White
+                        tint = if (isYouTubeSelected) Color.White else youtubeRed
                     )
                 },
-                label = { Text("YouTube", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                label = {
+                    Text(
+                        text = "YouTube",
+                        fontSize = 12.sp,
+                        fontWeight = if (isYouTubeSelected) FontWeight.Bold else FontWeight.SemiBold
+                    )
+                },
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(
-                    width = if (selectedType == "VIDEO") 2.dp else 1.dp,
-                    color = if (selectedType == "VIDEO") Color.White else Color.Transparent
+                    1.dp,
+                    if (isYouTubeSelected) Color.Transparent else if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
                 ),
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = youtubeRed,
                     selectedLabelColor = Color.White,
-                    containerColor = youtubeRed,
-                    labelColor = Color.White
+                    containerColor = chipBg,
+                    labelColor = chipText
                 )
             )
         }

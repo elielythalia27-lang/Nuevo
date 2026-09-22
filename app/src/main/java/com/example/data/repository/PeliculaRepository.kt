@@ -39,14 +39,50 @@ class PeliculaRepository(
     val downloadFolderName: Flow<String> = preferences.downloadFolderName
     val downloadFolderPath: Flow<String> = preferences.downloadFolderPath
 
-    fun getPeliculasFlow(forceRefresh: Boolean = false): Flow<Resource<List<Pelicula>>> = flow {
-        // Obtenemos primero la lista en caché para mostrarla instantáneamente sin bloquear en shimmer
-        val cached = try {
-            preferences.cachedPeliculas.first()
+    private val diskCacheFile: File by lazy {
+        File(context.filesDir, "catalog_cache_v2.json")
+    }
+
+    private fun readDiskCache(): List<Pelicula> {
+        return try {
+            if (diskCacheFile.exists() && diskCacheFile.length() > 0) {
+                val json = diskCacheFile.readText()
+                val type = object : com.google.gson.reflect.TypeToken<List<Pelicula>>() {}.type
+                com.google.gson.Gson().fromJson<List<Pelicula>>(json, type) ?: emptyList()
+            } else {
+                emptyList()
+            }
         } catch (_: Exception) {
             emptyList()
         }
+    }
 
+    private fun writeDiskCache(list: List<Pelicula>) {
+        try {
+            val json = com.google.gson.Gson().toJson(list)
+            val temp = File(context.filesDir, "catalog_cache_v2.tmp")
+            temp.writeText(json)
+            temp.renameTo(diskCacheFile)
+        } catch (_: Exception) {
+            // ignore
+        }
+    }
+
+    fun getPeliculasFlow(forceRefresh: Boolean = false): Flow<Resource<List<Pelicula>>> = flow {
+        // Obtenemos primero la lista en caché (disco o DataStore)
+        val diskList = readDiskCache()
+        val cached = if (diskList.isNotEmpty()) {
+            diskList
+        } else {
+            try {
+                preferences.cachedPeliculas.first()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        // Si tenemos catálogo en caché y no se solicitó forzar refresco total,
+        // lo emitimos inmediatamente para mostrarlo en el primer fotograma sin esperas
         if (cached.isNotEmpty() && !forceRefresh) {
             emit(Resource.Success(cached, isOffline = false))
         } else {
@@ -58,16 +94,23 @@ class PeliculaRepository(
             val remoteList = SecureEndpointManager.fetchAndDecryptPeliculas()
 
             if (remoteList.isNotEmpty()) {
+                writeDiskCache(remoteList)
                 preferences.saveCachedPeliculas(remoteList)
                 emit(Resource.Success(remoteList, isOffline = false))
             } else if (cached.isNotEmpty()) {
                 emit(Resource.Success(cached, isOffline = true))
             } else {
-                emit(Resource.Error("No se pudo obtener el catálogo del servidor"))
+                val fallback = readDiskCache()
+                if (fallback.isNotEmpty()) {
+                    emit(Resource.Success(fallback, isOffline = true))
+                } else {
+                    emit(Resource.Error("No se pudo obtener el catálogo del servidor"))
+                }
             }
         } catch (e: Exception) {
-            if (cached.isNotEmpty()) {
-                emit(Resource.Success(cached, isOffline = true))
+            val fallback = if (cached.isNotEmpty()) cached else readDiskCache()
+            if (fallback.isNotEmpty()) {
+                emit(Resource.Success(fallback, isOffline = true))
             } else {
                 emit(Resource.Error("Sin conexión con el catálogo de películas: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
             }

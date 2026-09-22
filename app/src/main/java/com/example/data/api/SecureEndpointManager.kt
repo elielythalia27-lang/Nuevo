@@ -48,8 +48,10 @@ object SecureEndpointManager {
 
     private val httpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(4, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .callTimeout(8, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(false)
             .followRedirects(true)
             .build()
     }

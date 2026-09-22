@@ -190,12 +190,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                     is Resource.Error -> {
                         _uiState.update { state ->
-                            state.copy(
-                                isLoading = false,
-                                errorMessage = resource.message,
-                                allPeliculas = emptyList(),
-                                filteredPeliculas = emptyList()
-                            )
+                            if (state.allPeliculas.isNotEmpty()) {
+                                // Conservamos las películas cargadas previamente en caché
+                                state.copy(
+                                    isLoading = false,
+                                    isDataOffline = true,
+                                    errorMessage = null
+                                )
+                            } else {
+                                state.copy(
+                                    isLoading = false,
+                                    errorMessage = resource.message,
+                                    allPeliculas = emptyList(),
+                                    filteredPeliculas = emptyList()
+                                )
+                            }
                         }
                     }
                 }

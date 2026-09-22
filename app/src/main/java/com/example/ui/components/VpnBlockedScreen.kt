@@ -2,6 +2,12 @@ package com.example.ui.components
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -33,11 +39,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +75,51 @@ fun VpnBlockedScreen(
     val secondaryBtnBorder = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
     val secondaryBtnText = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
 
+    val infiniteTransition = rememberInfiniteTransition(label = "vpn_anim")
+
+    // Smooth floating vertical motion
+    val floatY by infiniteTransition.animateFloat(
+        initialValue = -6f,
+        targetValue = 6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "vpn_float"
+    )
+
+    // Breathing pulse on the shield
+    val iconScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "vpn_shield_pulse"
+    )
+
+    // Radiant expanding ripple radar ring
+    val rippleScale by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "vpn_ripple_scale"
+    )
+
+    val rippleAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "vpn_ripple_alpha"
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -88,34 +142,54 @@ fun VpnBlockedScreen(
                     .padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Warning badge / glowing icon
+                // Warning badge / animated glowing icon container
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFFEF4444).copy(alpha = 0.25f),
-                                    Color(0xFFEF4444).copy(alpha = 0.05f)
-                                )
-                            )
-                        ),
+                        .size(112.dp)
+                        .graphicsLayer(translationY = floatY),
                     contentAlignment = Alignment.Center
                 ) {
+                    // Radiant animated expanding radar ripple
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(92.dp)
+                            .scale(rippleScale)
                             .clip(CircleShape)
-                            .background(Color(0xFFEF4444).copy(alpha = 0.2f)),
+                            .background(Color(0xFFEF4444).copy(alpha = rippleAlpha))
+                    )
+
+                    // Outer soft glow bubble
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFEF4444).copy(alpha = 0.28f),
+                                        Color(0xFFEF4444).copy(alpha = 0.08f)
+                                    )
+                                )
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = "Seguridad",
-                            tint = Color(0xFFEF4444),
-                            modifier = Modifier.size(32.dp)
-                        )
+                        // Inner circle with pulsing shield icon
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFEF4444).copy(alpha = 0.22f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = "Seguridad",
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .scale(iconScale)
+                            )
+                        }
                     }
                 }
 

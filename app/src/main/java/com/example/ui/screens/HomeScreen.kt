@@ -30,10 +30,23 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -61,8 +74,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -267,106 +283,42 @@ fun HomeScreen(
 
                     // No connection or failure to load JSON catalog and no local items
                     uiState.allPeliculas.isEmpty() -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.WifiOff,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(38.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "Sin conexión con el catálogo",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp,
-                                    color = titleTextColor,
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = "No fue posible actualizar el catálogo. Comprueba tu conexión a la red e inténtalo de nuevo.",
-                                    fontSize = 13.5.sp,
-                                    color = subtitleTextColor,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                 Button(
-                                    onClick = onRefresh,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    ),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.height(44.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Reintentar", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
+                        AnimatedCatalogEmptyState(
+                            icon = Icons.Default.WifiOff,
+                            iconTint = MaterialTheme.colorScheme.primary,
+                            title = "Sin conexión con el catálogo",
+                            subtitle = "No fue posible actualizar el catálogo. Comprueba tu conexión a la red e inténtalo de nuevo.",
+                            buttonText = "Reintentar",
+                            buttonIcon = Icons.Default.Refresh,
+                            onButtonClick = onRefresh,
+                            isDarkTheme = isDark,
+                            textPrimary = titleTextColor,
+                            textSecondary = subtitleTextColor,
+                            isRefreshing = uiState.isLoading
+                        )
                     }
 
                     uiState.filteredPeliculas.isEmpty() -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.CloudOff,
-                                    contentDescription = null,
-                                    tint = subtitleTextColor.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(56.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "Sin coincidencias",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = titleTextColor
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "No se encontraron títulos que coincidan con los filtros aplicados.",
-                                    fontSize = 13.sp,
-                                    color = subtitleTextColor,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = onClearFilters,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                ) {
-                                    Text("Restablecer filtros", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
+                        val isFilterActive = uiState.selectedType != "ALL" || uiState.onlyFavorites || uiState.searchQuery.isNotBlank()
+                        AnimatedCatalogEmptyState(
+                            icon = if (isFilterActive) Icons.Default.FilterListOff else Icons.Default.CloudOff,
+                            iconTint = MaterialTheme.colorScheme.primary,
+                            title = if (isFilterActive) "Sin coincidencias" else "Catálogo no disponible",
+                            subtitle = if (isFilterActive) {
+                                "No se encontraron títulos que coincidan con la búsqueda o filtros aplicados."
+                            } else {
+                                "No se pudieron cargar títulos del catálogo. Revisa tu conexión a internet o intenta actualizar."
+                            },
+                            buttonText = if (isFilterActive) "Restablecer filtros" else "Actualizar catálogo",
+                            buttonIcon = Icons.Default.Refresh,
+                            onButtonClick = {
+                                if (isFilterActive) onClearFilters() else onRefresh()
+                            },
+                            isDarkTheme = isDark,
+                            textPrimary = titleTextColor,
+                            textSecondary = subtitleTextColor,
+                            isRefreshing = uiState.isLoading
+                        )
                     }
 
                     else -> {
@@ -399,6 +351,7 @@ fun HomeScreen(
                             ) { pelicula ->
                                 val downloadItem = downloadsMap[pelicula.id]
                                 PeliculaCard(
+                                    modifier = Modifier.animateItem(),
                                     pelicula = pelicula,
                                     downloadItem = downloadItem,
                                     isDarkTheme = isDark,
@@ -888,3 +841,177 @@ fun HomeScreen(
         )
     }
 }
+
+@Composable
+private fun AnimatedCatalogEmptyState(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    buttonText: String,
+    buttonIcon: ImageVector,
+    onButtonClick: () -> Unit,
+    isDarkTheme: Boolean,
+    textPrimary: Color,
+    textSecondary: Color,
+    isRefreshing: Boolean = false
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "catalog_empty_anims")
+
+    val spinAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "spin_angle"
+    )
+
+    // Smooth floating vertical motion (gentle bobbing)
+    val floatY by infiniteTransition.animateFloat(
+        initialValue = -8f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "empty_float"
+    )
+
+    // Breathing pulse on the icon
+    val iconScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "icon_pulse"
+    )
+
+    // Expanding radiant ripple ring
+    val rippleScale by infiniteTransition.animateFloat(
+        initialValue = 0.82f,
+        targetValue = 1.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripple_scale"
+    )
+
+    val rippleAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.38f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripple_alpha"
+    )
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val btnScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "btn_scale"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp, vertical = 24.dp)
+    ) {
+        // Floating animated icon container with radiant ripple rings
+        Box(
+            modifier = Modifier
+                .size(116.dp)
+                .graphicsLayer(translationY = floatY),
+            contentAlignment = Alignment.Center
+        ) {
+            // Radiant animated expanding ripple ring
+            Box(
+                modifier = Modifier
+                    .size(92.dp)
+                    .scale(rippleScale)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = rippleAlpha))
+            )
+
+            // Inner soft glowing bubble
+            Box(
+                modifier = Modifier
+                    .size(82.dp)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = if (isDarkTheme) 0.18f else 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .scale(iconScale)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Text(
+            text = title,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.5.sp,
+            color = textPrimary,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = subtitle,
+            fontSize = 13.5.sp,
+            color = textSecondary,
+            textAlign = TextAlign.Center,
+            lineHeight = 19.sp
+        )
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        Button(
+            onClick = { if (!isRefreshing) onButtonClick() },
+            interactionSource = interactionSource,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp),
+            modifier = Modifier.scale(btnScale)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = buttonIcon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(17.dp)
+                        .graphicsLayer(rotationZ = if (isRefreshing) spinAngle else 0f)
+                )
+                Text(
+                    text = if (isRefreshing) "Reconectando..." else buttonText,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
