@@ -2,6 +2,7 @@ package com.example.ui.theme
 
 import android.app.Activity
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -73,7 +74,7 @@ fun MyApplicationTheme(
 
     val rawTargetScheme = if (darkTheme) darkColorScheme else lightColorScheme
 
-    val animSpec = tween<Color>(durationMillis = 240)
+    val animSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
     val animatedPrimary by animateColorAsState(rawTargetScheme.primary, animSpec, label = "theme_primary")
     val animatedOnPrimary by animateColorAsState(rawTargetScheme.onPrimary, animSpec, label = "theme_onPrimary")
     val animatedPrimaryContainer by animateColorAsState(rawTargetScheme.primaryContainer, animSpec, label = "theme_primaryContainer")

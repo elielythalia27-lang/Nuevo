@@ -2,6 +2,9 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
 import androidx.compose.foundation.BorderStroke
@@ -176,13 +179,23 @@ fun AjustesScreen(
     var wifiOnlyDownloads by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
 
-    val screenBg = MaterialTheme.colorScheme.background
-    val cardBg = MaterialTheme.colorScheme.surface
-    val cardBorder = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFCBD5E1)
-    val textPrimary = MaterialTheme.colorScheme.onSurface
-    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
-    val itemBg = MaterialTheme.colorScheme.surfaceVariant
-    val dividerColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+    val themeAnimSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
+
+    val targetScreenBg = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8FAFC)
+    val targetCardBg = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFFFFFFF)
+    val targetCardBorder = if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1)
+    val targetTextPrimary = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+    val targetTextSecondary = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val targetItemBg = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF1F5F9)
+    val targetDividerColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0)
+
+    val screenBg by animateColorAsState(targetValue = targetScreenBg, animationSpec = themeAnimSpec, label = "screen_bg_anim")
+    val cardBg by animateColorAsState(targetValue = targetCardBg, animationSpec = themeAnimSpec, label = "card_bg_anim")
+    val cardBorder by animateColorAsState(targetValue = targetCardBorder, animationSpec = themeAnimSpec, label = "card_border_anim")
+    val textPrimary by animateColorAsState(targetValue = targetTextPrimary, animationSpec = themeAnimSpec, label = "text_primary_anim")
+    val textSecondary by animateColorAsState(targetValue = targetTextSecondary, animationSpec = themeAnimSpec, label = "text_secondary_anim")
+    val itemBg by animateColorAsState(targetValue = targetItemBg, animationSpec = themeAnimSpec, label = "item_bg_anim")
+    val dividerColor by animateColorAsState(targetValue = targetDividerColor, animationSpec = themeAnimSpec, label = "divider_color_anim")
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -1014,14 +1027,26 @@ private fun SettingsSwitchRow(
                 color = textSecondary
             )
         }
+        val switchAnimSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
+        val uncheckedThumbColor by animateColorAsState(
+            targetValue = if (isDarkTheme) Color(0xFF64748B) else Color(0xFF94A3B8),
+            animationSpec = switchAnimSpec,
+            label = "switch_thumb_color"
+        )
+        val uncheckedTrackColor by animateColorAsState(
+            targetValue = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0),
+            animationSpec = switchAnimSpec,
+            label = "switch_track_color"
+        )
+
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = MaterialTheme.colorScheme.primary,
-                uncheckedThumbColor = if (isDarkTheme) Color(0xFF64748B) else Color(0xFF94A3B8),
-                uncheckedTrackColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                uncheckedThumbColor = uncheckedThumbColor,
+                uncheckedTrackColor = uncheckedTrackColor
             )
         )
     }

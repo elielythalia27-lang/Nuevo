@@ -264,9 +264,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             list = list.filter { state.favoriteIds.contains(it.id) }
         }
 
-        // Sort option - DEFAULT (JSON order), NAME_AZ, NAME_ZA
+        // Sort option - NAME_AZ, NAME_ZA
         list = when (state.sortOption) {
-            SortOption.DEFAULT -> list
             SortOption.NAME_AZ -> list.sortedBy { it.safeTitle.lowercase() }
             SortOption.NAME_ZA -> list.sortedByDescending { it.safeTitle.lowercase() }
         }

@@ -8,10 +8,12 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,6 +26,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,6 +96,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -592,6 +598,152 @@ fun DescargasScreen(
 }
 
 @Composable
+private fun AnimatedEmptyStateCard(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    buttonText: String,
+    onButtonClick: () -> Unit,
+    isDarkTheme: Boolean,
+    textPrimary: Color,
+    textSecondary: Color
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "empty_state_anims")
+
+    // Smooth floating vertical motion (gentle bobbing)
+    val floatY by infiniteTransition.animateFloat(
+        initialValue = -8f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "empty_float"
+    )
+
+    // Breathing pulse on the icon
+    val iconScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "icon_pulse"
+    )
+
+    // Expanding radiant ripple ring
+    val rippleScale by infiniteTransition.animateFloat(
+        initialValue = 0.82f,
+        targetValue = 1.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripple_scale"
+    )
+
+    val rippleAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.38f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripple_alpha"
+    )
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val btnScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "btn_scale"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.padding(horizontal = 24.dp)
+    ) {
+        // Floating animated icon container with radiant ripple rings
+        Box(
+            modifier = Modifier
+                .size(116.dp)
+                .graphicsLayer(translationY = floatY),
+            contentAlignment = Alignment.Center
+        ) {
+            // Radiant animated expanding ripple ring
+            Box(
+                modifier = Modifier
+                    .size(92.dp)
+                    .scale(rippleScale)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = rippleAlpha))
+            )
+
+            // Inner soft glowing bubble
+            Box(
+                modifier = Modifier
+                    .size(82.dp)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = if (isDarkTheme) 0.18f else 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .scale(iconScale)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Text(
+            text = title,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.5.sp,
+            color = textPrimary,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = subtitle,
+            fontSize = 13.5.sp,
+            color = textSecondary,
+            textAlign = TextAlign.Center,
+            lineHeight = 19.sp
+        )
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        Button(
+            onClick = onButtonClick,
+            interactionSource = interactionSource,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .graphicsLayer(scaleX = btnScale, scaleY = btnScale)
+                .height(46.dp)
+        ) {
+            Icon(imageVector = Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(buttonText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
 private fun ActiveDownloadsTab(
     activeList: List<DownloadItem>,
     maxConcurrentDownloads: Int,
@@ -624,53 +776,17 @@ private fun ActiveDownloadsTab(
                 .padding(32.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.15f else 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CloudDownload,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Sin transferencias activas",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = textPrimary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Las descargas que inicies se mostrarán aquí con velocidad en tiempo real y controles de gestión.",
-                    fontSize = 13.5.sp,
-                    color = textSecondary,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 19.sp
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = onExploreClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Movie, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Explorar catálogo", fontWeight = FontWeight.Bold)
-                }
-            }
+            AnimatedEmptyStateCard(
+                icon = Icons.Default.CloudDownload,
+                iconTint = MaterialTheme.colorScheme.primary,
+                title = "Sin transferencias activas",
+                subtitle = "Las descargas que inicies se mostrarán aquí con velocidad en tiempo real y controles de gestión.",
+                buttonText = "Explorar catálogo",
+                onButtonClick = onExploreClick,
+                isDarkTheme = isDarkTheme,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary
+            )
         }
     } else {
         LazyColumn(
@@ -1010,53 +1126,17 @@ private fun DownloadedTab(
                 .padding(32.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.15f else 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Biblioteca sin contenido",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = textPrimary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Los títulos que descargues se conservarán aquí para su reproducción sin conexión en cualquier momento.",
-                    fontSize = 13.5.sp,
-                    color = textSecondary,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 19.sp
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = onExploreClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Movie, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Explorar catálogo", fontWeight = FontWeight.Bold)
-                }
-            }
+            AnimatedEmptyStateCard(
+                icon = Icons.Default.CheckCircle,
+                iconTint = Color(0xFF10B981),
+                title = "Biblioteca sin contenido",
+                subtitle = "Los títulos que descargues se conservarán aquí para su reproducción sin conexión en cualquier momento.",
+                buttonText = "Explorar catálogo",
+                onButtonClick = onExploreClick,
+                isDarkTheme = isDarkTheme,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary
+            )
         }
     } else {
         Column(

@@ -1,4 +1,4 @@
-name: Build and Release Android APKs
+name: Build Android APK
 
 on:
   push:
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   build:
-    name: Compilar APKs (Release y Debug)
+    name: Compilar APK (DownloadFree)
     runs-on: ubuntu-latest
 
     steps:
@@ -53,39 +53,28 @@ jobs:
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=DownloadFree,O=Android,C=US"
           fi
 
-      - name: Compilar APKs (Release y Debug)
-        run: ./gradlew assembleRelease assembleDebug --no-daemon --stacktrace
+      - name: Compilar APK Release optimizado
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Organizar archivos APK
+      - name: Organizar archivo APK
         run: |
           mkdir -p build/dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} build/dist/DownloadFree-release.apk \; || true
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} build/dist/DownloadFree-debug.apk \; || true
-          ls -lh build/dist/
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} build/dist/DownloadFree.apk \;
+          ls -lh build/dist/DownloadFree.apk
 
-      - name: Subir APK Release como Artefacto
+      - name: Subir APK a Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DownloadFree-release
-          path: build/dist/DownloadFree-release.apk
-          if-no-files-found: warn
+          name: DownloadFree-APK
+          path: build/dist/DownloadFree.apk
+          if-no-files-found: error
           retention-days: 30
 
-      - name: Subir APK Debug como Artefacto
-        uses: actions/upload-artifact@v4
-        with:
-          name: DownloadFree-debug
-          path: build/dist/DownloadFree-debug.apk
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Publicar GitHub Release con APKs
+      - name: Publicar GitHub Release con APK
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            build/dist/DownloadFree-release.apk
-            build/dist/DownloadFree-debug.apk
+          files: build/dist/DownloadFree.apk
           generate_release_notes: true
           draft: false
           prerelease: false

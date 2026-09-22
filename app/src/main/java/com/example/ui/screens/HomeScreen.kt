@@ -84,6 +84,7 @@ import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
 import com.example.ui.components.ContinueWatchingBanner
 import com.example.ui.components.FilterBar
+import com.example.ui.components.LottiePullToRefreshBox
 import com.example.ui.components.PeliculaCard
 import com.example.ui.components.PeliculaGridSkeleton
 import com.example.ui.components.PeliculaListSkeleton
@@ -232,8 +233,11 @@ fun HomeScreen(
                 }
             }
 
-            // Clean 2-column Movie & Video Grid (reverted from list as requested)
-            Box(
+            // Main feed with Lottie-powered pull-to-refresh animation
+            LottiePullToRefreshBox(
+                isRefreshing = uiState.isLoading,
+                onRefresh = onRefresh,
+                isDarkTheme = isDark,
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f)

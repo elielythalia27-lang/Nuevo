@@ -167,7 +167,6 @@ enum class DownloadStatus {
 }
 
 enum class SortOption(val displayName: String) {
-    DEFAULT("Orden original (por defecto)"),
     NAME_AZ("Nombre (A - Z)"),
     NAME_ZA("Nombre (Z - A)")
 }

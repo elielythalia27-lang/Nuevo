@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -117,9 +118,11 @@ fun SplashScreen(
             )
 
             Image(
-                painter = painterResource(id = R.drawable.ic_app_logo),
+                painter = painterResource(id = R.drawable.icono),
                 contentDescription = "Logo",
-                modifier = Modifier.size(116.dp)
+                modifier = Modifier
+                    .size(116.dp)
+                    .clip(RoundedCornerShape(26.dp))
             )
         }
     }

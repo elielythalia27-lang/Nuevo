@@ -11,13 +11,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,12 +52,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -78,11 +75,11 @@ enum class ScreenRoute(
 }
 
 /**
- * Architectural Modern Floating Navigation Dock.
- * - Non-oval, refined geometric silhouette (16.dp corner radius)
- * - Eye-catching magnetic fluid sliding indicator with kinetic top beam
- * - Tactile spring micro-bouncing interactions on active tabs
- * - Dynamic pulsating beacon for background transfers
+ * Modern Translucent Floating Navigation Bar.
+ * - Elegant rounded capsule with subtle frosted-glass transparency.
+ * - Soft pill active indicator around the icon (no harsh rectangular boxes).
+ * - Smooth spring physics on tab changes.
+ * - Animated breathing badge for active downloads.
  */
 @Composable
 fun AppBottomNav(
@@ -93,35 +90,44 @@ fun AppBottomNav(
     modifier: Modifier = Modifier
 ) {
     val activeColor = MaterialTheme.colorScheme.primary
-    val inactiveColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val navAnimSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
 
-    // Architectural dock colors: refined glass look without excessive roundness
-    val dockShape = RoundedCornerShape(16.dp)
-    val indicatorShape = RoundedCornerShape(12.dp)
-
-    val containerBg = if (isDarkTheme) {
-        Color(0xF2090F1D) // Deep obsidian frosted glass
-    } else {
-        Color(0xFAFFFFFF) // Crisp bright crystalline frost
-    }
-
-    val dockBorderGradient = Brush.verticalGradient(
-        colors = if (isDarkTheme) {
-            listOf(
-                activeColor.copy(alpha = 0.50f),
-                Color.White.copy(alpha = 0.10f),
-                activeColor.copy(alpha = 0.20f)
-            )
-        } else {
-            listOf(
-                Color.White,
-                activeColor.copy(alpha = 0.35f),
-                Color(0xFFCBD5E1)
-            )
-        }
+    val inactiveColor by animateColorAsState(
+        targetValue = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF334155),
+        animationSpec = navAnimSpec,
+        label = "nav_inactive_color"
     )
 
-    // Infinite breathing beacon for active downloads
+    // Sleek rounded capsule silhouette
+    val dockShape = RoundedCornerShape(30.dp)
+
+    // In dark theme: frosted obsidian with high opacity
+    // In light theme: crisp solid white to guarantee high contrast and visibility against light backgrounds
+    val targetContainerBg = if (isDarkTheme) {
+        Color(0xEE0B1220) // 93% opacity dark obsidian
+    } else {
+        Color(0xFFFFFFFF) // 100% solid pure white
+    }
+
+    val containerBg by animateColorAsState(
+        targetValue = targetContainerBg,
+        animationSpec = navAnimSpec,
+        label = "nav_container_bg"
+    )
+
+    val targetDockBorderColor = if (isDarkTheme) {
+        Color.White.copy(alpha = 0.14f)
+    } else {
+        Color(0xFFCBD5E1) // Solid Slate-300 border for clear outline in light mode
+    }
+
+    val dockBorderColor by animateColorAsState(
+        targetValue = targetDockBorderColor,
+        animationSpec = navAnimSpec,
+        label = "nav_border_color"
+    )
+
+    // Infinite gentle breathing pulse for active download beacon
     val infiniteTransition = rememberInfiniteTransition(label = "bottom_nav_beacon")
     val beaconPulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -132,187 +138,127 @@ fun AppBottomNav(
         ),
         label = "beacon_scale"
     )
-    val beaconAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 0.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "beacon_alpha"
-    )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 24.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 420.dp)
+                .widthIn(max = 400.dp)
                 .fillMaxWidth()
                 .shadow(
-                    elevation = if (isDarkTheme) 22.dp else 16.dp,
+                    elevation = if (isDarkTheme) 12.dp else 16.dp,
                     shape = dockShape,
-                    spotColor = if (isDarkTheme) activeColor.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.18f),
-                    ambientColor = if (isDarkTheme) Color.Black.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.10f)
-                )
-                .border(
-                    width = 1.2.dp,
-                    brush = dockBorderGradient,
-                    shape = dockShape
+                    spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.6f) else Color(0x380F172A),
+                    ambientColor = if (isDarkTheme) Color.Black.copy(alpha = 0.2f) else Color(0x1F000000)
                 )
                 .testTag("floating_bottom_nav"),
             shape = dockShape,
             color = containerBg,
-            tonalElevation = 6.dp
+            border = BorderStroke(1.2.dp, dockBorderColor),
+            tonalElevation = if (isDarkTheme) 4.dp else 2.dp
         ) {
-            BoxWithConstraints(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(68.dp)
-                    .padding(6.dp)
+                    .height(66.dp)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val totalWidth = maxWidth
-                val tabCount = ScreenRoute.entries.size
-                val itemWidth = totalWidth / tabCount
+                ScreenRoute.entries.forEach { screen ->
+                    val isSelected = currentPage == screen.pageIndex
+                    val interactionSource = remember { MutableInteractionSource() }
 
-                // Animated magnetic sliding offset
-                val targetOffsetX = itemWidth * currentPage
-                val animatedOffsetX by animateDpAsState(
-                    targetValue = targetOffsetX,
-                    animationSpec = spring(
-                        dampingRatio = 0.68f,
-                        stiffness = Spring.StiffnessMediumLow
-                    ),
-                    label = "magnetic_indicator_offset"
-                )
+                    // Smooth spring animations for scale and position
+                    val iconScale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.10f else 0.94f,
+                        animationSpec = spring(
+                            dampingRatio = 0.65f,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "icon_scale"
+                    )
 
-                // 1. UNIQUE SLIDING MAGNETIC INDICATOR CAPSULE
-                Box(
-                    modifier = Modifier
-                        .offset(x = animatedOffsetX)
-                        .width(itemWidth)
-                        .fillMaxHeight()
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clip(indicatorShape)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = if (isDarkTheme) {
-                                    listOf(
-                                        activeColor.copy(alpha = 0.22f),
-                                        activeColor.copy(alpha = 0.12f)
-                                    )
-                                } else {
-                                    listOf(
-                                        activeColor.copy(alpha = 0.16f),
-                                        activeColor.copy(alpha = 0.08f)
-                                    )
-                                }
-                            )
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = activeColor.copy(alpha = if (isDarkTheme) 0.55f else 0.40f),
-                            shape = indicatorShape
-                        )
-                        .drawBehind {
-                            // Ambient neon glow pool
-                            drawCircle(
-                                color = activeColor.copy(alpha = if (isDarkTheme) 0.20f else 0.12f),
-                                radius = size.maxDimension * 0.45f
-                            )
-                        }
-                ) {
-                    // Kinetic Top Runner Light Beam on active tab
+                    val pillWidth by animateDpAsState(
+                        targetValue = if (isSelected) 56.dp else 0.dp,
+                        animationSpec = spring(
+                            dampingRatio = 0.70f,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "pill_width"
+                    )
+
+                    val pillAlpha by animateFloatAsState(
+                        targetValue = if (isSelected) 1f else 0f,
+                        animationSpec = tween(durationMillis = 200),
+                        label = "pill_alpha"
+                    )
+
+                    val contentColor by animateColorAsState(
+                        targetValue = if (isSelected) activeColor else inactiveColor,
+                        animationSpec = tween(durationMillis = 200),
+                        label = "content_color"
+                    )
+
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .width(36.dp)
-                            .height(2.5.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        activeColor,
-                                        Color.White,
-                                        activeColor,
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-                }
-
-                // 2. INTERACTIVE TABS ROW
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ScreenRoute.entries.forEach { screen ->
-                        val isSelected = currentPage == screen.pageIndex
-                        val interactionSource = remember { MutableInteractionSource() }
-
-                        // Tactile spring physics for selected tab
-                        val iconScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.14f else 0.96f,
-                            animationSpec = spring(
-                                dampingRatio = 0.60f,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "icon_scale"
-                        )
-                        val iconBounceY by animateDpAsState(
-                            targetValue = if (isSelected) (-2).dp else 0.dp,
-                            animationSpec = spring(
-                                dampingRatio = 0.55f,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "icon_bounce"
-                        )
-
-                        val contentColor by animateColorAsState(
-                            targetValue = if (isSelected) activeColor else inactiveColor,
-                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                            label = "content_color"
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = null
-                                ) {
-                                    onNavigate(screen.pageIndex)
-                                }
-                                .testTag("nav_item_${screen.route}"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.graphicsLayer(translationY = iconBounceY.value)
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
                             ) {
+                                onNavigate(screen.pageIndex)
+                            }
+                            .testTag("nav_item_${screen.route}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            // Soft pill indicator around the icon only
+                            Box(
+                                modifier = Modifier
+                                    .width(58.dp)
+                                    .height(30.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Background pill container (visible when selected)
+                                if (isSelected || pillAlpha > 0.05f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(pillWidth)
+                                            .height(30.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                activeColor.copy(
+                                                    alpha = (if (isDarkTheme) 0.22f else 0.18f) * pillAlpha
+                                                )
+                                            )
+                                    )
+                                }
+
                                 // Icon with Badge or pulsating Beacon
                                 Box(
                                     modifier = Modifier.scale(iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (screen == ScreenRoute.DOWNLOADS && downloadsCount > 0) {
-                                        // Beacon pulse effect behind badge
+                                        // Pulse halo behind badge
                                         Box(
                                             modifier = Modifier
-                                                .size(24.dp)
-                                                .offset(x = 10.dp, y = (-8).dp)
+                                                .size(20.dp)
+                                                .offset(x = 10.dp, y = (-7).dp)
                                                 .scale(beaconPulseScale)
                                                 .clip(CircleShape)
-                                                .background(activeColor.copy(alpha = beaconAlpha))
+                                                .background(activeColor.copy(alpha = 0.35f))
                                         )
 
                                         BadgedBox(
@@ -321,7 +267,7 @@ fun AppBottomNav(
                                                     containerColor = activeColor,
                                                     contentColor = activeColor.contrastingTextColor(),
                                                     modifier = Modifier
-                                                        .size(18.dp)
+                                                        .size(17.dp)
                                                         .offset(x = 6.dp, y = (-4).dp)
                                                 ) {
                                                     Text(
@@ -348,19 +294,19 @@ fun AppBottomNav(
                                         )
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.height(3.dp))
-
-                                // Clear, legible, crisp title label
-                                Text(
-                                    text = screen.title,
-                                    color = contentColor,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                    letterSpacing = 0.2.sp,
-                                    maxLines = 1
-                                )
                             }
+
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            // Clean and crisp title label
+                            Text(
+                                text = screen.title,
+                                color = contentColor,
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                letterSpacing = 0.1.sp,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
