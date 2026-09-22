@@ -1,5 +1,8 @@
 package com.example
 
+import android.app.Activity
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -66,19 +69,14 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
 import com.example.viewmodel.HomeViewModel
-import android.graphics.Bitmap
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalView
-import kotlinx.coroutines.Job
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val skipSplash = intent.getBooleanExtra("skip_splash", false)
+        val initialTab = intent.getIntExtra("initial_tab", 0)
 
         setContent {
             val homeViewModel: HomeViewModel = viewModel()
@@ -90,15 +88,10 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
             }
 
-            val view = LocalView.current
             val context = LocalContext.current
-            val coroutineScope = rememberCoroutineScope()
-            var snapshotBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-            val snapshotAlpha = remember { Animatable(1f) }
-            var transitionJob by remember { mutableStateOf<Job?>(null) }
 
             val handleThemeModeChange: (ThemeMode) -> Unit = { newMode ->
-                if (newMode != uiState.themeMode && transitionJob?.isActive != true) {
+                if (newMode != uiState.themeMode) {
                     val systemIsDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
                     val willBeDark = when (newMode) {
                         ThemeMode.SYSTEM -> systemIsDark
@@ -106,34 +99,7 @@ class MainActivity : ComponentActivity() {
                         ThemeMode.LIGHT -> false
                     }
 
-                    if (willBeDark != isDark) {
-                        // Capturar snapshot de la vista actual antes de cambiar de tema (estilo Telegram)
-                        try {
-                            if (view.width > 0 && view.height > 0) {
-                                val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-                                val canvas = android.graphics.Canvas(bmp)
-                                view.draw(canvas)
-                                snapshotBitmap = bmp.asImageBitmap()
-                            }
-                        } catch (_: Throwable) {
-                            snapshotBitmap = null
-                        }
-
-                        // Cambiar tema de forma inmediata
-                        homeViewModel.setThemeMode(newMode, willBeDark)
-
-                        // Desvanecer el snapshot suavemente sobre el nuevo tema (cero destellos)
-                        transitionJob = coroutineScope.launch {
-                            snapshotAlpha.snapTo(1f)
-                            snapshotAlpha.animateTo(
-                                targetValue = 0f,
-                                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
-                            )
-                            snapshotBitmap = null
-                        }
-                    } else {
-                        homeViewModel.setThemeMode(newMode, willBeDark)
-                    }
+                    homeViewModel.setThemeMode(newMode, willBeDark)
                 }
             }
 
@@ -152,21 +118,12 @@ class MainActivity : ComponentActivity() {
                     ) {
                         MainAppNavigation(
                             viewModel = homeViewModel,
+                            skipSplash = skipSplash,
+                            initialTab = initialTab,
                             onThemeModeChange = handleThemeModeChange,
                             modifier = Modifier.fillMaxSize()
                         )
                         CustomToastHost(isDarkTheme = isDark)
-
-                        // Overlay de snapshot con transición crossfade suave
-                        snapshotBitmap?.let { bmp ->
-                            Image(
-                                bitmap = bmp,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer { alpha = snapshotAlpha.value }
-                            )
-                        }
                     }
                 }
             }
@@ -177,6 +134,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppNavigation(
     viewModel: HomeViewModel,
+    skipSplash: Boolean = false,
+    initialTab: Int = 0,
     onThemeModeChange: (ThemeMode) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -260,7 +219,7 @@ fun MainAppNavigation(
     } else {
         NavHost(
             navController = navController,
-            startDestination = "splash",
+            startDestination = if (skipSplash) "main" else "splash",
             modifier = modifier
         ) {
             composable("splash") {
@@ -276,7 +235,7 @@ fun MainAppNavigation(
 
             composable("main") {
                 val pagerState = rememberPagerState(
-                    initialPage = 0,
+                    initialPage = if (skipSplash) initialTab else 0,
                     pageCount = { 3 }
                 )
 
