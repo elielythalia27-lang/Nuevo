@@ -64,6 +64,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
@@ -136,7 +138,7 @@ fun AjustesScreen(
     isDarkTheme: Boolean,
     onDarkThemeChange: (Boolean) -> Unit,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    onThemeModeChange: (ThemeMode) -> Unit = {},
+    onThemeModeChange: (ThemeMode, Offset?) -> Unit = { _, _ -> },
     themeColor: AppThemeColor,
     onThemeColorChange: (AppThemeColor) -> Unit,
     defaultFilterType: String,
@@ -179,23 +181,13 @@ fun AjustesScreen(
     var wifiOnlyDownloads by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
 
-    val themeAnimSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
-
-    val targetScreenBg = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8FAFC)
-    val targetCardBg = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFFFFFFF)
-    val targetCardBorder = if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1)
-    val targetTextPrimary = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF0F172A)
-    val targetTextSecondary = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val targetItemBg = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF1F5F9)
-    val targetDividerColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0)
-
-    val screenBg by animateColorAsState(targetValue = targetScreenBg, animationSpec = themeAnimSpec, label = "screen_bg_anim")
-    val cardBg by animateColorAsState(targetValue = targetCardBg, animationSpec = themeAnimSpec, label = "card_bg_anim")
-    val cardBorder by animateColorAsState(targetValue = targetCardBorder, animationSpec = themeAnimSpec, label = "card_border_anim")
-    val textPrimary by animateColorAsState(targetValue = targetTextPrimary, animationSpec = themeAnimSpec, label = "text_primary_anim")
-    val textSecondary by animateColorAsState(targetValue = targetTextSecondary, animationSpec = themeAnimSpec, label = "text_secondary_anim")
-    val itemBg by animateColorAsState(targetValue = targetItemBg, animationSpec = themeAnimSpec, label = "item_bg_anim")
-    val dividerColor by animateColorAsState(targetValue = targetDividerColor, animationSpec = themeAnimSpec, label = "divider_color_anim")
+    val screenBg = MaterialTheme.colorScheme.background
+    val cardBg = MaterialTheme.colorScheme.surface
+    val cardBorder = MaterialTheme.colorScheme.surfaceVariant
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+    val itemBg = MaterialTheme.colorScheme.surfaceVariant
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -243,77 +235,6 @@ fun AjustesScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Hero: Identidad de la App
-            item {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = cardBg),
-                    border = BorderStroke(1.dp, cardBorder),
-                    elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color.White,
-                            shadowElevation = 3.dp,
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                            modifier = Modifier.size(54.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.icono),
-                                    contentDescription = "Logo Download Free",
-                                    modifier = Modifier.size(34.dp)
-                                )
-                            }
-                        }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "Download Free",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp,
-                                    color = textPrimary
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.22f else 0.12f),
-                                    modifier = Modifier.padding(top = 1.dp)
-                                ) {
-                                    Text(
-                                        text = "v1.0 Oficial",
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Catálogo multimedia, streaming y descargas",
-                                fontSize = 12.sp,
-                                color = textSecondary
-                            )
-                        }
-                    }
-                }
-            }
-
             // Section 1: Apariencia y Personalización
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -353,19 +274,18 @@ fun AjustesScreen(
                                         val isSelected = themeMode == mode
                                         val activeBg = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
                                         val activeText = if (isSelected) MaterialTheme.colorScheme.onPrimary else textSecondary
+                                        var buttonCenter by remember { mutableStateOf(Offset.Zero) }
 
                                         Row(
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(activeBg)
+                                                .onGloballyPositioned { coordinates ->
+                                                    buttonCenter = coordinates.boundsInRoot().center
+                                                }
                                                 .clickable {
-                                                    val newIsDark = when (mode) {
-                                                        ThemeMode.SYSTEM -> isDarkTheme
-                                                        ThemeMode.DARK -> true
-                                                        ThemeMode.LIGHT -> false
-                                                    }
-                                                    onThemeModeChange(mode)
+                                                    onThemeModeChange(mode, buttonCenter)
                                                 }
                                                 .padding(vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically,

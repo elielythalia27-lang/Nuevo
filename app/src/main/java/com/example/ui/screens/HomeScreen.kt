@@ -153,7 +153,7 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Header: Clean title without any side icon, badge count and Telegram button
+            // Header: Prominent title with perfectly aligned count badge and Telegram button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -161,14 +161,16 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Title (no side icon as requested)
+                // Title (prominent and refined)
                 Text(
                     text = "Download Free",
-                    fontSize = 22.sp,
+                    fontSize = 27.sp,
+                    lineHeight = 32.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = ElielFont,
                     color = titleTextColor,
-                    letterSpacing = 0.4.sp
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
 
                 Row(
@@ -178,17 +180,20 @@ fun HomeScreen(
                     val isListVisible = !uiState.isLoading && uiState.allPeliculas.isNotEmpty()
 
                     if (isListVisible) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = badgeBg
+                        Box(
+                            modifier = Modifier
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(badgeBg)
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = uiState.allPeliculas.size.toString(),
-                                fontSize = 14.sp,
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }

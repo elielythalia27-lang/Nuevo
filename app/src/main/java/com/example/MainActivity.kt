@@ -23,6 +23,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -37,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +52,9 @@ import com.example.data.model.DownloadStatus
 import com.example.data.model.Pelicula
 import com.example.data.model.ThemeMode
 import com.example.ui.components.AppBottomNav
+import com.example.ui.components.ThemeWaveData
+import com.example.ui.components.ThemeWaveOverlay
+import kotlinx.coroutines.launch
 import com.example.ui.components.CustomToastHost
 import com.example.ui.components.PermissionRequestDialog
 import com.example.ui.components.VpnBlockedScreen
@@ -203,10 +210,22 @@ fun MainAppNavigation(
             }
 
             composable("main") {
-                var selectedPage by rememberSaveable { mutableIntStateOf(0) }
+                val pagerState = rememberPagerState(
+                    initialPage = 0,
+                    pageCount = { 3 }
+                )
 
-                BackHandler(enabled = selectedPage != 0) {
-                    selectedPage = 0
+                var themeWaveData by remember { mutableStateOf<ThemeWaveData?>(null) }
+                var pendingThemeMode by remember { mutableStateOf<ThemeMode?>(null) }
+                val currentPrimary = MaterialTheme.colorScheme.primary
+
+                BackHandler(enabled = pagerState.currentPage != 0) {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(
+                            page = 0,
+                            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                        )
+                    }
                 }
 
                 Box(
@@ -214,33 +233,13 @@ fun MainAppNavigation(
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
                 ) {
-                    AnimatedContent(
-                        targetState = selectedPage,
-                        transitionSpec = {
-                            val slideDistance = 320
-                            if (targetState > initialState) {
-                                (slideInHorizontally(
-                                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-                                    initialOffsetX = { slideDistance }
-                                ) + fadeIn(animationSpec = tween(durationMillis = 280))).togetherWith(
-                                    slideOutHorizontally(
-                                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-                                        targetOffsetX = { -slideDistance }
-                                    ) + fadeOut(animationSpec = tween(durationMillis = 220))
-                                )
-                            } else {
-                                (slideInHorizontally(
-                                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-                                    initialOffsetX = { -slideDistance }
-                                ) + fadeIn(animationSpec = tween(durationMillis = 280))).togetherWith(
-                                    slideOutHorizontally(
-                                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-                                        targetOffsetX = { slideDistance }
-                                    ) + fadeOut(animationSpec = tween(durationMillis = 220))
-                                )
-                            }
-                        },
-                        label = "screen_transition",
+                    HorizontalPager(
+                        state = pagerState,
+                        beyondViewportPageCount = 1,
+                        flingBehavior = PagerDefaults.flingBehavior(
+                            state = pagerState,
+                            snapAnimationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                        ),
                         modifier = Modifier.fillMaxSize()
                     ) { pageIndex ->
                         when (pageIndex) {
@@ -265,7 +264,12 @@ fun MainAppNavigation(
                                     },
                                     onRefresh = { viewModel.loadPeliculas(forceRefresh = true) },
                                     onOpenSettings = {
-                                        selectedPage = 2
+                                        coroutineScope.launch {
+                                            pagerState.animateScrollToPage(
+                                                page = 2,
+                                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                            )
+                                        }
                                     },
                                     onDismissContinueWatching = { viewModel.clearContinueWatching() },
                                     onLayoutModeChange = { viewModel.setCatalogLayoutMode(it) }
@@ -299,7 +303,12 @@ fun MainAppNavigation(
                                         viewModel.forceStartPendingDownload(download)
                                     },
                                     onExploreClick = {
-                                        selectedPage = 0
+                                        coroutineScope.launch {
+                                            pagerState.animateScrollToPage(
+                                                page = 0,
+                                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                            )
+                                        }
                                     },
                                     isDarkTheme = isDark,
                                     onRequestPermissions = {
@@ -314,14 +323,32 @@ fun MainAppNavigation(
                                     isDarkTheme = isDark,
                                     onDarkThemeChange = { viewModel.setDarkTheme(it) },
                                     themeMode = uiState.themeMode,
-                                    onThemeModeChange = { newMode ->
+                                    onThemeModeChange = { newMode, tapOffset ->
+                                        if (newMode == uiState.themeMode) {
+                                            // Ya está seleccionado este modo, no hacer nada
+                                            return@AjustesScreen
+                                        }
+
                                         val systemIsDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
                                         val willBeDark = when (newMode) {
                                             ThemeMode.SYSTEM -> systemIsDark
                                             ThemeMode.DARK -> true
                                             ThemeMode.LIGHT -> false
                                         }
-                                        viewModel.setThemeMode(newMode, willBeDark)
+
+                                        // Si el color visual efectivo (isDark) no cambia, aplicar directamente sin onda
+                                        val visualThemeChanges = (willBeDark != isDark)
+
+                                        if (tapOffset != null && visualThemeChanges) {
+                                            pendingThemeMode = newMode
+                                            themeWaveData = ThemeWaveData(
+                                                origin = tapOffset,
+                                                targetIsDark = willBeDark,
+                                                accentColor = currentPrimary
+                                            )
+                                        } else {
+                                            viewModel.setThemeMode(newMode, willBeDark)
+                                        }
                                     },
                                     themeColor = uiState.themeColor,
                                     onThemeColorChange = { viewModel.setThemeColor(it) },
@@ -344,12 +371,37 @@ fun MainAppNavigation(
                         }
                     }
 
+                    // Wave overlay triggered when changing theme mode
+                    ThemeWaveOverlay(
+                        waveData = themeWaveData,
+                        onWaveHalfway = {
+                            pendingThemeMode?.let { mode ->
+                                val systemIsDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+                                val willBeDark = when (mode) {
+                                    ThemeMode.SYSTEM -> systemIsDark
+                                    ThemeMode.DARK -> true
+                                    ThemeMode.LIGHT -> false
+                                }
+                                viewModel.setThemeMode(mode, willBeDark)
+                            }
+                        },
+                        onWaveFinished = {
+                            themeWaveData = null
+                            pendingThemeMode = null
+                        }
+                    )
+
                     // Floating Modern Navigation Pill Bar over the content
                     val downCount = uiState.downloads.count { it.status == DownloadStatus.DOWNLOADING }
                     AppBottomNav(
-                        currentPage = selectedPage,
+                        currentPage = pagerState.currentPage,
                         onNavigate = { targetPage ->
-                            selectedPage = targetPage
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(
+                                    page = targetPage,
+                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                )
+                            }
                         },
                         downloadsCount = downCount,
                         isDarkTheme = isDark,

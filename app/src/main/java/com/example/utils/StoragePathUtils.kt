@@ -16,9 +16,9 @@ object StoragePathUtils {
 
     fun getDefaultDownloadFolder(): FolderResult {
         val publicDir = try {
-            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DownloadFree")
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Download Free")
         } catch (_: Exception) {
-            File("/storage/emulated/0/Download/DownloadFree")
+            File("/storage/emulated/0/Download/Download Free")
         }
         return FolderResult(
             name = "Download Free",

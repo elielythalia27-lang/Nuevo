@@ -41,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +62,8 @@ fun FilterBar(
     isDarkTheme: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val hasActiveFilters = searchQuery.isNotEmpty() || selectedType != "ALL"
     val searchBg = if (isDarkTheme) Color(0xFF131C30) else Color.White
     val searchBorder = if (searchQuery.isNotEmpty()) {
@@ -152,7 +156,11 @@ fun FilterBar(
 
                 if (searchQuery.isNotEmpty()) {
                     IconButton(
-                        onClick = { onSearchQueryChange("") },
+                        onClick = {
+                            onSearchQueryChange("")
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                        },
                         modifier = Modifier.size(30.dp)
                     ) {
                         Icon(

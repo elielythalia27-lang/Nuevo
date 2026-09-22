@@ -349,9 +349,12 @@ class DownloadHelper(
                 } else {
                     pelicula.safeTitle
                 }
-                val cleanForFile = displayTitleWithTag.replace(Regex("[^a-zA-Z0-9(). _-]"), "_")
-                val hashSuffix = kotlin.math.abs(pelicula.id.hashCode()).toString().takeLast(6)
-                val fileName = "${cleanForFile}_${hashSuffix}.mp4"
+                val cleanForFile = displayTitleWithTag
+                    .replace(Regex("""[\\/:*?"<>|\x00-\x1F]"""), "")
+                    .replace(Regex("""\s+"""), " ")
+                    .trim(' ', '.')
+                    .ifBlank { "Video" }
+                val fileName = "$cleanForFile.mp4"
                 val savedFolderPath = try {
                     preferences.downloadFolderPath.first()
                 } catch (_: Exception) {
@@ -362,13 +365,13 @@ class DownloadHelper(
                     if (customDir.exists() || customDir.mkdirs()) {
                         customDir
                     } else {
-                        val fallback = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DownloadFree")
+                        val fallback = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Download Free")
                         if (!fallback.exists()) fallback.mkdirs()
                         fallback
                     }
                 } else {
                     val publicDir = try {
-                        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DownloadFree")
+                        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Download Free")
                     } catch (_: Exception) {
                         context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
                     }

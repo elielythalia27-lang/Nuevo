@@ -178,12 +178,12 @@ fun DescargasScreen(
     var itemToDelete by remember { mutableStateOf<DownloadItem?>(null) }
     var showCancelAllConfirm by remember { mutableStateOf(false) }
 
-    val screenBg = if (isDarkTheme) Color(0xFF070B18) else Color(0xFFF1F5F9)
-    val cardBg = if (isDarkTheme) Color(0xFF10192C) else Color.White
-    val cardBorder = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFA0AEC0)
-    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF0F172A)
-    val textSecondary = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF334155)
-    val tabBg = if (isDarkTheme) Color(0xFF10182C) else Color(0xFFE2E8F0)
+    val screenBg = MaterialTheme.colorScheme.background
+    val cardBg = MaterialTheme.colorScheme.surface
+    val cardBorder = MaterialTheme.colorScheme.surfaceVariant
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+    val tabBg = MaterialTheme.colorScheme.surfaceVariant
 
     val activeList = remember(downloads) {
         downloads.filter {
