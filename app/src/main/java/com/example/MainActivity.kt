@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -74,6 +75,28 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                setTaskDescription(
+                    ActivityManager.TaskDescription(
+                        getString(R.string.app_name),
+                        R.mipmap.ic_launcher,
+                        android.graphics.Color.WHITE
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                setTaskDescription(
+                    ActivityManager.TaskDescription(
+                        getString(R.string.app_name),
+                        null,
+                        android.graphics.Color.WHITE
+                    )
+                )
+            }
+        } catch (_: Exception) {
+        }
 
         val skipSplash = intent.getBooleanExtra("skip_splash", false)
         val initialTab = intent.getIntExtra("initial_tab", 0)
