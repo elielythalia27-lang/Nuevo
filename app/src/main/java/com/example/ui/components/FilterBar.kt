@@ -232,10 +232,10 @@ fun FilterBar(
                 )
             )
 
-            val youtubeRed = Color(0xFFEF4444)
+            val youtubeRed = Color(0xFFFF0000)
             val isYouTubeSelected = selectedType == "VIDEO"
 
-            // Chip: YouTube - Dynamic styling matching YouTube branding (Red icon when unselected, full Red pill when selected)
+            // Chip: YouTube - Dynamic styling matching YouTube branding (Red icon when unselected, full pure Red #FF0000 pill when selected)
             FilterChip(
                 selected = isYouTubeSelected,
                 onClick = { onTypeSelected("VIDEO") },
