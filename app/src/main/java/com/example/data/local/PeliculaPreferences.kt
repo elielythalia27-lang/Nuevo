@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.data.model.ContinueWatchingItem
 import com.example.data.model.DownloadItem
+import com.example.data.model.DownloadStatus
 import com.example.data.model.Pelicula
 import com.example.data.model.SortOption
 import com.example.data.model.ThemeMode
@@ -230,6 +231,10 @@ class PeliculaPreferences(private val context: Context) {
             items.forEach { updatedItem ->
                 val index = currentList.indexOfFirst { it.id == updatedItem.id }
                 if (index >= 0) {
+                    // Safety check: do not overwrite a PAUSED item with a DOWNLOADING periodic update
+                    if (currentList[index].status == DownloadStatus.PAUSED && updatedItem.status == DownloadStatus.DOWNLOADING) {
+                        return@forEach
+                    }
                     currentList[index] = updatedItem
                 } else {
                     currentList.add(updatedItem)

@@ -101,12 +101,12 @@ fun AppBottomNav(
     // Sleek rounded capsule silhouette
     val dockShape = RoundedCornerShape(30.dp)
 
-    // In dark theme: frosted obsidian with high opacity
-    // In light theme: crisp solid white to guarantee high contrast and visibility against light backgrounds
+    // In dark theme: frosted obsidian with 93% opacity
+    // In light theme: frosted clean white with 93% opacity matching the dark theme translucency
     val targetContainerBg = if (isDarkTheme) {
         Color(0xEE0B1220) // 93% opacity dark obsidian
     } else {
-        Color(0xFFFFFFFF) // 100% solid pure white
+        Color(0xEEFFFFFF) // 93% opacity frosted clean white
     }
 
     val containerBg by animateColorAsState(
@@ -118,7 +118,7 @@ fun AppBottomNav(
     val targetDockBorderColor = if (isDarkTheme) {
         Color.White.copy(alpha = 0.14f)
     } else {
-        Color(0xFFCBD5E1) // Solid Slate-300 border for clear outline in light mode
+        Color(0xFFCBD5E1).copy(alpha = 0.85f)
     }
 
     val dockBorderColor by animateColorAsState(
@@ -250,7 +250,7 @@ fun AppBottomNav(
                                     modifier = Modifier.scale(iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (screen == ScreenRoute.DOWNLOADS && downloadsCount > 0) {
+                                    if (screen == ScreenRoute.DOWNLOADS && downloadsCount > 0 && !isSelected) {
                                         // Pulse halo behind badge
                                         Box(
                                             modifier = Modifier

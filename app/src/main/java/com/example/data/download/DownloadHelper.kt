@@ -138,6 +138,9 @@ class DownloadHelper(
 
                 val updatedList = mutableListOf<DownloadItem>()
                 for (tracker in currentTrackers) {
+                    if (manuallyPausedIds.contains(tracker.item.id) || !activeTrackers.containsKey(tracker.item.id)) {
+                        continue
+                    }
                     val currentDownloaded = tracker.downloadedBytes
                     val currentTotal = tracker.totalBytes
                     val remainingBytes = (currentTotal - currentDownloaded).coerceAtLeast(0L)
@@ -565,8 +568,16 @@ class DownloadHelper(
                 activeCalls.remove(item.id)?.cancel()
                 activeJobs.remove(item.id)?.cancel()
 
+                val file = File(item.localFilePath)
+                val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
+                val total = if (item.totalBytes > 0) item.totalBytes else currentDownloaded
+                val progress = if (total > 0) ((currentDownloaded * 100) / total).toInt().coerceIn(0, 99) else item.progress
+
                 val pausedItem = item.copy(
                     status = DownloadStatus.PAUSED,
+                    downloadedBytes = currentDownloaded,
+                    totalBytes = total,
+                    progress = progress,
                     speedBytesPerSec = 0L,
                     etaSeconds = 0L
                 )
@@ -693,16 +704,32 @@ class DownloadHelper(
                     it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING
                 }
                 downloadingOrPending.forEach { item ->
+                    manuallyPausedIds.add(item.id)
+                    demotedIds.remove(item.id)
                     activeTrackers.remove(item.id)
-                    activeJobs[item.id]?.cancel()
-                    activeJobs.remove(item.id)
+                    activeCalls.remove(item.id)?.cancel()
+                    activeJobs.remove(item.id)?.cancel()
+                    val file = File(item.localFilePath)
+                    val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
+                    val total = if (item.totalBytes > 0) item.totalBytes else currentDownloaded
+                    val progress = if (total > 0) ((currentDownloaded * 100) / total).toInt().coerceIn(0, 99) else item.progress
                     val pausedItem = item.copy(
                         status = DownloadStatus.PAUSED,
+                        downloadedBytes = currentDownloaded,
+                        totalBytes = total,
+                        progress = progress,
                         speedBytesPerSec = 0L,
                         etaSeconds = 0L
                     )
                     preferences.addOrUpdateDownload(pausedItem)
+                    notificationManager.cancel(getNotificationId(item.id))
                     showPausedNotification(pausedItem)
+                }
+                if (activeTrackers.isEmpty()) {
+                    DownloadForegroundService.stopService(context)
+                    notificationManager.cancel(SUMMARY_NOTIFICATION_ID)
+                } else {
+                    updateGroupSummaryNotification(activeTrackers.values.toList(), totalBandwidthBytesPerSec.get())
                 }
             } catch (e: Exception) {
                 // ignore
@@ -725,6 +752,9 @@ class DownloadHelper(
                 var activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
 
                 pausedOrPending.forEach { item ->
+                    manuallyPausedIds.remove(item.id)
+                    manuallyCanceledIds.remove(item.id)
+                    demotedIds.remove(item.id)
                     val file = File(item.localFilePath)
                     if (activeCount < maxLimit) {
                         activeCount++
@@ -902,15 +932,37 @@ class DownloadHelper(
                     break
                 } catch (e: CancellationException) {
                     activeTrackers.remove(item.id)
+                    if (manuallyPausedIds.contains(item.id)) {
+                        val finalDownloaded = if (destFile.exists()) destFile.length() else item.downloadedBytes
+                        val total = if (item.totalBytes > 0) item.totalBytes else finalDownloaded
+                        val progress = if (total > 0) ((finalDownloaded * 100) / total).toInt().coerceIn(0, 99) else item.progress
+                        val paused = item.copy(
+                            status = DownloadStatus.PAUSED,
+                            downloadedBytes = finalDownloaded,
+                            totalBytes = total,
+                            progress = progress,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        preferences.addOrUpdateDownload(paused)
+                        notificationManager.cancel(getNotificationId(item.id))
+                        showPausedNotification(paused)
+                    }
                     break
                 } catch (e: Exception) {
                     activeTrackers.remove(item.id)
                     if (demotedIds.remove(item.id)) {
                         break
                     }
-                    if (manuallyPausedIds.remove(item.id)) {
+                    if (manuallyPausedIds.contains(item.id)) {
+                        val finalDownloaded = if (destFile.exists()) destFile.length() else item.downloadedBytes
+                        val total = if (item.totalBytes > 0) item.totalBytes else finalDownloaded
+                        val progress = if (total > 0) ((finalDownloaded * 100) / total).toInt().coerceIn(0, 99) else item.progress
                         val paused = item.copy(
                             status = DownloadStatus.PAUSED,
+                            downloadedBytes = finalDownloaded,
+                            totalBytes = total,
+                            progress = progress,
                             speedBytesPerSec = 0L,
                             etaSeconds = 0L
                         )

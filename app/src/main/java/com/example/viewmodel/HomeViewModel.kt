@@ -8,6 +8,7 @@ import com.example.data.download.DownloadHelper
 import com.example.data.local.PeliculaPreferences
 import com.example.data.model.ContinueWatchingItem
 import com.example.data.model.DownloadItem
+import com.example.data.model.DownloadStatus
 import com.example.data.model.Pelicula
 import com.example.data.model.SortOption
 import com.example.data.model.ThemeMode
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 data class PlaybackTarget(
     val videoUrl: String,
@@ -44,6 +47,7 @@ data class HomeUiState(
     val favoriteIds: Set<String> = emptySet(),
     val continueWatching: ContinueWatchingItem? = null,
     val downloads: List<DownloadItem> = emptyList(),
+    val activeDownloadsCount: Int = 0,
     val isDarkTheme: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val themeColor: AppThemeColor = AppThemeColor.TEAL,
@@ -62,6 +66,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val repository = PeliculaRepository(application, apiService, preferences)
     val downloadHelper = DownloadHelper.getActiveInstance(application)
     private val networkMonitor = NetworkMonitor(application)
+
+    private val pendingPausedIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val pendingResumedIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+
+    private fun calculateActiveDownloadsCount(items: List<DownloadItem>): Int {
+        return items.count { it.status == DownloadStatus.DOWNLOADING }
+    }
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -91,10 +102,40 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Collect downloads
+        // Collect downloads with real-time state reconciliation
         viewModelScope.launch {
             repository.downloads.collectLatest { downloadList ->
-                _uiState.update { it.copy(downloads = downloadList) }
+                val reconciledList = downloadList.map { item ->
+                    when {
+                        pendingPausedIds.contains(item.id) -> {
+                            if (item.status == DownloadStatus.PAUSED) {
+                                pendingPausedIds.remove(item.id)
+                                item
+                            } else {
+                                item.copy(
+                                    status = DownloadStatus.PAUSED,
+                                    speedBytesPerSec = 0L,
+                                    etaSeconds = 0L
+                                )
+                            }
+                        }
+                        pendingResumedIds.contains(item.id) -> {
+                            if (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.PENDING) {
+                                pendingResumedIds.remove(item.id)
+                                item
+                            } else {
+                                item.copy(status = DownloadStatus.DOWNLOADING)
+                            }
+                        }
+                        else -> item
+                    }
+                }
+                _uiState.update { state ->
+                    state.copy(
+                        downloads = reconciledList,
+                        activeDownloadsCount = calculateActiveDownloadsCount(reconciledList)
+                    )
+                }
             }
         }
 
@@ -307,38 +348,206 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startDownload(pelicula: Pelicula) {
+        val existing = _uiState.value.downloads.find { it.id == pelicula.id }
+        if (existing != null && existing.status == DownloadStatus.PAUSED) {
+            resumeDownload(existing)
+            return
+        }
+        _uiState.update { state ->
+            val isAlreadyActive = state.downloads.any {
+                it.id == pelicula.id && (it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.COMPLETED)
+            }
+            if (isAlreadyActive) return@update state
+
+            val currentActive = state.downloads.count { it.status == DownloadStatus.DOWNLOADING }
+            val nextStatus = if (currentActive < state.maxConcurrentDownloads) DownloadStatus.DOWNLOADING else DownloadStatus.PENDING
+            val extraTag = if (pelicula.isVideo) pelicula.youtuberName else pelicula.safeYear
+            val displayTitleWithTag = if (extraTag.isNotBlank() && !pelicula.safeTitle.contains("($extraTag)")) {
+                "${pelicula.safeTitle} ($extraTag)"
+            } else {
+                pelicula.safeTitle
+            }
+
+            val optimisticItem = DownloadItem(
+                id = pelicula.id,
+                title = displayTitleWithTag,
+                originalVideoUrl = pelicula.safeVideoUrl,
+                coverUrl = pelicula.safeCoverUrl,
+                year = extraTag,
+                type = pelicula.tp ?: "pl",
+                localFilePath = "",
+                status = nextStatus,
+                progress = 0
+            )
+
+            if (nextStatus == DownloadStatus.DOWNLOADING) {
+                pendingResumedIds.add(pelicula.id)
+                pendingPausedIds.remove(pelicula.id)
+            }
+
+            val updated = state.downloads.filterNot { it.id == pelicula.id } + optimisticItem
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = calculateActiveDownloadsCount(updated)
+            )
+        }
         downloadHelper.startDownload(pelicula)
     }
 
     fun pauseDownload(item: DownloadItem) {
+        pendingPausedIds.add(item.id)
+        pendingResumedIds.remove(item.id)
+        _uiState.update { state ->
+            val updated = state.downloads.map {
+                if (it.id == item.id) {
+                    it.copy(
+                        status = DownloadStatus.PAUSED,
+                        speedBytesPerSec = 0L,
+                        etaSeconds = 0L
+                    )
+                } else it
+            }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = calculateActiveDownloadsCount(updated)
+            )
+        }
         downloadHelper.pauseDownload(item)
     }
 
     fun resumeDownload(item: DownloadItem) {
+        pendingResumedIds.add(item.id)
+        pendingPausedIds.remove(item.id)
+        _uiState.update { state ->
+            val currentActive = state.downloads.count { it.status == DownloadStatus.DOWNLOADING && it.id != item.id }
+            val nextStatus = if (currentActive < state.maxConcurrentDownloads) {
+                DownloadStatus.DOWNLOADING
+            } else {
+                DownloadStatus.PENDING
+            }
+            val updated = state.downloads.map {
+                if (it.id == item.id) {
+                    it.copy(
+                        status = nextStatus,
+                        speedBytesPerSec = if (nextStatus == DownloadStatus.DOWNLOADING) it.speedBytesPerSec else 0L
+                    )
+                } else it
+            }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = calculateActiveDownloadsCount(updated)
+            )
+        }
         downloadHelper.resumeDownload(item)
     }
 
     fun cancelDownload(item: DownloadItem) {
+        pendingPausedIds.remove(item.id)
+        pendingResumedIds.remove(item.id)
+        _uiState.update { state ->
+            val updated = state.downloads.filterNot { it.id == item.id }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = calculateActiveDownloadsCount(updated)
+            )
+        }
         downloadHelper.cancelDownload(item)
     }
 
     fun deleteMultipleDownloads(items: List<DownloadItem>) {
+        val idsToDelete = items.map { it.id }.toSet()
+        idsToDelete.forEach { id ->
+            pendingPausedIds.remove(id)
+            pendingResumedIds.remove(id)
+        }
+        _uiState.update { state ->
+            val updated = state.downloads.filterNot { idsToDelete.contains(it.id) }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = calculateActiveDownloadsCount(updated)
+            )
+        }
         downloadHelper.deleteMultipleDownloads(items)
     }
 
     fun forceStartPendingDownload(item: DownloadItem) {
+        pendingPausedIds.remove(item.id)
+        pendingResumedIds.add(item.id)
+        _uiState.update { state ->
+            val updated = state.downloads.map {
+                if (it.id == item.id) it.copy(status = DownloadStatus.DOWNLOADING)
+                else it
+            }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = calculateActiveDownloadsCount(updated)
+            )
+        }
         downloadHelper.forceStartPending(item)
     }
 
     fun pauseAllDownloads() {
+        _uiState.update { state ->
+            state.downloads.forEach {
+                if (it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING) {
+                    pendingPausedIds.add(it.id)
+                    pendingResumedIds.remove(it.id)
+                }
+            }
+            val updated = state.downloads.map {
+                if (it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING) {
+                    it.copy(
+                        status = DownloadStatus.PAUSED,
+                        speedBytesPerSec = 0L,
+                        etaSeconds = 0L
+                    )
+                } else it
+            }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = 0
+            )
+        }
         downloadHelper.pauseAllDownloads()
     }
 
     fun resumeAllDownloads() {
+        pendingPausedIds.clear()
+        _uiState.update { state ->
+            var activeCount = 0
+            val maxLimit = state.maxConcurrentDownloads
+            val updated = state.downloads.map {
+                if (it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING || it.status == DownloadStatus.FAILED) {
+                    if (activeCount < maxLimit) {
+                        activeCount++
+                        pendingResumedIds.add(it.id)
+                        it.copy(status = DownloadStatus.DOWNLOADING)
+                    } else {
+                        it.copy(status = DownloadStatus.PENDING, speedBytesPerSec = 0L, etaSeconds = 0L)
+                    }
+                } else {
+                    if (it.status == DownloadStatus.DOWNLOADING) activeCount++
+                    it
+                }
+            }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = calculateActiveDownloadsCount(updated)
+            )
+        }
         downloadHelper.resumeAllDownloads()
     }
 
     fun cancelAllDownloads() {
+        pendingPausedIds.clear()
+        pendingResumedIds.clear()
+        _uiState.update { state ->
+            val updated = state.downloads.filter { it.status == DownloadStatus.COMPLETED }
+            state.copy(
+                downloads = updated,
+                activeDownloadsCount = 0
+            )
+        }
         downloadHelper.cancelAllDownloads()
     }
 
@@ -389,13 +598,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ThemeMode.DARK -> true
             ThemeMode.LIGHT -> false
         }
-        val correspondingColor = AppThemeColor.getCorrespondingColor(current.themeColor, isDark)
-        _uiState.update { it.copy(themeMode = mode, themeColor = correspondingColor, isDarkTheme = isDark) }
+        _uiState.update { it.copy(themeMode = mode, isDarkTheme = isDark) }
         viewModelScope.launch {
             repository.setThemeMode(mode)
-            if (correspondingColor.id != current.themeColor.id) {
-                repository.setThemeColor(correspondingColor.id)
-            }
         }
     }
 

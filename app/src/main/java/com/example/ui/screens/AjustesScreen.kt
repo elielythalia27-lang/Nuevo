@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import com.example.ui.components.AppToastManager
@@ -188,6 +189,11 @@ fun AjustesScreen(
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
     val itemBg = MaterialTheme.colorScheme.surfaceVariant
     val dividerColor = MaterialTheme.colorScheme.outlineVariant
+    val cardElevation by animateDpAsState(
+        targetValue = if (isDarkTheme) 0.dp else 1.5.dp,
+        animationSpec = tween<androidx.compose.ui.unit.Dp>(220),
+        label = "card_elevation"
+    )
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -243,7 +249,7 @@ fun AjustesScreen(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -334,13 +340,13 @@ fun AjustesScreen(
                                                 Brush.radialGradient(
                                                     colors = listOf(
                                                         themeColor.primary,
-                                                        themeColor.primaryVariantForTheme(isDarkTheme)
+                                                        themeColor.primaryVariant
                                                     )
                                                 )
                                             )
                                             .border(
                                                 2.dp,
-                                                if (isDarkTheme) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.15f),
+                                                MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                                                 CircleShape
                                             ),
                                         contentAlignment = Alignment.Center
@@ -467,7 +473,7 @@ fun AjustesScreen(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -533,7 +539,7 @@ fun AjustesScreen(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -766,7 +772,7 @@ fun AjustesScreen(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -815,7 +821,7 @@ fun AjustesScreen(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
                         border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 0.dp else 2.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(

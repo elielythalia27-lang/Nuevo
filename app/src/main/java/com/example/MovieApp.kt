@@ -29,7 +29,7 @@ class MovieApp : Application(), ImageLoaderFactory {
                     .build()
             }
             .respectCacheHeaders(false)
-            .allowHardware(true)
+            .allowHardware(false)
             .crossfade(false)
             .build()
     }

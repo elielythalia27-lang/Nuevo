@@ -180,25 +180,24 @@ fun HomeScreen(
 
                     if (isListVisible) {
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = badgeBg,
                             border = BorderStroke(
                                 width = 1.dp,
                                 color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1)
                             ),
-                            modifier = Modifier.height(42.dp)
+                            modifier = Modifier.height(32.dp)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .padding(horizontal = 12.dp),
+                                    .padding(horizontal = 9.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = uiState.allPeliculas.size.toString(),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }

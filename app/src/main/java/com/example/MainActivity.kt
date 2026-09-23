@@ -366,7 +366,6 @@ fun MainAppNavigation(
                     }
 
                     // Floating Modern Navigation Pill Bar over the content
-                    val downCount = uiState.downloads.count { it.status == DownloadStatus.DOWNLOADING }
                     AppBottomNav(
                         currentPage = pagerState.currentPage,
                         onNavigate = { targetPage ->
@@ -377,7 +376,7 @@ fun MainAppNavigation(
                                 )
                             }
                         },
-                        downloadsCount = downCount,
+                        downloadsCount = uiState.activeDownloadsCount,
                         isDarkTheme = isDark,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
