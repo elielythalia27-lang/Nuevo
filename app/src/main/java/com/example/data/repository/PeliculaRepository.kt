@@ -68,26 +68,15 @@ class PeliculaRepository(
         }
     }
 
-    fun getPeliculasFlow(forceRefresh: Boolean = false): Flow<Resource<List<Pelicula>>> = flow {
-        // Obtenemos primero la lista en caché (disco o DataStore)
-        val diskList = readDiskCache()
-        val cached = if (diskList.isNotEmpty()) {
-            diskList
-        } else {
-            try {
-                preferences.cachedPeliculas.first()
-            } catch (_: Exception) {
-                emptyList()
-            }
-        }
+    val wifiOnly: Flow<Boolean> = preferences.wifiOnly
 
-        // Si tenemos catálogo en caché y no se solicitó forzar refresco total,
-        // lo emitimos inmediatamente para mostrarlo en el primer fotograma sin esperas
-        if (cached.isNotEmpty() && !forceRefresh) {
-            emit(Resource.Success(cached, isOffline = false))
-        } else {
-            emit(Resource.Loading)
-        }
+    suspend fun setWifiOnly(enabled: Boolean) {
+        preferences.setWifiOnly(enabled)
+    }
+
+    fun getPeliculasFlow(forceRefresh: Boolean = false): Flow<Resource<List<Pelicula>>> = flow {
+        // La lista no debe mostrarse si no hay conexión con el JSON del servidor (incluso habiendo caché)
+        emit(Resource.Loading)
 
         try {
             // Cargar y desencriptar desde el endpoint seguro
@@ -97,23 +86,12 @@ class PeliculaRepository(
                 writeDiskCache(remoteList)
                 preferences.saveCachedPeliculas(remoteList)
                 emit(Resource.Success(remoteList, isOffline = false))
-            } else if (cached.isNotEmpty()) {
-                emit(Resource.Success(cached, isOffline = true))
             } else {
-                val fallback = readDiskCache()
-                if (fallback.isNotEmpty()) {
-                    emit(Resource.Success(fallback, isOffline = true))
-                } else {
-                    emit(Resource.Error("No se pudo obtener el catálogo del servidor"))
-                }
+                emit(Resource.Error("No se pudo obtener el catálogo del servidor"))
             }
         } catch (e: Exception) {
-            val fallback = if (cached.isNotEmpty()) cached else readDiskCache()
-            if (fallback.isNotEmpty()) {
-                emit(Resource.Success(fallback, isOffline = true))
-            } else {
-                emit(Resource.Error("Sin conexión con el catálogo de películas: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
-            }
+            // Sin conexión exitosa con el JSON, no se muestra la lista
+            emit(Resource.Error("Sin conexión con el catálogo: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
         }
     }
 

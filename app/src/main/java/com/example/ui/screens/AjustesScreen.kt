@@ -154,6 +154,8 @@ fun AjustesScreen(
     downloadFolderName: String = "Download Free",
     downloadFolderPath: String = "",
     onDownloadFolderChange: (name: String, path: String) -> Unit = { _, _ -> },
+    wifiOnly: Boolean = false,
+    onWifiOnlyChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -179,7 +181,6 @@ fun AjustesScreen(
     var hardwareAcceleration by remember { mutableStateOf(true) }
     var screenGestures by remember { mutableStateOf(true) }
     var autoResume by remember { mutableStateOf(true) }
-    var wifiOnlyDownloads by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
 
     val screenBg = MaterialTheme.colorScheme.background
@@ -328,8 +329,14 @@ fun AjustesScreen(
                                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    val onPrimaryColor = remember(themeColor.primary) {
-                                        themeColor.primary.contrastingTextColor()
+                                    val activePrimary = remember(themeColor, isDarkTheme) {
+                                        themeColor.primaryForTheme(isDarkTheme)
+                                    }
+                                    val activeVariant = remember(themeColor, isDarkTheme) {
+                                        themeColor.primaryVariantForTheme(isDarkTheme)
+                                    }
+                                    val onPrimaryColor = remember(activePrimary) {
+                                        activePrimary.contrastingTextColor()
                                     }
 
                                     Box(
@@ -339,8 +346,8 @@ fun AjustesScreen(
                                             .background(
                                                 Brush.radialGradient(
                                                     colors = listOf(
-                                                        themeColor.primary,
-                                                        themeColor.primaryVariant
+                                                        activePrimary,
+                                                        activeVariant
                                                     )
                                                 )
                                             )
@@ -360,10 +367,10 @@ fun AjustesScreen(
                                     }
 
                                     Column(modifier = Modifier.weight(1f)) {
-                                        val currentHex = remember(themeColor.primary) {
-                                            val r = (themeColor.primary.red * 255).toInt().coerceIn(0, 255)
-                                            val g = (themeColor.primary.green * 255).toInt().coerceIn(0, 255)
-                                            val b = (themeColor.primary.blue * 255).toInt().coerceIn(0, 255)
+                                        val currentHex = remember(activePrimary) {
+                                            val r = (activePrimary.red * 255).toInt().coerceIn(0, 255)
+                                            val g = (activePrimary.green * 255).toInt().coerceIn(0, 255)
+                                            val b = (activePrimary.blue * 255).toInt().coerceIn(0, 255)
                                             String.format("#%02X%02X%02X", r, g, b)
                                         }
                                         Text(
@@ -692,12 +699,12 @@ fun AjustesScreen(
                                 icon = Icons.Default.Wifi,
                                 title = "Transferencias únicamente por Wi-Fi",
                                 subtitle = "Restringe descargas a redes Wi-Fi para no consumir tus datos móviles.",
-                                checked = wifiOnlyDownloads,
+                                checked = wifiOnly,
                                 isDarkTheme = isDarkTheme,
                                 textPrimary = textPrimary,
                                 textSecondary = textSecondary,
                                 onCheckedChange = {
-                                    wifiOnlyDownloads = it
+                                    onWifiOnlyChange(it)
                                     AppToastManager.show(
                                         if (it) "Descargas restringidas a redes Wi-Fi" else "Descargas permitidas en cualquier conexión",
                                         ToastType.INFO
@@ -1015,26 +1022,37 @@ private fun SettingsSwitchRow(
                 color = textSecondary
             )
         }
-        val switchAnimSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
-        val uncheckedThumbColor by animateColorAsState(
-            targetValue = if (isDarkTheme) Color(0xFF64748B) else Color(0xFF94A3B8),
-            animationSpec = switchAnimSpec,
-            label = "switch_thumb_color"
-        )
-        val uncheckedTrackColor by animateColorAsState(
-            targetValue = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0),
-            animationSpec = switchAnimSpec,
-            label = "switch_track_color"
-        )
+        val activePrimary = MaterialTheme.colorScheme.primary
+        val isBrightAccent = (0.299f * activePrimary.red + 0.587f * activePrimary.green + 0.114f * activePrimary.blue) > 0.65f
+
+        val checkedThumb = if (isBrightAccent) Color(0xFF0F172A) else Color.White
+        val checkedTrack = activePrimary
+        val checkedBorder = if (isBrightAccent) Color(0xFF64748B) else Color.Transparent
+
+        val uncheckedThumbColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
+        val uncheckedTrackColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+        val uncheckedBorderColor = if (isDarkTheme) Color(0xFF475569) else Color(0xFFCBD5E1)
 
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            thumbContent = if (checked) {
+                {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(SwitchDefaults.IconSize),
+                        tint = if (isBrightAccent) Color.White else MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else null,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedThumbColor = checkedThumb,
+                checkedTrackColor = checkedTrack,
+                checkedBorderColor = checkedBorder,
                 uncheckedThumbColor = uncheckedThumbColor,
-                uncheckedTrackColor = uncheckedTrackColor
+                uncheckedTrackColor = uncheckedTrackColor,
+                uncheckedBorderColor = uncheckedBorderColor
             )
         )
     }
@@ -1352,10 +1370,13 @@ private fun ThemeColorPickerDialog(
                 }
 
                 // Active color indicator chip (HEX code only, no color names)
-                val currentHex = remember(currentColor.primary) {
-                    val r = (currentColor.primary.red * 255).toInt().coerceIn(0, 255)
-                    val g = (currentColor.primary.green * 255).toInt().coerceIn(0, 255)
-                    val b = (currentColor.primary.blue * 255).toInt().coerceIn(0, 255)
+                val activePrimary = remember(currentColor, isDarkTheme) {
+                    currentColor.primaryForTheme(isDarkTheme)
+                }
+                val currentHex = remember(activePrimary) {
+                    val r = (activePrimary.red * 255).toInt().coerceIn(0, 255)
+                    val g = (activePrimary.green * 255).toInt().coerceIn(0, 255)
+                    val b = (activePrimary.blue * 255).toInt().coerceIn(0, 255)
                     String.format("#%02X%02X%02X", r, g, b)
                 }
 
@@ -1378,7 +1399,7 @@ private fun ThemeColorPickerDialog(
                                 modifier = Modifier
                                     .size(22.dp)
                                     .clip(CircleShape)
-                                    .background(currentColor.primary)
+                                    .background(activePrimary)
                                     .border(
                                         1.5.dp,
                                         if (isDarkTheme) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.2f),
@@ -1419,15 +1440,18 @@ private fun ThemeColorPickerDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             rowColors.forEach { preset ->
+                                val presetActivePrimary = remember(preset, isDarkTheme) {
+                                    preset.primaryForTheme(isDarkTheme)
+                                }
                                 val isSelected = currentColor.id.equals(preset.id, ignoreCase = true) ||
-                                        (currentColor.primary.value == preset.primary.value)
-                                val presetOnColor = remember(preset.primary) { preset.primary.contrastingTextColor() }
+                                        (activePrimary.value == presetActivePrimary.value)
+                                val presetOnColor = remember(presetActivePrimary) { presetActivePrimary.contrastingTextColor() }
 
                                 Box(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(preset.primary)
+                                        .background(presetActivePrimary)
                                         .border(
                                             width = if (isSelected) 3.dp else 1.dp,
                                             color = if (isSelected) (if (isDarkTheme) Color.White else Color(0xFF0F172A)) else dialogBorder,

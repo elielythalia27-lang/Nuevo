@@ -19,6 +19,7 @@ import com.example.data.model.Pelicula
 import com.example.data.model.formatByteSize
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
+import com.example.utils.NetworkUtils
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
 import kotlinx.coroutines.CancellationException
@@ -344,6 +345,12 @@ class DownloadHelper(
             return
         }
 
+        val isWifiOnlySync = try { kotlinx.coroutines.runBlocking { preferences.wifiOnly.first() } } catch (_: Exception) { false }
+        if (isWifiOnlySync && !NetworkUtils.isWifiOrEthernet(context)) {
+            AppToastManager.show("Descarga bloqueada: 'Solo Wi-Fi' está activo y estás conectado a datos móviles", ToastType.ERROR)
+            return
+        }
+
         scope.launch(Dispatchers.IO) {
             try {
                 val extraTag = if (pelicula.isVideo) pelicula.youtuberName else pelicula.safeYear
@@ -552,6 +559,7 @@ class DownloadHelper(
                 .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
                 .setContentIntent(getContentPendingIntent())
                 .setOngoing(true)
+                .setSilent(true)
                 .setOnlyAlertOnce(true)
                 .build()
 
@@ -1006,7 +1014,7 @@ class DownloadHelper(
 
         val now = System.currentTimeMillis()
         val lastUpdate = lastNotificationUpdate[item.id] ?: 0L
-        if (now - lastUpdate < 1400L) return
+        if (now - lastUpdate < 2000L && item.progress < 100) return
         lastNotificationUpdate[item.id] = now
 
         try {
@@ -1035,7 +1043,9 @@ class DownloadHelper(
                     getCancelPendingIntent(item.id)
                 )
                 .setOngoing(true)
+                .setSilent(true)
                 .setOnlyAlertOnce(true)
+                .setSortKey(item.id)
 
             if (isSingle) {
                 // Update foreground notification directly - prevents duplicate notification and eliminate flicker

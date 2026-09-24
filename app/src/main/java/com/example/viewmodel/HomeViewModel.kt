@@ -14,8 +14,11 @@ import com.example.data.model.SortOption
 import com.example.data.model.ThemeMode
 import com.example.data.repository.PeliculaRepository
 import com.example.data.repository.Resource
+import com.example.ui.components.AppToastManager
+import com.example.ui.components.ToastType
 import com.example.ui.theme.AppThemeColor
 import com.example.utils.NetworkMonitor
+import com.example.utils.NetworkUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +59,7 @@ data class HomeUiState(
     val catalogLayoutMode: String = "GRID_2",
     val downloadFolderName: String = "Download Free",
     val downloadFolderPath: String = "",
+    val wifiOnly: Boolean = false,
     val activePlayback: PlaybackTarget? = null
 )
 
@@ -205,6 +209,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // Collect wifi only
+        viewModelScope.launch {
+            repository.wifiOnly.collectLatest { enabled ->
+                _uiState.update { it.copy(wifiOnly = enabled) }
+            }
+        }
+
         loadPeliculas()
     }
 
@@ -231,21 +242,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                     is Resource.Error -> {
                         _uiState.update { state ->
-                            if (state.allPeliculas.isNotEmpty()) {
-                                // Conservamos las películas cargadas previamente en caché
-                                state.copy(
-                                    isLoading = false,
-                                    isDataOffline = true,
-                                    errorMessage = null
-                                )
-                            } else {
-                                state.copy(
-                                    isLoading = false,
-                                    errorMessage = resource.message,
-                                    allPeliculas = emptyList(),
-                                    filteredPeliculas = emptyList()
-                                )
-                            }
+                            state.copy(
+                                isLoading = false,
+                                errorMessage = resource.message,
+                                allPeliculas = emptyList(),
+                                filteredPeliculas = emptyList(),
+                                isDataOffline = true
+                            )
                         }
                     }
                 }
@@ -348,6 +351,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startDownload(pelicula: Pelicula) {
+        if (_uiState.value.wifiOnly && !NetworkUtils.isWifiOrEthernet(getApplication())) {
+            AppToastManager.show(
+                "Descarga bloqueada: 'Solo Wi-Fi' está activo y estás en datos móviles",
+                ToastType.ERROR
+            )
+            return
+        }
         val existing = _uiState.value.downloads.find { it.id == pelicula.id }
         if (existing != null && existing.status == DownloadStatus.PAUSED) {
             resumeDownload(existing)
@@ -416,6 +426,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resumeDownload(item: DownloadItem) {
+        if (_uiState.value.wifiOnly && !NetworkUtils.isWifiOrEthernet(getApplication())) {
+            AppToastManager.show(
+                "Descarga en pausa: 'Solo Wi-Fi' está activo y estás en datos móviles",
+                ToastType.ERROR
+            )
+            return
+        }
         pendingResumedIds.add(item.id)
         pendingPausedIds.remove(item.id)
         _uiState.update { state ->
@@ -598,9 +615,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ThemeMode.DARK -> true
             ThemeMode.LIGHT -> false
         }
-        _uiState.update { it.copy(themeMode = mode, isDarkTheme = isDark) }
+        val correspondingColor = AppThemeColor.getCorrespondingColor(current.themeColor, isDark)
+        _uiState.update {
+            it.copy(
+                themeMode = mode,
+                isDarkTheme = isDark,
+                themeColor = correspondingColor
+            )
+        }
         viewModelScope.launch {
             repository.setThemeMode(mode)
+            repository.setThemeColor(correspondingColor.id)
+        }
+    }
+
+    fun setWifiOnly(enabled: Boolean) {
+        _uiState.update { it.copy(wifiOnly = enabled) }
+        viewModelScope.launch {
+            repository.setWifiOnly(enabled)
         }
     }
 
@@ -611,6 +643,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playPelicula(pelicula: Pelicula, initialPositionMs: Long = 0L) {
+        val isOnline = pelicula.safeVideoUrl.startsWith("http", ignoreCase = true)
+        if (isOnline && _uiState.value.wifiOnly && !NetworkUtils.isWifiOrEthernet(getApplication())) {
+            AppToastManager.show(
+                "Reproducción bloqueada: 'Solo Wi-Fi' está activo y estás conectado por datos móviles",
+                ToastType.ERROR
+            )
+            return
+        }
         val savedPos = if (initialPositionMs > 0L) initialPositionMs else {
             val cw = _uiState.value.continueWatching
             if (cw != null && cw.videoUrl == pelicula.safeVideoUrl) cw.positionMs else 0L

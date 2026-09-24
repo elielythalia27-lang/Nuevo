@@ -42,6 +42,21 @@ class PeliculaPreferences(private val context: Context) {
         val THEME_MODE_KEY = stringPreferencesKey("theme_mode_setting")
         val DOWNLOAD_FOLDER_NAME_KEY = stringPreferencesKey("download_folder_name")
         val DOWNLOAD_FOLDER_PATH_KEY = stringPreferencesKey("download_folder_path")
+        val WIFI_ONLY_KEY = booleanPreferencesKey("wifi_only_downloads")
+    }
+
+    val wifiOnly: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[WIFI_ONLY_KEY] ?: false
+        }
+
+    suspend fun setWifiOnly(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[WIFI_ONLY_KEY] = enabled
+        }
     }
 
     val downloadFolderName: Flow<String> = context.dataStore.data

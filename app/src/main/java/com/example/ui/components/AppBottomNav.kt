@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.contrastingTextColor
@@ -250,30 +251,21 @@ fun AppBottomNav(
                                     modifier = Modifier.scale(iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (screen == ScreenRoute.DOWNLOADS && downloadsCount > 0 && !isSelected) {
-                                        // Pulse halo behind badge
-                                        Box(
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .offset(x = 10.dp, y = (-7).dp)
-                                                .scale(beaconPulseScale)
-                                                .clip(CircleShape)
-                                                .background(activeColor.copy(alpha = 0.35f))
-                                        )
-
+                                    if (screen == ScreenRoute.DOWNLOADS && downloadsCount > 0) {
                                         BadgedBox(
                                             badge = {
                                                 Badge(
                                                     containerColor = activeColor,
                                                     contentColor = activeColor.contrastingTextColor(),
-                                                    modifier = Modifier
-                                                        .size(17.dp)
-                                                        .offset(x = 6.dp, y = (-4).dp)
+                                                    modifier = Modifier.offset(x = 2.dp, y = (-2).dp)
                                                 ) {
+                                                    val displayCount = if (downloadsCount > 99) "99+" else "$downloadsCount"
                                                     Text(
-                                                        text = "$downloadsCount",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold
+                                                        text = displayCount,
+                                                        fontSize = 9.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        lineHeight = 11.sp,
+                                                        textAlign = TextAlign.Center
                                                     )
                                                 }
                                             }

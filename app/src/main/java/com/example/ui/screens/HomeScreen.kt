@@ -174,30 +174,30 @@ fun HomeScreen(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val isListVisible = !uiState.isLoading && uiState.allPeliculas.isNotEmpty()
 
                     if (isListVisible) {
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = badgeBg,
                             border = BorderStroke(
                                 width = 1.dp,
                                 color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1)
                             ),
-                            modifier = Modifier.height(32.dp)
+                            modifier = Modifier.height(38.dp)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .padding(horizontal = 9.dp),
+                                    .padding(horizontal = 12.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = uiState.allPeliculas.size.toString(),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -207,7 +207,7 @@ fun HomeScreen(
                     // Telegram Channel Button with official Telegram logo and modern interactive container
                     Surface(
                         onClick = { showTelegramDialog = true },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = if (isDark) Color(0xFF131D33) else Color.White,
                         border = BorderStroke(
                             width = 1.dp,
@@ -215,7 +215,7 @@ fun HomeScreen(
                         ),
                         shadowElevation = if (isDark) 1.dp else 2.dp,
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(38.dp)
                             .testTag("telegram_button")
                     ) {
                         Box(
@@ -225,7 +225,7 @@ fun HomeScreen(
                             Image(
                                 painter = painterResource(id = R.drawable.telegram),
                                 contentDescription = "Canal de Telegram",
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }

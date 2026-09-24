@@ -79,11 +79,9 @@ class MainActivity : ComponentActivity() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 setTaskDescription(
-                    ActivityManager.TaskDescription(
-                        getString(R.string.app_name),
-                        R.mipmap.ic_launcher,
-                        android.graphics.Color.WHITE
-                    )
+                    ActivityManager.TaskDescription.Builder()
+                        .setPrimaryColor(android.graphics.Color.WHITE)
+                        .build()
                 )
             } else {
                 @Suppress("DEPRECATION")
@@ -382,7 +380,9 @@ fun MainAppNavigation(
                                     downloadFolderPath = uiState.downloadFolderPath,
                                     onDownloadFolderChange = { name, path ->
                                         viewModel.setDownloadFolder(name, path)
-                                    }
+                                    },
+                                    wifiOnly = uiState.wifiOnly,
+                                    onWifiOnlyChange = { viewModel.setWifiOnly(it) }
                                 )
                             }
                         }
