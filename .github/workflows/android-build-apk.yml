@@ -16,7 +16,7 @@ jobs:
     name: Compilar APK Release Firmado
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Descargar código fuente del repositorio
@@ -36,10 +36,10 @@ jobs:
           add-job-summary: 'on-failure'
           add-job-summary-as-pr-comment: 'never'
 
-      - name: Preparar Gradle Wrapper y permisos de ejecución
+      - name: Otorgar permisos de ejecución al Gradle Wrapper
         run: |
           if [ ! -f gradlew ]; then
-            echo "Generando gradle wrapper..."
+            echo "gradlew no encontrado, generando wrapper mediante Gradle..."
             gradle wrapper || true
           fi
           chmod +x gradlew || true
@@ -48,13 +48,13 @@ jobs:
         run: |
           touch .env && touch .env.example
 
-      - name: Preparar Almacén de Claves de Firma Release (my-upload-key.jks)
+      - name: Configurar Almacén de Claves Release (my-upload-key.jks)
         run: |
           if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
             echo "Decodificando keystore desde GitHub Secrets..."
             echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
           elif [ ! -f my-upload-key.jks ] && [ ! -f release.keystore ]; then
-            echo "Generando almacén de claves Release automatizado..."
+            echo "Generando almacén de claves Release automatizado con keytool..."
             keytool -genkeypair -v \
               -keystore my-upload-key.jks \
               -alias uploadKey \
@@ -63,10 +63,10 @@ jobs:
               -validity 10000 \
               -storepass android \
               -keypass android \
-              -dname "CN=DownloadFree, OU=Android, O=DownloadFree, L=Mountain View, ST=CA, C=US"
+              -dname "CN=DownloadFree, OU=Mobile, O=Eliel, L=Havana, ST=Havana, C=CU"
           fi
 
-      - name: Compilar APK Release con banderas optimizadas para CI
+      - name: Compilar APK Release
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
@@ -79,23 +79,21 @@ jobs:
             gradle :app:assembleRelease --no-daemon -Dkotlin.compiler.execution.strategy=daemon -Dksp.incremental=false -Dksp.incremental.intermodule=false --stacktrace
           fi
 
-      - name: Verificar y organizar APK generado
+      - name: Verificar existencia del archivo APK Release
         run: |
-          mkdir -p output_apk
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} output_apk/ \;
-          if [ -z "$(ls -A output_apk)" ]; then
-            echo "::error::No se generó ningún archivo APK en app/build/outputs/apk/release/"
+          echo "Verificando artefactos generados en app/build/outputs/apk/release/:"
+          ls -la app/build/outputs/apk/release/
+          if compgen -G "app/build/outputs/apk/release/*.apk" > /dev/null; then
+            echo "¡APK Release generado y firmado exitosamente!"
+          else
+            echo "::error::No se encontró ningún archivo APK en app/build/outputs/apk/release/"
             exit 1
           fi
-          echo "=========================================="
-          echo "APK Release generado y firmado exitosamente:"
-          ls -lh output_apk/
-          echo "=========================================="
 
       - name: Subir APK como Artefacto Descargable
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
-          path: output_apk/*.apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
