@@ -246,8 +246,8 @@ class PeliculaPreferences(private val context: Context) {
             items.forEach { updatedItem ->
                 val index = currentList.indexOfFirst { it.id == updatedItem.id }
                 if (index >= 0) {
-                    // Safety check: do not overwrite a PAUSED item with a DOWNLOADING periodic update
-                    if (currentList[index].status == DownloadStatus.PAUSED && updatedItem.status == DownloadStatus.DOWNLOADING) {
+                    // Safety check: ticker updates must only apply to items currently DOWNLOADING, never overwrite PAUSED, PENDING or FAILED
+                    if (currentList[index].status != DownloadStatus.DOWNLOADING) {
                         return@forEach
                     }
                     currentList[index] = updatedItem

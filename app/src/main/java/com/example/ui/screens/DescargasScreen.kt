@@ -189,7 +189,8 @@ fun DescargasScreen(
         downloads.filter {
             it.status == DownloadStatus.DOWNLOADING ||
             it.status == DownloadStatus.PAUSED ||
-            it.status == DownloadStatus.PENDING
+            it.status == DownloadStatus.PENDING ||
+            it.status == DownloadStatus.FAILED
         }
     }
 
@@ -1059,43 +1060,44 @@ private fun ActiveDownloadsTab(
                         textSecondary = textSecondary
                     )
                 }
+            }
 
-                if (failedItems.isNotEmpty()) {
-                    item {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ErrorOutline,
-                                contentDescription = null,
-                                tint = Color(0xFFEF4444),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "CON ERROR (${failedItems.size})",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFEF4444),
-                                letterSpacing = 1.sp
-                            )
-                        }
-                    }
-
-                    items(failedItems, key = { it.id }) { item ->
-                        ActiveDownloadingCard(
-                            item = item,
-                            onPause = {},
-                            onResume = { onForceStart(item) },
-                            onCancel = { onCancel(item) },
-                            isDarkTheme = isDarkTheme,
-                            cardBg = cardBg,
-                            cardBorder = cardBorder,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary
+            // Failed downloads section (always shown if any exist)
+            if (failedItems.isNotEmpty()) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "CON ERROR (${failedItems.size})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFEF4444),
+                            letterSpacing = 1.sp
                         )
                     }
+                }
+
+                items(failedItems, key = { it.id }) { item ->
+                    ActiveDownloadingCard(
+                        item = item,
+                        onPause = {},
+                        onResume = { onForceStart(item) },
+                        onCancel = { onCancel(item) },
+                        isDarkTheme = isDarkTheme,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary
+                    )
                 }
             }
         }
@@ -1554,15 +1556,19 @@ fun ActiveDownloadingCard(
 
                 // Pause / Resume and Cancel Action Buttons
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     when {
                         isFailed -> {
                             // Retry Button
-                            IconButton(
-                                onClick = onResume,
-                                modifier = Modifier.size(34.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable(onClick = onResume)
+                                    .testTag("retry_download_button"),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
@@ -1574,9 +1580,13 @@ fun ActiveDownloadingCard(
                         }
                         isPaused -> {
                             // Resume Button
-                            IconButton(
-                                onClick = onResume,
-                                modifier = Modifier.size(34.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable(onClick = onResume)
+                                    .testTag("resume_download_button"),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
@@ -1588,9 +1598,13 @@ fun ActiveDownloadingCard(
                         }
                         else -> {
                             // Pause Button
-                            IconButton(
-                                onClick = onPause,
-                                modifier = Modifier.size(34.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable(onClick = onPause)
+                                    .testTag("pause_download_button"),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Pause,
@@ -1603,15 +1617,19 @@ fun ActiveDownloadingCard(
                     }
 
                     // Cancel Button
-                    IconButton(
-                        onClick = onCancel,
-                        modifier = Modifier.size(34.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onCancel)
+                            .testTag("cancel_download_button"),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Cancelar descarga",
                             tint = Color(0xFFEF4444),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
                 }

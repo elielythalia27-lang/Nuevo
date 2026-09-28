@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -96,16 +97,17 @@ fun Modifier.shimmerEffect(
  */
 @Composable
 fun PeliculaGridItemSkeleton(isDark: Boolean = isSystemInDarkTheme()) {
+    val cardBg = if (isDark) Color(0xFF0F172A) else Color.White
+    val cardBorder = if (isDark) Color(0xFF26354D) else Color(0xFFA0AEC0)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDark) Color(0xFF0F172A) else Color.White
-        ),
-        border = BorderStroke(1.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 2.dp else 3.dp)
+            .clip(RoundedCornerShape(10.dp)),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        border = BorderStroke(if (isDark) 1.dp else 1.2.dp, cardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 1.5.dp else 2.5.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Poster skeleton matching vertical 0.78f aspect ratio
@@ -113,27 +115,28 @@ fun PeliculaGridItemSkeleton(isDark: Boolean = isSystemInDarkTheme()) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(0.78f)
-                    .shimmerEffect(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp), isDark = isDark)
+                    .shimmerEffect(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp), isDark = isDark)
             )
             // Title and badge skeleton
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .heightIn(min = 40.dp)
                     .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .height(13.dp)
+                        .fillMaxWidth(0.80f)
+                        .height(11.dp)
                         .shimmerEffect(RoundedCornerShape(4.dp), isDark = isDark)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.5f)
-                        .height(11.dp)
+                        .fillMaxWidth(0.50f)
+                        .height(10.dp)
                         .shimmerEffect(RoundedCornerShape(4.dp), isDark = isDark)
                 )
             }
@@ -143,56 +146,75 @@ fun PeliculaGridItemSkeleton(isDark: Boolean = isSystemInDarkTheme()) {
 
 /**
  * Shimmer placeholder for movie cards in list mode.
+ * Matches PeliculaCard list mode exactly: poster 74x108dp, corner 9dp, card 10dp, 2-line title and badge pills.
  */
 @Composable
 fun PeliculaListItemSkeleton(isDark: Boolean = isSystemInDarkTheme()) {
+    val cardBg = if (isDark) Color(0xFF0F172A) else Color.White
+    val cardBorder = if (isDark) Color(0xFF26354D) else Color(0xFFA0AEC0)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDark) Color(0xFF0F172A) else Color.White
-        ),
-        border = BorderStroke(1.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 2.dp else 3.dp)
+            .clip(RoundedCornerShape(10.dp)),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        border = BorderStroke(if (isDark) 1.dp else 1.2.dp, cardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 1.5.dp else 2.5.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Poster (exact 74x108 dp with 9dp corner)
             Box(
                 modifier = Modifier
-                    .size(width = 85.dp, height = 125.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .shimmerEffect(RoundedCornerShape(8.dp), isDark = isDark)
+                    .size(width = 74.dp, height = 108.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .shimmerEffect(RoundedCornerShape(9.dp), isDark = isDark)
             )
+
+            // Metadata Column
             Column(
-                modifier = Modifier
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Title Line 1
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .height(15.dp)
+                        .fillMaxWidth(0.92f)
+                        .height(14.dp)
                         .shimmerEffect(RoundedCornerShape(4.dp), isDark = isDark)
                 )
+                // Title Line 2
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.5f)
-                        .height(12.dp)
+                        .fillMaxWidth(0.62f)
+                        .height(14.dp)
                         .shimmerEffect(RoundedCornerShape(4.dp), isDark = isDark)
                 )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.3f)
-                        .height(10.dp)
-                        .shimmerEffect(RoundedCornerShape(4.dp), isDark = isDark)
-                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Badges row skeleton (simulating category and year pills)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 54.dp, height = 18.dp)
+                            .shimmerEffect(RoundedCornerShape(6.dp), isDark = isDark)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(width = 42.dp, height = 18.dp)
+                            .shimmerEffect(RoundedCornerShape(6.dp), isDark = isDark)
+                    )
+                }
             }
         }
     }

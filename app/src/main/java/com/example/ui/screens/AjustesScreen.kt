@@ -694,26 +694,6 @@ fun AjustesScreen(
 
                             HorizontalDivider(color = dividerColor)
 
-                            // Wi-Fi Only Switch
-                            SettingsSwitchRow(
-                                icon = Icons.Default.Wifi,
-                                title = "Transferencias únicamente por Wi-Fi",
-                                subtitle = "Restringe descargas a redes Wi-Fi para no consumir tus datos móviles.",
-                                checked = wifiOnly,
-                                isDarkTheme = isDarkTheme,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
-                                onCheckedChange = {
-                                    onWifiOnlyChange(it)
-                                    AppToastManager.show(
-                                        if (it) "Descargas restringidas a redes Wi-Fi" else "Descargas permitidas en cualquier conexión",
-                                        ToastType.INFO
-                                    )
-                                }
-                            )
-
-                            HorizontalDivider(color = dividerColor)
-
                             // Limpiar Caché
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1272,10 +1252,16 @@ private fun ThemeColorPickerDialog(
     // Determine the exact index and row of the currently selected color
     val selectedColorIndex = remember(availableColors, currentColor) {
         val idx = availableColors.indexOfFirst {
-            it.id.equals(currentColor.id, ignoreCase = true) ||
-                    it.primary.value == currentColor.primary.value
+            it.id.equals(currentColor.id, ignoreCase = true)
         }
-        if (idx >= 0) idx else 0
+        if (idx >= 0) {
+            idx
+        } else {
+            val byVal = availableColors.indexOfFirst {
+                it.primary.value == currentColor.primary.value
+            }
+            if (byVal >= 0) byVal else 0
+        }
     }
 
     val selectedRowIndex = remember(selectedColorIndex) {
@@ -1443,8 +1429,7 @@ private fun ThemeColorPickerDialog(
                                 val presetActivePrimary = remember(preset, isDarkTheme) {
                                     preset.primaryForTheme(isDarkTheme)
                                 }
-                                val isSelected = currentColor.id.equals(preset.id, ignoreCase = true) ||
-                                        (activePrimary.value == presetActivePrimary.value)
+                                val isSelected = selectedColorIndex >= 0 && availableColors.getOrNull(selectedColorIndex)?.id == preset.id
                                 val presetOnColor = remember(presetActivePrimary) { presetActivePrimary.contrastingTextColor() }
 
                                 Box(

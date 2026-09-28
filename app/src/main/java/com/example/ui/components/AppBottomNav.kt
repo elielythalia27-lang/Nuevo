@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -11,6 +13,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -251,22 +259,49 @@ fun AppBottomNav(
                                     modifier = Modifier.scale(iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (screen == ScreenRoute.DOWNLOADS && downloadsCount > 0) {
+                                    if (screen == ScreenRoute.DOWNLOADS) {
+                                        val showDownloadBadge = downloadsCount > 0 && !isSelected
+                                        val badgeScale by animateFloatAsState(
+                                            targetValue = if (showDownloadBadge) 1f else 0f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessMedium
+                                            ),
+                                            label = "downloads_badge_scale"
+                                        )
+
                                         BadgedBox(
                                             badge = {
-                                                Badge(
-                                                    containerColor = activeColor,
-                                                    contentColor = activeColor.contrastingTextColor(),
-                                                    modifier = Modifier.offset(x = 2.dp, y = (-2).dp)
-                                                ) {
-                                                    val displayCount = if (downloadsCount > 99) "99+" else "$downloadsCount"
-                                                    Text(
-                                                        text = displayCount,
-                                                        fontSize = 9.5.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        lineHeight = 11.sp,
-                                                        textAlign = TextAlign.Center
-                                                    )
+                                                if (badgeScale > 0.01f) {
+                                                    Badge(
+                                                        containerColor = activeColor,
+                                                        contentColor = activeColor.contrastingTextColor(),
+                                                        modifier = Modifier
+                                                            .offset(x = 2.dp, y = (-2).dp)
+                                                            .graphicsLayer {
+                                                                scaleX = badgeScale
+                                                                scaleY = badgeScale
+                                                                alpha = badgeScale.coerceIn(0f, 1f)
+                                                            }
+                                                    ) {
+                                                        AnimatedContent(
+                                                            targetState = downloadsCount,
+                                                            transitionSpec = {
+                                                                (scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn())
+                                                                    .togetherWith(scaleOut() + fadeOut())
+                                                            },
+                                                            label = "badge_number_anim"
+                                                        ) { count ->
+                                                            val displayCount = if (count > 99) "99+" else "$count"
+                                                            Text(
+                                                                text = displayCount,
+                                                                fontSize = 9.5.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                lineHeight = 11.sp,
+                                                                textAlign = TextAlign.Center
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         ) {

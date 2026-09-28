@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,21 +84,17 @@ fun FilterBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .animateContentSize()
     ) {
         // Modern Search Pill with integrated icons and clear button
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
-                .border(
-                    width = 1.dp,
-                    color = searchBorder,
-                    shape = CircleShape
-                ),
+                .height(50.dp)
+                .clip(CircleShape),
             shape = CircleShape,
             color = searchBg,
-            shadowElevation = if (isDarkTheme) 2.dp else 3.dp
+            border = BorderStroke(1.dp, searchBorder),
+            shadowElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
@@ -155,13 +152,16 @@ fun FilterBar(
                 )
 
                 if (searchQuery.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            onSearchQueryChange("")
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                        },
-                        modifier = Modifier.size(30.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                onSearchQueryChange("")
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,

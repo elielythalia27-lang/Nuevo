@@ -287,7 +287,6 @@ fun PlayerScreen(
     DisposableEffect(Unit) {
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         insetsController?.let { controller ->
-            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.isAppearanceLightStatusBars = false
             controller.isAppearanceLightNavigationBars = false
         }
@@ -298,18 +297,6 @@ fun PlayerScreen(
                 activity.window.attributes = lp
             }
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            insetsController?.show(WindowInsetsCompat.Type.systemBars())
-        }
-    }
-
-    // Synchronize system notification bar and navigation bar with controls visibility
-    LaunchedEffect(areControlsVisible) {
-        insetsController?.let { controller ->
-            if (areControlsVisible) {
-                controller.show(WindowInsetsCompat.Type.systemBars())
-            } else {
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-            }
         }
     }
 
@@ -456,10 +443,10 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 // 1. Tap, Double-Tap and Press & Hold (Fast forward 2x)
-                .pointerInput(isScreenLocked) {
+                .pointerInput(isScreenLocked, isBuffering) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
-                            if (!isScreenLocked) {
+                            if (!isScreenLocked && !isBuffering) {
                                 val isRightSide = offset.x > (size.width / 2)
                                 if (isRightSide) {
                                     val newPos = (exoPlayer.currentPosition + 10_000L).coerceAtMost(exoPlayer.duration)
@@ -474,7 +461,7 @@ fun PlayerScreen(
                             }
                         },
                         onPress = {
-                            if (!isScreenLocked) {
+                            if (!isScreenLocked && !isBuffering) {
                                 // Press & Hold for fast forward (2x speed like YouTube)
                                 val holdJob = coroutineScope.launch {
                                     delay(350)
@@ -497,7 +484,7 @@ fun PlayerScreen(
                         onTap = {
                             if (isScreenLocked) {
                                 isLockIconVisible = !isLockIconVisible
-                            } else {
+                            } else if (!isBuffering) {
                                 areControlsVisible = !areControlsVisible
                                 if (areControlsVisible) resetControlsTimer()
                             }
@@ -505,8 +492,8 @@ fun PlayerScreen(
                     )
                 }
                 // 2. Drag gestures: Horizontal (Swipe to Seek) & Vertical (Left=Brightness, Right=Volume)
-                .pointerInput(isScreenLocked) {
-                    if (!isScreenLocked) {
+                .pointerInput(isScreenLocked, isBuffering) {
+                    if (!isScreenLocked && !isBuffering) {
                         detectDragGestures(
                             onDragStart = { offset ->
                                 dragStartX = offset.x
@@ -610,6 +597,34 @@ fun PlayerScreen(
                 exit = fadeOut(tween(250))
             ) {
                 PlayerBufferingIndicator()
+            }
+
+            // Safe exit button while buffering or error
+            AnimatedVisibility(
+                visible = (isBuffering || playbackError != null) && !isScreenLocked,
+                enter = fadeIn(tween(200)),
+                exit = fadeOut(tween(200)),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 20.dp, start = 16.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
+                        onBack()
+                    },
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Volver",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             // Playback Error Banner

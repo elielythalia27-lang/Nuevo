@@ -17,7 +17,7 @@ import androidx.core.view.WindowCompat
 
 @Composable
 private fun animateColorScheme(target: ColorScheme): ColorScheme {
-    val duration = 220
+    val duration = 360
     val spec = tween<Color>(durationMillis = duration, easing = FastOutSlowInEasing)
 
     val primary by animateColorAsState(target.primary, spec, label = "primary")

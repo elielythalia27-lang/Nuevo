@@ -25,8 +25,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 
 data class PlaybackTarget(
     val videoUrl: String,
@@ -70,9 +68,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val repository = PeliculaRepository(application, apiService, preferences)
     val downloadHelper = DownloadHelper.getActiveInstance(application)
     private val networkMonitor = NetworkMonitor(application)
-
-    private val pendingPausedIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-    private val pendingResumedIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val manuallyPausedIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private fun calculateActiveDownloadsCount(items: List<DownloadItem>): Int {
         return items.count { it.status == DownloadStatus.DOWNLOADING }
@@ -106,38 +102,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Collect downloads with real-time state reconciliation
+        // Collect downloads reactively with paused state preservation
         viewModelScope.launch {
             repository.downloads.collectLatest { downloadList ->
-                val reconciledList = downloadList.map { item ->
-                    when {
-                        pendingPausedIds.contains(item.id) -> {
-                            if (item.status == DownloadStatus.PAUSED) {
-                                pendingPausedIds.remove(item.id)
-                                item
-                            } else {
-                                item.copy(
-                                    status = DownloadStatus.PAUSED,
-                                    speedBytesPerSec = 0L,
-                                    etaSeconds = 0L
-                                )
-                            }
-                        }
-                        pendingResumedIds.contains(item.id) -> {
-                            if (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.PENDING) {
-                                pendingResumedIds.remove(item.id)
-                                item
-                            } else {
-                                item.copy(status = DownloadStatus.DOWNLOADING)
-                            }
-                        }
-                        else -> item
+                val reconciled = downloadList.map { item ->
+                    if (manuallyPausedIds.contains(item.id)) {
+                        item.copy(
+                            status = DownloadStatus.PAUSED,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                    } else {
+                        item
                     }
                 }
                 _uiState.update { state ->
                     state.copy(
-                        downloads = reconciledList,
-                        activeDownloadsCount = calculateActiveDownloadsCount(reconciledList)
+                        downloads = reconciled,
+                        activeDownloadsCount = calculateActiveDownloadsCount(reconciled)
                     )
                 }
             }
@@ -358,6 +340,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
+        manuallyPausedIds.remove(pelicula.id)
         val existing = _uiState.value.downloads.find { it.id == pelicula.id }
         if (existing != null && existing.status == DownloadStatus.PAUSED) {
             resumeDownload(existing)
@@ -390,11 +373,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 progress = 0
             )
 
-            if (nextStatus == DownloadStatus.DOWNLOADING) {
-                pendingResumedIds.add(pelicula.id)
-                pendingPausedIds.remove(pelicula.id)
-            }
-
             val updated = state.downloads.filterNot { it.id == pelicula.id } + optimisticItem
             state.copy(
                 downloads = updated,
@@ -405,8 +383,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun pauseDownload(item: DownloadItem) {
-        pendingPausedIds.add(item.id)
-        pendingResumedIds.remove(item.id)
+        manuallyPausedIds.add(item.id)
         _uiState.update { state ->
             val updated = state.downloads.map {
                 if (it.id == item.id) {
@@ -433,8 +410,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
-        pendingResumedIds.add(item.id)
-        pendingPausedIds.remove(item.id)
+        manuallyPausedIds.remove(item.id)
         _uiState.update { state ->
             val currentActive = state.downloads.count { it.status == DownloadStatus.DOWNLOADING && it.id != item.id }
             val nextStatus = if (currentActive < state.maxConcurrentDownloads) {
@@ -459,8 +435,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun cancelDownload(item: DownloadItem) {
-        pendingPausedIds.remove(item.id)
-        pendingResumedIds.remove(item.id)
+        manuallyPausedIds.remove(item.id)
         _uiState.update { state ->
             val updated = state.downloads.filterNot { it.id == item.id }
             state.copy(
@@ -473,10 +448,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteMultipleDownloads(items: List<DownloadItem>) {
         val idsToDelete = items.map { it.id }.toSet()
-        idsToDelete.forEach { id ->
-            pendingPausedIds.remove(id)
-            pendingResumedIds.remove(id)
-        }
+        manuallyPausedIds.removeAll(idsToDelete)
         _uiState.update { state ->
             val updated = state.downloads.filterNot { idsToDelete.contains(it.id) }
             state.copy(
@@ -488,8 +460,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun forceStartPendingDownload(item: DownloadItem) {
-        pendingPausedIds.remove(item.id)
-        pendingResumedIds.add(item.id)
+        manuallyPausedIds.remove(item.id)
         _uiState.update { state ->
             val updated = state.downloads.map {
                 if (it.id == item.id) it.copy(status = DownloadStatus.DOWNLOADING)
@@ -504,13 +475,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun pauseAllDownloads() {
+        val activeIds = _uiState.value.downloads
+            .filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING }
+            .map { it.id }
+        manuallyPausedIds.addAll(activeIds)
         _uiState.update { state ->
-            state.downloads.forEach {
-                if (it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING) {
-                    pendingPausedIds.add(it.id)
-                    pendingResumedIds.remove(it.id)
-                }
-            }
             val updated = state.downloads.map {
                 if (it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING) {
                     it.copy(
@@ -529,7 +498,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resumeAllDownloads() {
-        pendingPausedIds.clear()
+        manuallyPausedIds.clear()
         _uiState.update { state ->
             var activeCount = 0
             val maxLimit = state.maxConcurrentDownloads
@@ -537,7 +506,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING || it.status == DownloadStatus.FAILED) {
                     if (activeCount < maxLimit) {
                         activeCount++
-                        pendingResumedIds.add(it.id)
                         it.copy(status = DownloadStatus.DOWNLOADING)
                     } else {
                         it.copy(status = DownloadStatus.PENDING, speedBytesPerSec = 0L, etaSeconds = 0L)
@@ -556,8 +524,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun cancelAllDownloads() {
-        pendingPausedIds.clear()
-        pendingResumedIds.clear()
         _uiState.update { state ->
             val updated = state.downloads.filter { it.status == DownloadStatus.COMPLETED }
             state.copy(

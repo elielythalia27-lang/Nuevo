@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,8 +69,10 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -137,11 +140,21 @@ fun HomeScreen(
     val gridStateAll = rememberLazyGridState()
     val gridStateMovies = rememberLazyGridState()
     val gridStateVideos = rememberLazyGridState()
+    val gridStateSearch = rememberLazyGridState()
 
-    val activeGridState = when (uiState.selectedType) {
+    val catalogGridState = when (uiState.selectedType) {
         "MOVIE" -> gridStateMovies
         "VIDEO" -> gridStateVideos
         else -> gridStateAll
+    }
+
+    val activeGridState = if (uiState.searchQuery.isNotEmpty()) gridStateSearch else catalogGridState
+
+    // When starting a new search, scroll the search results to the top
+    LaunchedEffect(uiState.searchQuery) {
+        if (uiState.searchQuery.isNotEmpty()) {
+            gridStateSearch.scrollToItem(0, 0)
+        }
     }
 
     Scaffold(
@@ -162,15 +175,31 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 // Title (prominent and refined with clean typography from eliel font)
-                Text(
-                    text = "Download Free",
-                    fontSize = 28.sp,
-                    lineHeight = 34.sp,
-                    fontFamily = ElielFont,
-                    color = titleTextColor,
-                    letterSpacing = 0.5.sp,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .height(38.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        text = "Download Free",
+                        fontSize = 28.sp,
+                        lineHeight = 28.sp,
+                        fontFamily = ElielFont,
+                        color = titleTextColor,
+                        letterSpacing = 0.5.sp,
+                        style = androidx.compose.ui.text.TextStyle(
+                            platformStyle = androidx.compose.ui.text.PlatformTextStyle(
+                                includeFontPadding = false
+                            ),
+                            lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                                alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                                trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both
+                            )
+                        ),
+                        modifier = Modifier.offset(y = 2.dp)
+                    )
+                }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -196,8 +225,9 @@ fun HomeScreen(
                             ) {
                                 Text(
                                     text = uiState.allPeliculas.size.toString(),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.2.sp,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -656,13 +686,6 @@ fun HomeScreen(
                                             )
                                         }
                                     }
-
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(22.dp)
-                                    )
                                 }
                             }
                         }
