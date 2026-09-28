@@ -203,7 +203,7 @@ class DownloadWorker(
                 }
 
                 input = body.byteStream()
-                val buffer = ByteArray(8 * 1024)
+                val buffer = ByteArray(32 * 1024)
                 var bytesRead = 0
                 var lastTime = System.currentTimeMillis()
                 var bytesSinceLastUpdate = 0L
@@ -217,9 +217,6 @@ class DownloadWorker(
                     raf.write(buffer, 0, bytesRead)
                     downloaded += bytesRead
                     bytesSinceLastUpdate += bytesRead
-
-                    // Equitable Bandwidth Balancer: pace stream dynamically to ensure equal speed share across all active downloads
-                    DownloadBandwidthCoordinator.paceTransfer(downloadId, bytesRead)
 
                     val now = System.currentTimeMillis()
                     val timeDiff = now - lastTime
