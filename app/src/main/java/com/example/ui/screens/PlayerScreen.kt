@@ -286,6 +286,7 @@ fun PlayerScreen(
 
     DisposableEffect(Unit) {
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
         insetsController?.let { controller ->
             controller.isAppearanceLightStatusBars = false
             controller.isAppearanceLightNavigationBars = false
@@ -296,7 +297,7 @@ fun PlayerScreen(
                 lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                 activity.window.attributes = lp
             }
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
     }
 
@@ -1072,11 +1073,11 @@ fun PlayerScreen(
                                 // Screen rotation / orientation switch
                                 IconButton(
                                     onClick = {
-                                        isLandscape = !isLandscape
-                                        activity?.requestedOrientation = if (isLandscape) {
-                                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                        } else {
+                                        val currentLandscape = activity?.resources?.configuration?.orientation == Configuration.ORIENTATION_LANDSCAPE
+                                        activity?.requestedOrientation = if (currentLandscape) {
                                             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                                        } else {
+                                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                                         }
                                         resetControlsTimer()
                                     }
