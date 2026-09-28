@@ -24,6 +24,7 @@ import com.example.data.model.Pelicula
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
 import com.example.utils.NetworkUtils
+import com.example.utils.NotificationUtils
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
 import kotlinx.coroutines.CoroutineScope
@@ -72,17 +73,20 @@ class DownloadHelper(
     }
 
     companion object {
-        const val CHANNEL_PROGRESS_ID = "downloads_progress_channel_v4"
-        const val CHANNEL_PROGRESS_NAME = "Progreso de descargas"
-        const val CHANNEL_ALERTS_ID = "downloads_alerts_channel_v4"
-        const val CHANNEL_ALERTS_NAME = "Avisos de descargas finalizadas"
+        const val CHANNEL_PROGRESS_ID = NotificationUtils.CHANNEL_PROGRESS_ID
+        const val CHANNEL_SUCCESS_ID = NotificationUtils.CHANNEL_SUCCESS_ID
+        const val CHANNEL_ERROR_ID = NotificationUtils.CHANNEL_ERROR_ID
+        const val CHANNEL_NOTICES_ID = NotificationUtils.CHANNEL_NOTICES_ID
+
+        // Backward-compatible alias
+        const val CHANNEL_ALERTS_ID = NotificationUtils.CHANNEL_SUCCESS_ID
 
         const val ACTION_PAUSE_DOWNLOAD = "com.downloadfree.ACTION_PAUSE_DOWNLOAD"
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
-        const val GROUP_KEY_DOWNLOADS = "com.downloadfree.GROUP_DOWNLOADS"
-        const val SUMMARY_NOTIFICATION_ID = 69696
+        const val GROUP_KEY_DOWNLOADS = NotificationUtils.GROUP_DOWNLOADS
+        const val SUMMARY_NOTIFICATION_ID = NotificationUtils.SUMMARY_NOTIFICATION_ID
         const val FOREGROUND_SERVICE_NOTIFICATION_ID = 88888
 
         @Volatile
@@ -240,31 +244,7 @@ class DownloadHelper(
     }
 
     private fun createNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val progressChannel = NotificationChannel(
-                CHANNEL_PROGRESS_ID,
-                CHANNEL_PROGRESS_NAME,
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Muestra la velocidad, tiempo estimado y barra de porcentaje"
-                setShowBadge(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-
-            val alertsChannel = NotificationChannel(
-                CHANNEL_ALERTS_ID,
-                CHANNEL_ALERTS_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Avisos de películas listas para reproducir o errores de red"
-                setShowBadge(true)
-                enableVibration(true)
-            }
-
-            notificationManager.createNotificationChannel(progressChannel)
-            notificationManager.createNotificationChannel(alertsChannel)
-        }
+        NotificationUtils.initNotificationChannels(context)
     }
 
     fun getWorkName(downloadId: String): String = "download_work_$downloadId"
@@ -805,42 +785,7 @@ class DownloadHelper(
     fun showPausedNotification(item: DownloadItem) {
         if (!PermissionHelper.hasNotificationPermission(context)) return
         try {
-            val displayTitle = if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
-                "${item.title} (${item.year})"
-            } else {
-                item.title
-            }
-            val sizeInfo = if (item.totalBytes > 0) {
-                "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
-            } else {
-                formatByteSize(item.downloadedBytes)
-            }
-            val subtitle = "${item.progress}% • $sizeInfo • Pausada"
-            val notification = NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
-                .setContentTitle("⏸ En pausa: $displayTitle")
-                .setContentText(subtitle)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
-                .setSmallIcon(R.drawable.ic_notification_pause)
-                .setColor(0xFFF59E0B.toInt())
-                .setProgress(100, item.progress, item.totalBytes <= 0)
-                .setContentIntent(getContentPendingIntent())
-                .addAction(
-                    android.R.drawable.ic_media_play,
-                    "Reanudar",
-                    getResumePendingIntent(item.id)
-                )
-                .addAction(
-                    android.R.drawable.ic_menu_close_clear_cancel,
-                    "Cancelar",
-                    getCancelPendingIntent(item.id)
-                )
-                .setAutoCancel(false)
-                .setOngoing(false)
-                .setShowWhen(false)
-                .setWhen(0L)
-                .setSortKey("download_${item.id}")
-                .setOnlyAlertOnce(true)
-                .build()
+            val notification = NotificationUtils.buildPausedNotification(context, item)
             notificationManager.notify(getNotificationId(item.id), notification)
         } catch (_: Exception) {}
     }

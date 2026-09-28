@@ -21,6 +21,7 @@ import com.example.data.model.DownloadStatus
 import com.example.data.model.formatByteSize
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
+import com.example.utils.NotificationUtils
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
 import kotlinx.coroutines.CancellationException
@@ -384,63 +385,7 @@ class DownloadWorker(
         speed: Long,
         eta: Long
     ): Notification {
-        ensureNotificationChannels()
-
-        val displayTitle = if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
-            "${item.title} (${item.year})"
-        } else {
-            item.title
-        }
-
-        val sizeStr = if (item.totalBytes > 0) {
-            "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
-        } else {
-            formatByteSize(item.downloadedBytes)
-        }
-
-        val speedStr = if (speed > 0) formatByteSize(speed) + "/s" else "0 KB/s"
-        val etaStr = if (eta > 0) {
-            val hours = eta / 3600
-            val minutes = (eta % 3600) / 60
-            val seconds = eta % 60
-            when {
-                hours > 0 -> "⏳ ${hours}h ${minutes}m"
-                minutes > 0 -> "⏳ ${minutes}m ${seconds}s"
-                else -> "⏳ ${seconds}s"
-            }
-        } else "⏳ Calculando..."
-
-        val subtitle = "$progress% - $sizeStr - $speedStr | $etaStr"
-
-        return NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
-            .setContentTitle("📥 Descargando: $displayTitle")
-            .setContentText(subtitle)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setColor(0xFF00897B.toInt())
-            .setProgress(100, progress, item.totalBytes <= 0)
-            .setContentIntent(getContentPendingIntent())
-            .addAction(
-                R.drawable.ic_notification_pause,
-                "Pausar",
-                getPausePendingIntent(item.id)
-            )
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "Cancelar",
-                getCancelPendingIntent(item.id)
-            )
-            .setOngoing(true)
-            .setSilent(true)
-            .setShowWhen(false)
-            .setWhen(0L)
-            .setSortKey("download_${item.id}")
-            .setGroup(DownloadHelper.GROUP_KEY_DOWNLOADS)
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .build()
+        return NotificationUtils.buildProgressNotification(appContext, item, progress, speed, eta)
     }
 
     private fun updateProgressNotification(
@@ -451,7 +396,7 @@ class DownloadWorker(
     ) {
         if (!PermissionHelper.hasNotificationPermission(appContext)) return
         try {
-            val notif = buildProgressNotification(item, progress, speed, eta)
+            val notif = NotificationUtils.buildProgressNotification(appContext, item, progress, speed, eta)
             notificationManager.notify(getNotificationId(item.id), notif)
         } catch (_: Exception) {}
     }
@@ -462,22 +407,8 @@ class DownloadWorker(
         speed: Long,
         eta: Long
     ): ForegroundInfo {
-        ensureNotificationChannels()
-
-        val summaryNotification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
-            .setContentTitle("Download Free")
-            .setContentText("Servicio de descargas activo")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setColor(0xFF00897B.toInt())
-            .setGroup(DownloadHelper.GROUP_KEY_DOWNLOADS)
-            .setGroupSummary(true)
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
-            .setOngoing(true)
-            .setSilent(true)
-            .setShowWhen(false)
-            .setWhen(0L)
-            .setContentIntent(getContentPendingIntent())
-            .build()
+        NotificationUtils.initNotificationChannels(appContext)
+        val summaryNotification = NotificationUtils.buildSummaryNotification(appContext)
 
         val foregroundInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ForegroundInfo(
@@ -497,106 +428,29 @@ class DownloadWorker(
     }
 
     private fun ensureNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val progressChannel = NotificationChannel(
-                DownloadHelper.CHANNEL_PROGRESS_ID,
-                DownloadHelper.CHANNEL_PROGRESS_NAME,
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Muestra la velocidad, tiempo estimado y porcentaje de descargas"
-                setShowBadge(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-
-            val alertsChannel = NotificationChannel(
-                DownloadHelper.CHANNEL_ALERTS_ID,
-                DownloadHelper.CHANNEL_ALERTS_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Avisos de descargas completadas y errores"
-                setShowBadge(true)
-                enableVibration(true)
-            }
-
-            notificationManager.createNotificationChannel(progressChannel)
-            notificationManager.createNotificationChannel(alertsChannel)
-        }
+        NotificationUtils.initNotificationChannels(appContext)
     }
 
     private fun getContentPendingIntent(): PendingIntent {
-        val intent = Intent(appContext, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("initial_tab", 1)
-            putExtra("skip_splash", true)
-        }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        return PendingIntent.getActivity(appContext, 1001, intent, flags)
+        return NotificationUtils.createOpenDownloadsPendingIntent(appContext)
     }
 
     private fun getPausePendingIntent(itemId: String): PendingIntent {
-        val intent = Intent(appContext, DownloadActionReceiver::class.java).apply {
-            action = DownloadHelper.ACTION_PAUSE_DOWNLOAD
-            putExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, itemId)
-        }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        return PendingIntent.getBroadcast(appContext, (itemId + "_pause").hashCode(), intent, flags)
+        return NotificationUtils.createPausePendingIntent(appContext, itemId)
     }
 
     private fun getResumePendingIntent(itemId: String): PendingIntent {
-        val intent = Intent(appContext, DownloadActionReceiver::class.java).apply {
-            action = DownloadHelper.ACTION_RESUME_DOWNLOAD
-            putExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, itemId)
-        }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        return PendingIntent.getBroadcast(appContext, (itemId + "_resume").hashCode(), intent, flags)
+        return NotificationUtils.createResumePendingIntent(appContext, itemId)
     }
 
     private fun getCancelPendingIntent(itemId: String): PendingIntent {
-        val intent = Intent(appContext, DownloadActionReceiver::class.java).apply {
-            action = DownloadHelper.ACTION_CANCEL_DOWNLOAD
-            putExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, itemId)
-        }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        return PendingIntent.getBroadcast(appContext, (itemId + "_cancel").hashCode(), intent, flags)
+        return NotificationUtils.createCancelPendingIntent(appContext, itemId)
     }
 
     private fun showCompletedNotification(item: DownloadItem) {
         if (!PermissionHelper.hasNotificationPermission(appContext)) return
         try {
-            val displayTitle = if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
-                "${item.title} (${item.year})"
-            } else {
-                item.title
-            }
-            val sizeStr = formatByteSize(item.totalBytes.coerceAtLeast(item.downloadedBytes))
-            val detail = "$sizeStr • Lista para ver sin conexión"
-            val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_ALERTS_ID)
-                .setContentTitle("✅ Descarga completada")
-                .setContentText("$displayTitle • $detail")
-                .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$detail"))
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setColor(0xFF10B981.toInt())
-                .setContentIntent(getContentPendingIntent())
-                .setAutoCancel(true)
-                .setOngoing(false)
-                .build()
+            val notification = NotificationUtils.buildCompletedNotification(appContext, item)
             notificationManager.notify(getNotificationId(item.id), notification)
         } catch (_: Exception) {}
     }
@@ -604,42 +458,7 @@ class DownloadWorker(
     private fun showPausedNotification(item: DownloadItem) {
         if (!PermissionHelper.hasNotificationPermission(appContext)) return
         try {
-            val displayTitle = if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
-                "${item.title} (${item.year})"
-            } else {
-                item.title
-            }
-            val sizeInfo = if (item.totalBytes > 0) {
-                "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
-            } else {
-                formatByteSize(item.downloadedBytes)
-            }
-            val subtitle = "${item.progress}% • $sizeInfo • Pausada"
-            val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
-                .setContentTitle("⏸ En pausa: $displayTitle")
-                .setContentText(subtitle)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
-                .setSmallIcon(R.drawable.ic_notification_pause)
-                .setColor(0xFFF59E0B.toInt())
-                .setProgress(100, item.progress, item.totalBytes <= 0)
-                .setContentIntent(getContentPendingIntent())
-                .addAction(
-                    android.R.drawable.ic_media_play,
-                    "Reanudar",
-                    getResumePendingIntent(item.id)
-                )
-                .addAction(
-                    android.R.drawable.ic_menu_close_clear_cancel,
-                    "Cancelar",
-                    getCancelPendingIntent(item.id)
-                )
-                .setAutoCancel(false)
-                .setOngoing(false)
-                .setShowWhen(false)
-                .setWhen(0L)
-                .setSortKey("download_${item.id}")
-                .setOnlyAlertOnce(true)
-                .build()
+            val notification = NotificationUtils.buildPausedNotification(appContext, item)
             notificationManager.notify(getNotificationId(item.id), notification)
         } catch (_: Exception) {}
     }
@@ -647,27 +466,12 @@ class DownloadWorker(
     private fun showFailedNotification(item: DownloadItem, error: String) {
         if (!PermissionHelper.hasNotificationPermission(appContext)) return
         try {
-            val displayTitle = if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
-                "${item.title} (${item.year})"
-            } else {
-                item.title
-            }
-            val subtitle = "$displayTitle: Conexión interrumpida (Progreso guardado)"
-            val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_ALERTS_ID)
-                .setContentTitle("❌ Descarga detenida")
-                .setContentText(subtitle)
-                .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$error - Progreso guardado para reanudar."))
-                .setSmallIcon(R.drawable.ic_notification_error)
-                .setColor(0xFFEF4444.toInt())
-                .setContentIntent(getContentPendingIntent())
-                .setAutoCancel(true)
-                .setOngoing(false)
-                .build()
+            val notification = NotificationUtils.buildErrorNotification(appContext, item, error)
             notificationManager.notify(getNotificationId(item.id), notification)
         } catch (_: Exception) {}
     }
 
-    private fun getNotificationId(id: String): Int = id.hashCode()
+    private fun getNotificationId(id: String): Int = NotificationUtils.getNotificationId(id)
 
     companion object {
         const val KEY_DOWNLOAD_ID = "key_download_id"

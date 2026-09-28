@@ -67,6 +67,7 @@ import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.SplashScreen
 import com.example.ui.theme.AppThemeColor
 import com.example.ui.theme.MyApplicationTheme
+import com.example.utils.NotificationUtils
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
 import com.example.viewmodel.HomeViewModel
@@ -75,6 +76,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        NotificationUtils.initNotificationChannels(this)
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
