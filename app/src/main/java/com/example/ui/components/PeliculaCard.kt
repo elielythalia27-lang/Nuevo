@@ -200,13 +200,14 @@ fun PeliculaCard(
                         if (pelicula.isVideo && pelicula.youtuberName.isNotEmpty() && !pelicula.youtuberName.equals("YouTube", ignoreCase = true)) {
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                                color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+                                border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1))
                             ) {
                                 Text(
                                     text = pelicula.youtuberName,
                                     fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = titleColor,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -215,13 +216,14 @@ fun PeliculaCard(
                         } else if (pelicula.safeYear.isNotEmpty()) {
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                                color = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+                                border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1))
                             ) {
                                 Text(
                                     text = pelicula.safeYear,
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = titleColor,
+                                    color = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }

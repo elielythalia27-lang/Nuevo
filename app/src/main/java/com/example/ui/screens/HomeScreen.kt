@@ -427,10 +427,11 @@ fun HomeScreen(
     selectedPeliculaForSheet?.let { pelicula ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val downloadItem = uiState.downloads.find { it.id == pelicula.id }
-        val sheetBg = MaterialTheme.colorScheme.surface
-        val sheetTitleColor = MaterialTheme.colorScheme.onSurface
-        val sheetBadgeBg = MaterialTheme.colorScheme.surfaceVariant
-        val sheetBadgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+        val sheetBg = if (isDark) Color(0xFF0F172A) else Color.White
+        val sheetTitleColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+        val sheetBadgeBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+        val sheetBadgeBorder = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+        val sheetBadgeTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
 
         ModalBottomSheet(
             onDismissRequest = { selectedPeliculaForSheet = null },
@@ -504,7 +505,7 @@ fun HomeScreen(
                                 Text(
                                     text = if (pelicula.isVideo) "YouTube" else "Película",
                                     fontSize = 11.sp,
-                                    color = if (pelicula.isVideo) Color.White else MaterialTheme.colorScheme.onPrimary,
+                                    color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
@@ -515,13 +516,14 @@ fun HomeScreen(
                                 if (creator.isNotEmpty() && !creator.equals("YouTube", ignoreCase = true)) {
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
-                                        color = sheetBadgeBg
+                                        color = sheetBadgeBg,
+                                        border = BorderStroke(1.dp, sheetBadgeBorder)
                                     ) {
                                         Text(
                                             text = creator,
                                             fontSize = 11.sp,
                                             color = sheetBadgeTextColor,
-                                            fontWeight = FontWeight.SemiBold,
+                                            fontWeight = FontWeight.Bold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -531,14 +533,15 @@ fun HomeScreen(
                             } else if (pelicula.safeYear.isNotEmpty()) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = sheetBadgeBg
+                                    color = sheetBadgeBg,
+                                    border = BorderStroke(1.dp, sheetBadgeBorder)
                                 ) {
                                     Text(
                                         text = pelicula.safeYear,
                                         fontSize = 11.sp,
                                         color = sheetBadgeTextColor,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
                             }
