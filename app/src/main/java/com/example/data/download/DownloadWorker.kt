@@ -168,7 +168,7 @@ class DownloadWorker(
                 }
 
                 input = body.byteStream()
-                val buffer = ByteArray(32 * 1024)
+                val buffer = ByteArray(8 * 1024)
                 var bytesRead = 0
                 var lastTime = System.currentTimeMillis()
                 var bytesSinceLastUpdate = 0L
@@ -384,6 +384,10 @@ class DownloadWorker(
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
+            .setWhen(0L)
+            .setSortKey("download_${item.id}")
+            .setGroup("active_downloads_group")
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
@@ -529,11 +533,13 @@ class DownloadWorker(
             } else {
                 item.title
             }
+            val subtitle = "${item.progress}% • Pausada"
             val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
-                .setContentTitle("Descarga pausada")
-                .setContentText("$displayTitle (${item.progress}%)")
+                .setContentTitle(displayTitle)
+                .setContentText(subtitle)
                 .setSmallIcon(R.drawable.ic_notification_pause)
                 .setColor(0xFFF59E0B.toInt())
+                .setProgress(100, item.progress, item.totalBytes <= 0)
                 .setContentIntent(getContentPendingIntent())
                 .addAction(
                     android.R.drawable.ic_media_play,
@@ -546,7 +552,12 @@ class DownloadWorker(
                     getCancelPendingIntent(item.id)
                 )
                 .setAutoCancel(false)
-                .setOngoing(false)
+                .setOngoing(true)
+                .setShowWhen(false)
+                .setWhen(0L)
+                .setSortKey("download_${item.id}")
+                .setGroup("active_downloads_group")
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
                 .setOnlyAlertOnce(true)
                 .build()
             notificationManager.notify(getNotificationId(item.id), notification)

@@ -431,6 +431,7 @@ class DownloadHelper(
             getMutexFor(item.id).withLock {
                 try {
                     workManager.cancelUniqueWork(getWorkName(item.id))
+                    clearLiveProgress(item.id)
                     val file = File(item.localFilePath)
                     val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
                     val total = if (item.totalBytes > 0) item.totalBytes else currentDownloaded
@@ -445,8 +446,15 @@ class DownloadHelper(
                         etaSeconds = 0L
                     )
                     preferences.addOrUpdateDownload(pausedItem)
-                    notificationManager.cancel(getNotificationId(item.id))
                     showPausedNotification(pausedItem)
+
+                    // WorkManager cleans up foreground notifications asynchronously.
+                    // Delayed re-post ensures paused notification remains firmly in the tray with resume/cancel actions.
+                    delay(300L)
+                    showPausedNotification(pausedItem)
+                    delay(500L)
+                    showPausedNotification(pausedItem)
+
                     checkAndStartNextPending()
                 } catch (_: Exception) {}
             }
@@ -578,8 +586,10 @@ class DownloadHelper(
                 val downloadingOrPending = currentList.filter {
                     it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING
                 }
+                val pausedItems = mutableListOf<DownloadItem>()
                 downloadingOrPending.forEach { item ->
                     workManager.cancelUniqueWork(getWorkName(item.id))
+                    clearLiveProgress(item.id)
                     val file = File(item.localFilePath)
                     val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
                     val total = if (item.totalBytes > 0) item.totalBytes else currentDownloaded
@@ -593,9 +603,14 @@ class DownloadHelper(
                         etaSeconds = 0L
                     )
                     preferences.addOrUpdateDownload(pausedItem)
-                    notificationManager.cancel(getNotificationId(item.id))
+                    pausedItems.add(pausedItem)
                     showPausedNotification(pausedItem)
                 }
+
+                delay(300L)
+                pausedItems.forEach { showPausedNotification(it) }
+                delay(500L)
+                pausedItems.forEach { showPausedNotification(it) }
             } catch (_: Exception) {}
         }
     }
@@ -702,11 +717,13 @@ class DownloadHelper(
             } else {
                 item.title
             }
+            val subtitle = "${item.progress}% • Pausada"
             val notification = NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
-                .setContentTitle("Descarga pausada")
-                .setContentText("$displayTitle (${item.progress}%)")
+                .setContentTitle(displayTitle)
+                .setContentText(subtitle)
                 .setSmallIcon(R.drawable.ic_notification_pause)
                 .setColor(0xFFF59E0B.toInt())
+                .setProgress(100, item.progress, item.totalBytes <= 0)
                 .setContentIntent(getContentPendingIntent())
                 .addAction(
                     android.R.drawable.ic_media_play,
@@ -719,7 +736,12 @@ class DownloadHelper(
                     getCancelPendingIntent(item.id)
                 )
                 .setAutoCancel(false)
-                .setOngoing(false)
+                .setOngoing(true)
+                .setShowWhen(false)
+                .setWhen(0L)
+                .setSortKey("download_${item.id}")
+                .setGroup("active_downloads_group")
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
                 .setOnlyAlertOnce(true)
                 .build()
             notificationManager.notify(getNotificationId(item.id), notification)
