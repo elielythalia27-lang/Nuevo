@@ -413,14 +413,38 @@ class DownloadWorker(
         speed: Long,
         eta: Long
     ): ForegroundInfo {
-        val notification = buildProgressNotification(item, progress, speed, eta)
-        val notifId = getNotificationId(item.id)
+        ensureNotificationChannels()
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(notifId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        val summaryNotification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
+            .setContentTitle("Download Free")
+            .setContentText("Servicio de descargas activo")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setColor(0xFF00897B.toInt())
+            .setGroup("active_downloads_group")
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
+            .setOngoing(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setWhen(0L)
+            .setContentIntent(getContentPendingIntent())
+            .build()
+
+        val foregroundInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(
+                DownloadHelper.FOREGROUND_SERVICE_NOTIFICATION_ID,
+                summaryNotification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
         } else {
-            ForegroundInfo(notifId, notification)
+            ForegroundInfo(
+                DownloadHelper.FOREGROUND_SERVICE_NOTIFICATION_ID,
+                summaryNotification
+            )
         }
+
+        updateProgressNotification(item, progress, speed, eta)
+        return foregroundInfo
     }
 
     private fun ensureNotificationChannels() {

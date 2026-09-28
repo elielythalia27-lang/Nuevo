@@ -79,6 +79,7 @@ class DownloadHelper(
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
+        const val FOREGROUND_SERVICE_NOTIFICATION_ID = 88888
 
         @Volatile
         private var instance: DownloadHelper? = null
@@ -430,7 +431,6 @@ class DownloadHelper(
         scope.launch(Dispatchers.IO) {
             getMutexFor(item.id).withLock {
                 try {
-                    workManager.cancelUniqueWork(getWorkName(item.id))
                     clearLiveProgress(item.id)
                     val file = File(item.localFilePath)
                     val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
@@ -446,14 +446,9 @@ class DownloadHelper(
                         etaSeconds = 0L
                     )
                     preferences.addOrUpdateDownload(pausedItem)
+                    // Mutate notification instantaneously in place (0ms, no flicker)
                     showPausedNotification(pausedItem)
-
-                    // WorkManager cleans up foreground notifications asynchronously.
-                    // Delayed re-post ensures paused notification remains firmly in the tray with resume/cancel actions.
-                    delay(300L)
-                    showPausedNotification(pausedItem)
-                    delay(500L)
-                    showPausedNotification(pausedItem)
+                    workManager.cancelUniqueWork(getWorkName(item.id))
 
                     checkAndStartNextPending()
                 } catch (_: Exception) {}
@@ -586,9 +581,7 @@ class DownloadHelper(
                 val downloadingOrPending = currentList.filter {
                     it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING
                 }
-                val pausedItems = mutableListOf<DownloadItem>()
                 downloadingOrPending.forEach { item ->
-                    workManager.cancelUniqueWork(getWorkName(item.id))
                     clearLiveProgress(item.id)
                     val file = File(item.localFilePath)
                     val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
@@ -603,14 +596,9 @@ class DownloadHelper(
                         etaSeconds = 0L
                     )
                     preferences.addOrUpdateDownload(pausedItem)
-                    pausedItems.add(pausedItem)
                     showPausedNotification(pausedItem)
+                    workManager.cancelUniqueWork(getWorkName(item.id))
                 }
-
-                delay(300L)
-                pausedItems.forEach { showPausedNotification(it) }
-                delay(500L)
-                pausedItems.forEach { showPausedNotification(it) }
             } catch (_: Exception) {}
         }
     }
