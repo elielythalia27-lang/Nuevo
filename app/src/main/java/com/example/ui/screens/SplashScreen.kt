@@ -49,88 +49,179 @@ fun AppLogoVector(
         val w = size.width
         val h = size.height
 
-        // 1. Dynamic Anchor Pillar (Synchronized with chosen theme color)
+        // 0. 3D Soft Ambient Ground Shadow
+        val groundShadow = Brush.radialGradient(
+            colors = listOf(
+                Color(0x35004D40),
+                Color.Transparent
+            ),
+            center = Offset(w * 0.50f, h * 0.88f),
+            radius = w * 0.40f
+        )
+        drawOval(
+            brush = groundShadow,
+            topLeft = Offset(w * 0.15f, h * 0.82f),
+            size = Size(w * 0.70f, h * 0.12f)
+        )
+
+        // 1. 3D Dynamic Anchor Pillar - Back Depth Layer
+        drawRoundRect(
+            color = Color(0xFF004D40),
+            topLeft = Offset(w * 0.25f, h * 0.26f),
+            size = Size(w * 0.11f, h * 0.51f),
+            cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
+        )
+
+        // 1b. 3D Dynamic Anchor Pillar - Front Face with Gloss Gradient
         val spineGradient = Brush.linearGradient(
             colors = listOf(
-                primaryColor,
+                primaryColor.copy(alpha = 1f),
                 primaryColor.copy(alpha = 0.85f),
-                if (isDark) primaryColor.copy(alpha = 0.65f) else primaryColor.copy(alpha = 0.90f)
+                Color(0xFF00695C)
             ),
-            start = Offset(w * 0.24f, h * 0.25f),
-            end = Offset(w * 0.36f, h * 0.75f)
+            start = Offset(w * 0.23f, h * 0.24f),
+            end = Offset(w * 0.35f, h * 0.75f)
         )
         drawRoundRect(
             brush = spineGradient,
-            topLeft = Offset(w * 0.24f, h * 0.25f),
+            topLeft = Offset(w * 0.23f, h * 0.24f),
             size = Size(w * 0.11f, h * 0.50f),
             cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
         )
 
-        // 2. Dynamic Streamline Media Curve Loop (Synchronized with chosen theme color)
+        // 1c. 3D Anchor Pillar - Top Chamfer Highlight
+        drawRoundRect(
+            color = Color(0x70FFFFFF),
+            topLeft = Offset(w * 0.23f, h * 0.24f),
+            size = Size(w * 0.11f, h * 0.06f),
+            cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
+        )
+
+        // 2. 3D Dynamic Media Curve Loop - Depth Layer
+        val loopDepthPath = Path().apply {
+            moveTo(w * 0.35f, h * 0.27f)
+            lineTo(w * 0.56f, h * 0.27f)
+            cubicTo(w * 0.73f, h * 0.27f, w * 0.83f, h * 0.40f, w * 0.83f, h * 0.52f)
+            cubicTo(w * 0.83f, h * 0.66f, w * 0.73f, h * 0.77f, w * 0.56f, h * 0.77f)
+            lineTo(w * 0.35f, h * 0.77f)
+            lineTo(w * 0.35f, h * 0.69f)
+            lineTo(w * 0.56f, h * 0.69f)
+            cubicTo(w * 0.66f, h * 0.69f, w * 0.74f, h * 0.61f, w * 0.74f, h * 0.52f)
+            cubicTo(w * 0.74f, h * 0.43f, w * 0.66f, h * 0.35f, w * 0.56f, h * 0.35f)
+            lineTo(w * 0.35f, h * 0.35f)
+            close()
+        }
+        drawPath(path = loopDepthPath, color = Color(0xFF00382E))
+
+        // 2b. 3D Dynamic Media Curve Loop - Main Face
         val loopGradient = Brush.linearGradient(
             colors = listOf(
+                Color(0xFF1DE9B6),
                 primaryColor,
-                primaryColor.copy(alpha = 0.90f),
-                if (isDark) primaryColor.copy(alpha = 0.70f) else primaryColor.copy(alpha = 0.85f)
+                Color(0xFF004D40)
             ),
-            start = Offset(w * 0.34f, h * 0.25f),
-            end = Offset(w * 0.82f, h * 0.75f)
+            start = Offset(w * 0.33f, h * 0.24f),
+            end = Offset(w * 0.82f, h * 0.76f)
         )
         val loopPath = Path().apply {
-            moveTo(w * 0.34f, h * 0.25f)
-            lineTo(w * 0.55f, h * 0.25f)
-            cubicTo(w * 0.72f, h * 0.25f, w * 0.82f, h * 0.38f, w * 0.82f, h * 0.50f)
-            cubicTo(w * 0.82f, h * 0.64f, w * 0.72f, h * 0.75f, w * 0.55f, h * 0.75f)
-            lineTo(w * 0.34f, h * 0.75f)
-            lineTo(w * 0.34f, h * 0.67f)
-            lineTo(w * 0.55f, h * 0.67f)
-            cubicTo(w * 0.65f, h * 0.67f, w * 0.73f, h * 0.59f, w * 0.73f, h * 0.50f)
-            cubicTo(w * 0.73f, h * 0.41f, w * 0.65f, h * 0.33f, w * 0.55f, h * 0.33f)
-            lineTo(w * 0.34f, h * 0.33f)
+            moveTo(w * 0.33f, h * 0.24f)
+            lineTo(w * 0.55f, h * 0.24f)
+            cubicTo(w * 0.72f, h * 0.24f, w * 0.82f, h * 0.37f, w * 0.82f, h * 0.49f)
+            cubicTo(w * 0.82f, h * 0.63f, w * 0.72f, h * 0.74f, w * 0.55f, h * 0.74f)
+            lineTo(w * 0.33f, h * 0.74f)
+            lineTo(w * 0.33f, h * 0.66f)
+            lineTo(w * 0.55f, h * 0.66f)
+            cubicTo(w * 0.65f, h * 0.66f, w * 0.73f, h * 0.58f, w * 0.73f, h * 0.49f)
+            cubicTo(w * 0.73f, h * 0.40f, w * 0.65f, h * 0.32f, w * 0.55f, h * 0.32f)
+            lineTo(w * 0.33f, h * 0.32f)
             close()
         }
         drawPath(path = loopPath, brush = loopGradient)
 
-        // 3. Dynamic Download Arrow Pointer
+        // 2c. 3D Loop Top Specular Highlight
+        val highlightPath = Path().apply {
+            moveTo(w * 0.34f, h * 0.24f)
+            lineTo(w * 0.55f, h * 0.24f)
+            cubicTo(w * 0.68f, h * 0.24f, w * 0.78f, h * 0.33f, w * 0.80f, h * 0.45f)
+            cubicTo(w * 0.77f, h * 0.35f, w * 0.65f, h * 0.27f, w * 0.55f, h * 0.27f)
+            lineTo(w * 0.34f, h * 0.27f)
+            close()
+        }
+        drawPath(path = highlightPath, color = Color(0x90FFFFFF))
+
+        // 3. 3D Download Arrow Pointer - Depth Edge
+        val arrowDepthPath = Path().apply {
+            moveTo(w * 0.55f, h * 0.68f)
+            lineTo(w * 0.65f, h * 0.77f)
+            lineTo(w * 0.52f, h * 0.79f)
+            close()
+        }
+        drawPath(path = arrowDepthPath, color = Color(0xFF00332A))
+
+        // 3b. 3D Download Arrow Pointer - Front Face
         val arrowPath = Path().apply {
-            moveTo(w * 0.54f, h * 0.67f)
-            lineTo(w * 0.63f, h * 0.75f)
+            moveTo(w * 0.54f, h * 0.66f)
+            lineTo(w * 0.64f, h * 0.75f)
             lineTo(w * 0.51f, h * 0.77f)
             close()
         }
         val arrowGradient = Brush.linearGradient(
-            colors = listOf(primaryColor, primaryColor.copy(alpha = 0.75f)),
-            start = Offset(w * 0.51f, h * 0.67f),
-            end = Offset(w * 0.63f, h * 0.77f)
+            colors = listOf(Color(0xFF00E676), primaryColor, Color(0xFF00796B)),
+            start = Offset(w * 0.51f, h * 0.66f),
+            end = Offset(w * 0.64f, h * 0.77f)
         )
         drawPath(path = arrowPath, brush = arrowGradient)
 
-        // 4. Ruby Red Cinema Play Button
+        // 4. 3D Ruby Red Cinema Play Button - Soft Shadow
+        val rubyShadowPath = Path().apply {
+            moveTo(w * 0.43f, h * 0.40f)
+            lineTo(w * 0.67f, h * 0.52f)
+            lineTo(w * 0.43f, h * 0.64f)
+            close()
+        }
+        drawPath(path = rubyShadowPath, color = Color(0x40000000))
+
+        // 4b. 3D Ruby Red Cinema Play Button - 3D Jewel Body
         val rubyBrush = Brush.linearGradient(
             colors = listOf(
+                Color(0xFFFF5252),
                 Color(0xFFFF1744),
-                Color(0xFFE53935),
-                Color(0xFFC62828)
+                Color(0xFFD50000),
+                Color(0xFF8B0000)
             ),
-            start = Offset(w * 0.40f, h * 0.38f),
-            end = Offset(w * 0.68f, h * 0.62f)
+            start = Offset(w * 0.41f, h * 0.38f),
+            end = Offset(w * 0.66f, h * 0.63f)
         )
         val playPath = Path().apply {
-            moveTo(w * 0.42f, h * 0.39f)
+            moveTo(w * 0.41f, h * 0.38f)
             lineTo(w * 0.65f, h * 0.50f)
-            lineTo(w * 0.42f, h * 0.61f)
+            lineTo(w * 0.41f, h * 0.62f)
             close()
         }
         drawPath(path = playPath, brush = rubyBrush)
 
-        // Inner Red Facet for depth
-        val playInnerPath = Path().apply {
-            moveTo(w * 0.43f, h * 0.42f)
-            lineTo(w * 0.60f, h * 0.50f)
-            lineTo(w * 0.43f, h * 0.58f)
+        // 4c. 3D Ruby Red - Top Specular Bevel
+        val playGlossPath = Path().apply {
+            moveTo(w * 0.41f, h * 0.38f)
+            lineTo(w * 0.65f, h * 0.50f)
+            lineTo(w * 0.41f, h * 0.50f)
             close()
         }
-        drawPath(path = playInnerPath, color = Color(0xFFD32F2F))
+        val glossBrush = Brush.linearGradient(
+            colors = listOf(Color(0x80FFFFFF), Color.Transparent),
+            start = Offset(w * 0.41f, h * 0.38f),
+            end = Offset(w * 0.65f, h * 0.50f)
+        )
+        drawPath(path = playGlossPath, brush = glossBrush)
+
+        // 4d. Specular Center Sparkle
+        val playInnerPath = Path().apply {
+            moveTo(w * 0.43f, h * 0.42f)
+            lineTo(w * 0.54f, h * 0.48f)
+            lineTo(w * 0.43f, h * 0.54f)
+            close()
+        }
+        drawPath(path = playInnerPath, color = Color(0x35FFFFFF))
     }
 }
 

@@ -371,7 +371,6 @@ fun MainAppNavigation(
                                     onDefaultFilterTypeChange = { viewModel.setDefaultFilterType(it) },
                                     sortOption = uiState.sortOption,
                                     onSortOptionChange = { viewModel.setSortOption(it) },
-                                    onClearCache = { viewModel.clearCache() },
                                     maxConcurrentDownloads = uiState.maxConcurrentDownloads,
                                     onMaxConcurrentDownloadsChange = { viewModel.setMaxConcurrentDownloads(it) },
                                     catalogLayoutMode = uiState.catalogLayoutMode,

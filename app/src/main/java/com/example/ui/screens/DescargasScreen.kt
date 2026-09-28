@@ -1383,8 +1383,8 @@ fun ActiveDownloadingCard(
     val isPaused = item.status == DownloadStatus.PAUSED
     val isFailed = item.status == DownloadStatus.FAILED
     val animatedProgress by animateFloatAsState(
-        targetValue = item.progress / 100f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        targetValue = (item.progress / 100f).coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
         label = "download_progress"
     )
 

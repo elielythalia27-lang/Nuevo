@@ -146,7 +146,6 @@ fun AjustesScreen(
     onDefaultFilterTypeChange: (String) -> Unit,
     sortOption: SortOption,
     onSortOptionChange: (SortOption) -> Unit,
-    onClearCache: () -> Unit,
     maxConcurrentDownloads: Int = 3,
     onMaxConcurrentDownloadsChange: (Int) -> Unit = {},
     catalogLayoutMode: String = "GRID_2",
@@ -181,7 +180,6 @@ fun AjustesScreen(
     var hardwareAcceleration by remember { mutableStateOf(true) }
     var screenGestures by remember { mutableStateOf(true) }
     var autoResume by remember { mutableStateOf(true) }
-    var showClearCacheDialog by remember { mutableStateOf(false) }
 
     val screenBg = MaterialTheme.colorScheme.background
     val cardBg = MaterialTheme.colorScheme.surface
@@ -691,61 +689,6 @@ fun AjustesScreen(
                                     }
                                 }
                             }
-
-                            HorizontalDivider(color = dividerColor)
-
-                            // Limpiar Caché
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CleaningServices,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    Column(modifier = Modifier.weight(1f, fill = false)) {
-                                        Text(
-                                            text = "Memoria caché",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = textPrimary
-                                        )
-                                        Text(
-                                            text = "Elimina archivos temporales y miniaturas",
-                                            fontSize = 12.sp,
-                                            color = textSecondary
-                                        )
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { showClearCacheDialog = true },
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0),
-                                        contentColor = textPrimary
-                                    )
-                                ) {
-                                    Text("Limpiar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
                         }
                     }
                 }
@@ -862,47 +805,6 @@ fun AjustesScreen(
                     }
                 }
             }
-        }
-
-        // Dialog: Clear Cache Confirmation
-        if (showClearCacheDialog) {
-            AlertDialog(
-                onDismissRequest = { showClearCacheDialog = false },
-                containerColor = cardBg,
-                shape = RoundedCornerShape(16.dp),
-                title = { Text("¿Deseas vaciar la memoria caché?", color = textPrimary, fontWeight = FontWeight.Bold) },
-                text = {
-                    Text(
-                        "Se liberará espacio eliminando archivos temporales y miniaturas del sistema. Tu biblioteca de descargas se conservará intacta.",
-                        color = textSecondary,
-                        lineHeight = 19.sp
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onClearCache()
-                            showClearCacheDialog = false
-                            AppToastManager.show("Memoria caché liberada con éxito", ToastType.SUCCESS)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Vaciar caché", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { showClearCacheDialog = false },
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Cancelar", color = textSecondary)
-                    }
-                }
-            )
         }
 
         if (showColorPickerDialog) {

@@ -102,9 +102,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Collect downloads reactively with paused state preservation
+        // Collect downloads reactively with strict 700ms StateFlow cycle from downloadHelper
         viewModelScope.launch {
-            repository.downloads.collectLatest { downloadList ->
+            downloadHelper.liveDownloadsState.collectLatest { downloadList ->
                 val reconciled = downloadList.map { item ->
                     if (manuallyPausedIds.contains(item.id)) {
                         item.copy(

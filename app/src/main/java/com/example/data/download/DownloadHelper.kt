@@ -29,12 +29,26 @@ import com.example.utils.VpnProxyDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+
+data class LiveProgressUpdate(
+    val downloadId: String,
+    val downloadedBytes: Long,
+    val totalBytes: Long,
+    val progress: Int,
+    val speedBytesPerSec: Long,
+    val etaSeconds: Long
+)
 
 class DownloadHelper(
     private val context: Context,
@@ -45,6 +59,11 @@ class DownloadHelper(
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private val workManager = WorkManager.getInstance(context)
     private val itemMutexes = ConcurrentHashMap<String, Mutex>()
+    private val liveProgressMap = ConcurrentHashMap<String, LiveProgressUpdate>()
+
+    // Custom StateFlow for smooth 700ms UI progress rendering
+    private val _liveDownloadsState = MutableStateFlow<List<DownloadItem>>(emptyList())
+    val liveDownloadsState: StateFlow<List<DownloadItem>> = _liveDownloadsState.asStateFlow()
 
     private fun getMutexFor(id: String): Mutex {
         return itemMutexes.computeIfAbsent(id) { Mutex() }
@@ -78,11 +97,97 @@ class DownloadHelper(
     init {
         instance = this
         createNotificationChannels()
+
+        // Sync initial persisted list
+        scope.launch(Dispatchers.IO) {
+            preferences.downloads.collect { storedList ->
+                val currentLive = liveProgressMap
+                val merged = storedList.map { item ->
+                    val live = currentLive[item.id]
+                    if (live != null && item.status == DownloadStatus.DOWNLOADING) {
+                        item.copy(
+                            downloadedBytes = live.downloadedBytes,
+                            totalBytes = if (live.totalBytes > 0) live.totalBytes else item.totalBytes,
+                            progress = live.progress,
+                            speedBytesPerSec = live.speedBytesPerSec,
+                            etaSeconds = live.etaSeconds
+                        )
+                    } else {
+                        item
+                    }
+                }
+                _liveDownloadsState.value = merged
+            }
+        }
+
+        // Strict 700ms Coroutine delay strategy for UI progress rendering
+        scope.launch(Dispatchers.Default) {
+            var lastDbPersistTime = 0L
+            while (isActive) {
+                delay(700L) // Enforce strict 700ms UI update cycle
+                if (liveProgressMap.isNotEmpty()) {
+                    val currentList = _liveDownloadsState.value
+                    if (currentList.isNotEmpty()) {
+                        var hasChanges = false
+                        val updatedList = currentList.map { item ->
+                            val live = liveProgressMap[item.id]
+                            if (live != null && item.status == DownloadStatus.DOWNLOADING) {
+                                hasChanges = true
+                                item.copy(
+                                    downloadedBytes = live.downloadedBytes,
+                                    totalBytes = if (live.totalBytes > 0) live.totalBytes else item.totalBytes,
+                                    progress = live.progress,
+                                    speedBytesPerSec = live.speedBytesPerSec,
+                                    etaSeconds = live.etaSeconds
+                                )
+                            } else {
+                                item
+                            }
+                        }
+
+                        if (hasChanges) {
+                            _liveDownloadsState.value = updatedList
+                            val now = System.currentTimeMillis()
+                            // Throttle disk I/O to avoid redundant writes while UI renders smoothly every 700ms
+                            if (now - lastDbPersistTime >= 1400L) {
+                                lastDbPersistTime = now
+                                preferences.updateMultipleDownloads(
+                                    updatedList.filter { it.status == DownloadStatus.DOWNLOADING }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         scope.launch(Dispatchers.IO) {
             preferences.maxConcurrentDownloads.collect {
                 checkAndStartNextPending()
             }
         }
+    }
+
+    fun reportProgress(
+        downloadId: String,
+        downloadedBytes: Long,
+        totalBytes: Long,
+        progress: Int,
+        speedBytesPerSec: Long,
+        etaSeconds: Long
+    ) {
+        liveProgressMap[downloadId] = LiveProgressUpdate(
+            downloadId = downloadId,
+            downloadedBytes = downloadedBytes,
+            totalBytes = totalBytes,
+            progress = progress,
+            speedBytesPerSec = speedBytesPerSec,
+            etaSeconds = etaSeconds
+        )
+    }
+
+    fun clearLiveProgress(downloadId: String) {
+        liveProgressMap.remove(downloadId)
     }
 
     private fun createNotificationChannels() {
@@ -95,6 +200,7 @@ class DownloadHelper(
                 description = "Muestra la velocidad, tiempo estimado y barra de porcentaje"
                 setShowBadge(false)
                 enableVibration(false)
+                setSound(null, null)
             }
 
             val alertsChannel = NotificationChannel(

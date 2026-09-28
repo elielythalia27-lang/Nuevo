@@ -170,7 +170,6 @@ class DownloadWorker(
                 var bytesSinceLastUpdate = 0L
                 var lastSpeed = 0L
                 var lastEta = 0L
-                var lastDbUpdate = System.currentTimeMillis()
 
                 while (isActive && !isStopped) {
                     bytesRead = input.read(buffer)
@@ -183,7 +182,8 @@ class DownloadWorker(
                     val now = System.currentTimeMillis()
                     val timeDiff = now - lastTime
 
-                    if (timeDiff >= 1200L) {
+                    // Update cadence: exactly every 700 milliseconds
+                    if (timeDiff >= 700L) {
                         lastSpeed = (bytesSinceLastUpdate * 1000L) / timeDiff.coerceAtLeast(1L)
                         val remainingBytes = (totalBytes - downloaded).coerceAtLeast(0L)
                         lastEta = if (lastSpeed > 2048 && remainingBytes > 0) remainingBytes / lastSpeed else 0L
@@ -203,16 +203,18 @@ class DownloadWorker(
                             etaSeconds = lastEta
                         )
 
-                        // Update notification
-                        try {
-                            setForeground(createForegroundInfo(progressItem, currentProgress, lastSpeed, lastEta))
-                        } catch (_: Exception) {}
+                        // Report to in-memory Live Progress StateFlow tracker for strict 700ms smooth UI rendering
+                        DownloadHelper.getActiveInstance(appContext).reportProgress(
+                            downloadId = downloadId,
+                            downloadedBytes = downloaded,
+                            totalBytes = totalBytes,
+                            progress = currentProgress,
+                            speedBytesPerSec = lastSpeed,
+                            etaSeconds = lastEta
+                        )
 
-                        // Update DB every 2.5s
-                        if (now - lastDbUpdate >= 2500L) {
-                            preferences.addOrUpdateDownload(progressItem)
-                            lastDbUpdate = now
-                        }
+                        // Update notification directly via NotificationManager to avoid service flickering
+                        updateProgressNotification(progressItem, currentProgress, lastSpeed, lastEta)
 
                         bytesSinceLastUpdate = 0L
                         lastTime = now
@@ -220,6 +222,7 @@ class DownloadWorker(
                 }
 
                 if (bytesRead == -1 && !isStopped) {
+                    DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
                     val finalSize = destFile.length()
                     val completed = initialItem.copy(
                         status = DownloadStatus.COMPLETED,
@@ -246,6 +249,7 @@ class DownloadWorker(
                 if (retryCount < maxRetries) {
                     delay(1500L)
                 } else {
+                    DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
                     val failedItem = initialItem.copy(
                         status = DownloadStatus.FAILED,
                         downloadedBytes = if (destFile.exists()) destFile.length() else 0L,
@@ -266,6 +270,7 @@ class DownloadWorker(
         }
 
         if (isStopped) {
+            DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
             val finalDownloaded = if (destFile.exists()) destFile.length() else 0L
             val currentList = preferences.downloads.first()
             val existing = currentList.find { it.id == downloadId }
@@ -321,12 +326,12 @@ class DownloadWorker(
         DownloadHelper.getActiveInstance(appContext).notifyTaskFinished(downloadId)
     }
 
-    private fun createForegroundInfo(
+    private fun buildProgressNotification(
         item: DownloadItem,
         progress: Int,
         speed: Long,
         eta: Long
-    ): ForegroundInfo {
+    ): Notification {
         ensureNotificationChannels()
 
         val displayTitle = if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
@@ -348,11 +353,11 @@ class DownloadWorker(
             etaStr.ifBlank { null }
         ).joinToString(" • ").ifBlank { "Descargando..." }
 
-        val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
+        return NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
             .setContentTitle(displayTitle)
             .setContentText(subtitle)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setColor(0xFF0284C7.toInt())
+            .setColor(0xFF00897B.toInt())
             .setProgress(100, progress, item.totalBytes <= 0)
             .setContentIntent(getContentPendingIntent())
             .addAction(
@@ -367,9 +372,33 @@ class DownloadWorker(
             )
             .setOngoing(true)
             .setSilent(true)
+            .setShowWhen(false)
             .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+    }
 
+    private fun updateProgressNotification(
+        item: DownloadItem,
+        progress: Int,
+        speed: Long,
+        eta: Long
+    ) {
+        if (!PermissionHelper.hasNotificationPermission(appContext)) return
+        try {
+            val notif = buildProgressNotification(item, progress, speed, eta)
+            notificationManager.notify(getNotificationId(item.id), notif)
+        } catch (_: Exception) {}
+    }
+
+    private fun createForegroundInfo(
+        item: DownloadItem,
+        progress: Int,
+        speed: Long,
+        eta: Long
+    ): ForegroundInfo {
+        val notification = buildProgressNotification(item, progress, speed, eta)
         val notifId = getNotificationId(item.id)
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -389,6 +418,7 @@ class DownloadWorker(
                 description = "Muestra la velocidad, tiempo estimado y porcentaje de descargas"
                 setShowBadge(false)
                 enableVibration(false)
+                setSound(null, null)
             }
 
             val alertsChannel = NotificationChannel(
