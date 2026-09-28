@@ -81,6 +81,8 @@ class DownloadHelper(
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
+        const val GROUP_KEY_DOWNLOADS = "com.downloadfree.GROUP_DOWNLOADS"
+        const val SUMMARY_NOTIFICATION_ID = 69696
         const val FOREGROUND_SERVICE_NOTIFICATION_ID = 88888
 
         @Volatile
