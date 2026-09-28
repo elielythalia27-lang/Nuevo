@@ -224,13 +224,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                     is Resource.Error -> {
                         _uiState.update { state ->
-                            state.copy(
-                                isLoading = false,
-                                errorMessage = resource.message,
-                                allPeliculas = emptyList(),
-                                filteredPeliculas = emptyList(),
-                                isDataOffline = true
-                            )
+                            val currentItems = state.allPeliculas
+                            if (currentItems.isNotEmpty()) {
+                                state.copy(
+                                    isLoading = false,
+                                    errorMessage = null,
+                                    isDataOffline = true
+                                )
+                            } else {
+                                state.copy(
+                                    isLoading = false,
+                                    errorMessage = resource.message,
+                                    allPeliculas = emptyList(),
+                                    filteredPeliculas = emptyList(),
+                                    isDataOffline = true
+                                )
+                            }
                         }
                     }
                 }

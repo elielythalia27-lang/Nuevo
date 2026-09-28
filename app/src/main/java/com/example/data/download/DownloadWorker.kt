@@ -93,19 +93,52 @@ class DownloadWorker(
 
         DownloadBandwidthCoordinator.registerStream(downloadId)
 
+        var actualFile = destFile
+        val safeDir = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: appContext.filesDir
+
+        // Proactive write access validation
+        try {
+            actualFile.parentFile?.mkdirs()
+            if (!actualFile.exists()) {
+                actualFile.createNewFile()
+                actualFile.delete()
+            }
+        } catch (_: Exception) {
+            safeDir.mkdirs()
+            actualFile = File(safeDir, destFile.name)
+            preferences.addOrUpdateDownload(initialItem.copy(localFilePath = actualFile.absolutePath))
+        }
+
         while (isActive && retryCount < maxRetries && !completedSuccessfully && !isStopped) {
             if (VpnProxyDetector.isVpnOrProxyActive(appContext)) {
                 DownloadBandwidthCoordinator.unregisterStream(downloadId)
-                handlePausedOnVpn(downloadId, title, coverUrl, year, type, destFile)
+                handlePausedOnVpn(downloadId, title, coverUrl, year, type, actualFile)
                 return@withContext Result.success()
             }
 
             var input: InputStream? = null
             var raf: RandomAccessFile? = null
-            var downloaded = if (destFile.exists()) destFile.length() else 0L
+            var downloaded = if (actualFile.exists()) actualFile.length() else 0L
 
             try {
-                destFile.parentFile?.mkdirs()
+                try {
+                    actualFile.parentFile?.mkdirs()
+                    raf = RandomAccessFile(actualFile, "rw")
+                } catch (e: Exception) {
+                    if (e.message?.contains("EACCES", ignoreCase = true) == true ||
+                        e.message?.contains("Permission denied", ignoreCase = true) == true ||
+                        e is SecurityException
+                    ) {
+                        safeDir.mkdirs()
+                        actualFile = File(safeDir, destFile.name)
+                        preferences.addOrUpdateDownload(initialItem.copy(localFilePath = actualFile.absolutePath))
+                        downloaded = if (actualFile.exists()) actualFile.length() else 0L
+                        raf = RandomAccessFile(actualFile, "rw")
+                    } else {
+                        throw e
+                    }
+                }
+
                 val requestBuilder = Request.Builder().url(videoUrl)
                 if (downloaded > 0) {
                     requestBuilder.addHeader("Range", "bytes=$downloaded-")
@@ -121,7 +154,7 @@ class DownloadWorker(
                             completedSuccessfully = true
                         } else {
                             downloaded = 0L
-                            destFile.delete()
+                            actualFile.delete()
                         }
                     } else {
                         throw Exception("HTTP ${response.code}: ${response.message}")
@@ -130,8 +163,9 @@ class DownloadWorker(
 
                 if (completedSuccessfully) {
                     DownloadBandwidthCoordinator.unregisterStream(downloadId)
-                    val finalSize = destFile.length()
+                    val finalSize = actualFile.length()
                     val completed = initialItem.copy(
+                        localFilePath = actualFile.absolutePath,
                         status = DownloadStatus.COMPLETED,
                         progress = 100,
                         downloadedBytes = finalSize,
@@ -159,7 +193,6 @@ class DownloadWorker(
                     else -> 0L
                 }
 
-                raf = RandomAccessFile(destFile, "rw")
                 if (response.code == 206) {
                     raf.seek(downloaded)
                 } else {
@@ -260,9 +293,10 @@ class DownloadWorker(
                     DownloadBandwidthCoordinator.unregisterStream(downloadId)
                     DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
                     val failedItem = initialItem.copy(
+                        localFilePath = actualFile.absolutePath,
                         status = DownloadStatus.FAILED,
-                        downloadedBytes = if (destFile.exists()) destFile.length() else 0L,
-                        totalBytes = if (destFile.exists()) destFile.length() else 0L,
+                        downloadedBytes = if (actualFile.exists()) actualFile.length() else 0L,
+                        totalBytes = if (actualFile.exists()) actualFile.length() else 0L,
                         speedBytesPerSec = 0L,
                         etaSeconds = 0L
                     )
@@ -289,10 +323,11 @@ class DownloadWorker(
                 // Item was cancelled/deleted: dismiss progress notification and do NOT recreate
                 notificationManager.cancel(getNotificationId(downloadId))
             } else if (existing.status == DownloadStatus.PAUSED) {
-                val finalDownloaded = if (destFile.exists()) destFile.length() else existing.downloadedBytes
+                val finalDownloaded = if (actualFile.exists()) actualFile.length() else existing.downloadedBytes
                 val total = if (existing.totalBytes > 0) existing.totalBytes else finalDownloaded
                 val progress = if (total > 0) ((finalDownloaded * 100) / total).toInt().coerceIn(0, 99) else existing.progress
                 val pausedItem = existing.copy(
+                    localFilePath = actualFile.absolutePath,
                     downloadedBytes = finalDownloaded,
                     totalBytes = total,
                     progress = progress,

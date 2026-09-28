@@ -14,15 +14,16 @@ object StoragePathUtils {
         val path: String
     )
 
-    fun getDefaultDownloadFolder(): FolderResult {
-        val publicDir = try {
-            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Download Free")
-        } catch (_: Exception) {
-            File("/storage/emulated/0/Download/Download Free")
-        }
+    fun getDefaultDownloadFolder(context: Context? = null): FolderResult {
+        val safeDir = context?.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: try {
+                File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Download Free")
+            } catch (_: Exception) {
+                File("/storage/emulated/0/Download/Download Free")
+            }
         return FolderResult(
             name = "Download Free",
-            path = publicDir.absolutePath
+            path = safeDir.absolutePath
         )
     }
 

@@ -238,25 +238,17 @@ class DownloadHelper(
             .trim(' ', '.')
             .ifBlank { "Video" }
         val fileName = "$cleanTitle.mp4"
+        val safeAppDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+
         val targetDir = if (savedFolderPath.isNotBlank()) {
             val customDir = File(savedFolderPath)
-            if (customDir.exists() || customDir.mkdirs()) {
+            if ((customDir.exists() || customDir.mkdirs()) && customDir.canWrite()) {
                 customDir
             } else {
-                val fallback = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Download Free")
-                if (!fallback.exists()) fallback.mkdirs()
-                fallback
+                safeAppDir
             }
         } else {
-            val publicDir = try {
-                File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Download Free")
-            } catch (_: Exception) {
-                context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-            }
-            if (!publicDir.exists()) {
-                publicDir.mkdirs()
-            }
-            publicDir
+            safeAppDir
         }
         if (!targetDir.exists()) {
             targetDir.mkdirs()

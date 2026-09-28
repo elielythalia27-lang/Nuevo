@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -35,8 +36,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Dynamic App Logo Vector:
- * - Pure White Background
- * - Dynamically synchronizes with the active theme's chosen primary color
+ * - Synchronizes with the active theme's chosen primary color and Dark/Light mode
  * - Features the iconic red play button and dynamic theme media loop
  */
 @Composable
@@ -52,7 +52,7 @@ fun AppLogoVector(
         // 0. 3D Soft Ambient Ground Shadow
         val groundShadow = Brush.radialGradient(
             colors = listOf(
-                Color(0x35004D40),
+                if (isDark) Color(0x50000000) else Color(0x35004D40),
                 Color.Transparent
             ),
             center = Offset(w * 0.50f, h * 0.88f),
@@ -66,7 +66,7 @@ fun AppLogoVector(
 
         // 1. 3D Dynamic Anchor Pillar - Back Depth Layer
         drawRoundRect(
-            color = Color(0xFF004D40),
+            color = if (isDark) Color(0xFF00382E) else Color(0xFF004D40),
             topLeft = Offset(w * 0.25f, h * 0.26f),
             size = Size(w * 0.11f, h * 0.51f),
             cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
@@ -285,10 +285,18 @@ fun SplashScreen(
             .testTag("splash_screen"),
         contentAlignment = Alignment.Center
     ) {
-        // App Icon Emblem: White background container with dynamic theme colors
+        val emblemBg = if (isDarkTheme) Color(0xFF131D33) else Color.White
+        val emblemBorder = if (isDarkTheme) {
+            BorderStroke(1.5.dp, Color.White.copy(alpha = 0.12f))
+        } else {
+            BorderStroke(1.dp, Color(0xFFE2E8F0))
+        }
+
+        // App Icon Emblem: Adapts background and accents cleanly according to current theme
         Surface(
             shape = RoundedCornerShape(32.dp),
-            color = Color.White,
+            color = emblemBg,
+            border = emblemBorder,
             shadowElevation = if (isDarkTheme) 20.dp else 12.dp,
             modifier = Modifier
                 .size(136.dp)
