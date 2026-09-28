@@ -780,7 +780,7 @@ fun HomeScreen(
                             )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Pause,
+                                imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
                                 tint = Color(0xFFF59E0B),
                                 modifier = Modifier.size(20.dp)
@@ -807,15 +807,15 @@ fun HomeScreen(
                                 .fillMaxWidth()
                                 .height(50.dp),
                             shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurface
+                                contentColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Download,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))

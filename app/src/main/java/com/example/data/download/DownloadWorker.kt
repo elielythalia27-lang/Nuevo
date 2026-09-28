@@ -392,22 +392,30 @@ class DownloadWorker(
             item.title
         }
 
-        val speedStr = if (speed > 0) formatByteSize(speed) + "/s" else ""
-        val etaStr = if (eta > 0) {
-            val m = eta / 60
-            val s = eta % 60
-            if (m > 0) "${m}m ${s}s restantes" else "${s}s restantes"
-        } else ""
+        val sizeStr = if (item.totalBytes > 0) {
+            "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
+        } else {
+            formatByteSize(item.downloadedBytes)
+        }
 
-        val subtitle = listOfNotNull(
-            speedStr.ifBlank { null },
-            "$progress%",
-            etaStr.ifBlank { null }
-        ).joinToString(" • ").ifBlank { "Descargando..." }
+        val speedStr = if (speed > 0) formatByteSize(speed) + "/s" else "0 KB/s"
+        val etaStr = if (eta > 0) {
+            val hours = eta / 3600
+            val minutes = (eta % 3600) / 60
+            val seconds = eta % 60
+            when {
+                hours > 0 -> "⏳ ${hours}h ${minutes}m"
+                minutes > 0 -> "⏳ ${minutes}m ${seconds}s"
+                else -> "⏳ ${seconds}s"
+            }
+        } else "⏳ Calculando..."
+
+        val subtitle = "$progress% - $sizeStr - $speedStr | $etaStr"
 
         return NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
-            .setContentTitle(displayTitle)
+            .setContentTitle("📥 Descargando: $displayTitle")
             .setContentText(subtitle)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setColor(0xFF00897B.toInt())
             .setProgress(100, progress, item.totalBytes <= 0)
@@ -577,9 +585,12 @@ class DownloadWorker(
             } else {
                 item.title
             }
+            val sizeStr = formatByteSize(item.totalBytes.coerceAtLeast(item.downloadedBytes))
+            val detail = "$sizeStr • Lista para ver sin conexión"
             val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_ALERTS_ID)
-                .setContentTitle("Descarga completada")
-                .setContentText(displayTitle)
+                .setContentTitle("✅ Descarga completada")
+                .setContentText("$displayTitle • $detail")
+                .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$detail"))
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setColor(0xFF10B981.toInt())
                 .setContentIntent(getContentPendingIntent())
@@ -598,10 +609,16 @@ class DownloadWorker(
             } else {
                 item.title
             }
-            val subtitle = "${item.progress}% • Pausada"
+            val sizeInfo = if (item.totalBytes > 0) {
+                "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
+            } else {
+                formatByteSize(item.downloadedBytes)
+            }
+            val subtitle = "${item.progress}% • $sizeInfo • Pausada"
             val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_PROGRESS_ID)
-                .setContentTitle(displayTitle)
+                .setContentTitle("⏸ En pausa: $displayTitle")
                 .setContentText(subtitle)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
                 .setSmallIcon(R.drawable.ic_notification_pause)
                 .setColor(0xFFF59E0B.toInt())
                 .setProgress(100, item.progress, item.totalBytes <= 0)
@@ -630,9 +647,16 @@ class DownloadWorker(
     private fun showFailedNotification(item: DownloadItem, error: String) {
         if (!PermissionHelper.hasNotificationPermission(appContext)) return
         try {
+            val displayTitle = if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
+                "${item.title} (${item.year})"
+            } else {
+                item.title
+            }
+            val subtitle = "$displayTitle: Conexión interrumpida (Progreso guardado)"
             val notification = NotificationCompat.Builder(appContext, DownloadHelper.CHANNEL_ALERTS_ID)
-                .setContentTitle("Error al descargar")
-                .setContentText("${item.title}: $error")
+                .setContentTitle("❌ Descarga detenida")
+                .setContentText(subtitle)
+                .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$error - Progreso guardado para reanudar."))
                 .setSmallIcon(R.drawable.ic_notification_error)
                 .setColor(0xFFEF4444.toInt())
                 .setContentIntent(getContentPendingIntent())

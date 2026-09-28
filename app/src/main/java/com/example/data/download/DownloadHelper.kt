@@ -808,10 +808,16 @@ class DownloadHelper(
             } else {
                 item.title
             }
-            val subtitle = "${item.progress}% • Pausada"
+            val sizeInfo = if (item.totalBytes > 0) {
+                "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
+            } else {
+                formatByteSize(item.downloadedBytes)
+            }
+            val subtitle = "${item.progress}% • $sizeInfo • Pausada"
             val notification = NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
-                .setContentTitle(displayTitle)
+                .setContentTitle("⏸ En pausa: $displayTitle")
                 .setContentText(subtitle)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
                 .setSmallIcon(R.drawable.ic_notification_pause)
                 .setColor(0xFFF59E0B.toInt())
                 .setProgress(100, item.progress, item.totalBytes <= 0)
@@ -835,6 +841,19 @@ class DownloadHelper(
                 .build()
             notificationManager.notify(getNotificationId(item.id), notification)
         } catch (_: Exception) {}
+    }
+
+    private fun formatByteSize(bytes: Long): String {
+        if (bytes <= 0) return "0 B"
+        val kb = bytes / 1024.0
+        val mb = kb / 1024.0
+        val gb = mb / 1024.0
+        return when {
+            gb >= 1.0 -> String.format(java.util.Locale.US, "%.2f GB", gb)
+            mb >= 1.0 -> String.format(java.util.Locale.US, "%.1f MB", mb)
+            kb >= 1.0 -> String.format(java.util.Locale.US, "%.0f KB", kb)
+            else -> "$bytes B"
+        }
     }
 
     private fun getContentPendingIntent(): PendingIntent {

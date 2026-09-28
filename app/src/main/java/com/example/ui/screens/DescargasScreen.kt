@@ -1573,7 +1573,7 @@ fun ActiveDownloadingCard(
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = "Reintentar descarga",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = Color(0xFFEF4444),
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -1591,7 +1591,7 @@ fun ActiveDownloadingCard(
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
                                     contentDescription = "Reanudar descarga",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = Color(0xFF10B981),
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -1699,11 +1699,11 @@ fun PendingQueueCard(
             Column(modifier = Modifier.weight(1f)) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFF59E0B).copy(alpha = 0.2f)
+                    color = Color(0xFF0284C7).copy(alpha = 0.2f)
                 ) {
                     Text(
                         text = "En cola #$queueIndex",
-                        color = Color(0xFFF59E0B),
+                        color = Color(0xFF38BDF8),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
