@@ -59,6 +59,7 @@ class DownloadHelper(
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private val workManager = WorkManager.getInstance(context)
     private val itemMutexes = ConcurrentHashMap<String, Mutex>()
+    private val queueMutex = Mutex()
     private val liveProgressMap = ConcurrentHashMap<String, LiveProgressUpdate>()
 
     // Custom StateFlow for smooth 700ms UI progress rendering
@@ -348,6 +349,7 @@ class DownloadHelper(
                         progress = 0
                     )
                     preferences.addOrUpdateDownload(pendingItem)
+                    notificationManager.cancel(getNotificationId(pelicula.id))
                     AppToastManager.show(
                         "En cola: límite de $maxLimit descargas simultáneas alcanzado",
                         ToastType.INFO
@@ -421,6 +423,7 @@ class DownloadHelper(
 
     fun cancelDownloadById(id: String) {
         scope.launch(Dispatchers.IO) {
+            notificationManager.cancel(getNotificationId(id))
             val list = preferences.downloads.first()
             val item = list.find { it.id == id } ?: return@launch
             cancelDownload(item)
@@ -481,6 +484,7 @@ class DownloadHelper(
                             etaSeconds = 0L
                         )
                         preferences.addOrUpdateDownload(pendingItem)
+                        notificationManager.cancel(getNotificationId(currentItem.id))
                         AppToastManager.show("En cola: máximo $maxLimit descargas activas", ToastType.INFO)
                     } else {
                         val resumingItem = currentItem.copy(
@@ -501,12 +505,13 @@ class DownloadHelper(
         scope.launch(Dispatchers.IO) {
             getMutexFor(item.id).withLock {
                 try {
+                    clearLiveProgress(item.id)
                     workManager.cancelUniqueWork(getWorkName(item.id))
+                    notificationManager.cancel(getNotificationId(item.id))
                     val file = File(item.localFilePath)
                     if (file.exists()) {
                         file.delete()
                     }
-                    notificationManager.cancel(getNotificationId(item.id))
                     preferences.removeDownload(item.id)
                     checkAndStartNextPending()
                 } catch (_: Exception) {}
@@ -520,12 +525,13 @@ class DownloadHelper(
                 val ids = items.map { it.id }.toSet()
                 items.forEach { item ->
                     try {
+                        clearLiveProgress(item.id)
                         workManager.cancelUniqueWork(getWorkName(item.id))
+                        notificationManager.cancel(getNotificationId(item.id))
                         val file = File(item.localFilePath)
                         if (file.exists()) {
                             file.delete()
                         }
-                        notificationManager.cancel(getNotificationId(item.id))
                     } catch (_: Exception) {}
                 }
                 preferences.removeDownloads(ids)
@@ -549,6 +555,7 @@ class DownloadHelper(
 
                     if (activeList.size >= maxLimit) {
                         val itemToDemote = activeList.last()
+                        clearLiveProgress(itemToDemote.id)
                         workManager.cancelUniqueWork(getWorkName(itemToDemote.id))
                         notificationManager.cancel(getNotificationId(itemToDemote.id))
                         val demotedPending = itemToDemote.copy(
@@ -596,9 +603,14 @@ class DownloadHelper(
                         etaSeconds = 0L
                     )
                     preferences.addOrUpdateDownload(pausedItem)
-                    showPausedNotification(pausedItem)
-                    workManager.cancelUniqueWork(getWorkName(item.id))
+                    if (item.status == DownloadStatus.DOWNLOADING) {
+                        showPausedNotification(pausedItem)
+                        workManager.cancelUniqueWork(getWorkName(item.id))
+                    } else {
+                        notificationManager.cancel(getNotificationId(item.id))
+                    }
                 }
+                notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
             } catch (_: Exception) {}
         }
     }
@@ -624,7 +636,9 @@ class DownloadHelper(
                         activeCount++
                         val resumingItem = item.copy(
                             localFilePath = targetFile.absolutePath,
-                            status = DownloadStatus.DOWNLOADING
+                            status = DownloadStatus.DOWNLOADING,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
                         )
                         preferences.addOrUpdateDownload(resumingItem)
                         enqueueWorker(resumingItem, targetFile)
@@ -636,6 +650,7 @@ class DownloadHelper(
                             etaSeconds = 0L
                         )
                         preferences.addOrUpdateDownload(pendingItem)
+                        notificationManager.cancel(getNotificationId(item.id))
                     }
                 }
             } catch (_: Exception) {}
@@ -653,14 +668,16 @@ class DownloadHelper(
                     it.status == DownloadStatus.FAILED
                 }
                 activeItems.forEach { item ->
+                    clearLiveProgress(item.id)
                     workManager.cancelUniqueWork(getWorkName(item.id))
                     val file = File(item.localFilePath)
                     if (file.exists()) {
                         file.delete()
                     }
                     notificationManager.cancel(getNotificationId(item.id))
-                    preferences.removeDownload(item.id)
                 }
+                notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
+                preferences.saveDownloads(emptyList())
             } catch (_: Exception) {}
         }
     }
@@ -673,28 +690,36 @@ class DownloadHelper(
 
     private suspend fun checkAndStartNextPending() {
         if (VpnProxyDetector.isVpnOrProxyActive(context)) return
-        try {
-            val list = preferences.downloads.first()
-            val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
-            val downloadingList = list.filter { it.status == DownloadStatus.DOWNLOADING }
-            val activeCount = downloadingList.size
+        queueMutex.withLock {
+            try {
+                val list = preferences.downloads.first()
+                val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
+                val downloadingList = list.filter { it.status == DownloadStatus.DOWNLOADING }
+                val activeCount = downloadingList.size
 
-            if (activeCount < maxLimit) {
-                val availableSlots = maxLimit - activeCount
-                val pendingList = list.filter { it.status == DownloadStatus.PENDING }.take(availableSlots)
-                val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
-
-                for (nextPending in pendingList) {
-                    val targetFile = resolveDestinationFile(nextPending, savedFolderPath)
-                    val toStart = nextPending.copy(
-                        localFilePath = targetFile.absolutePath,
-                        status = DownloadStatus.DOWNLOADING
-                    )
-                    preferences.addOrUpdateDownload(toStart)
-                    enqueueWorker(toStart, targetFile)
+                if (activeCount == 0) {
+                    notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
                 }
-            }
-        } catch (_: Exception) {}
+
+                if (activeCount < maxLimit) {
+                    val availableSlots = maxLimit - activeCount
+                    val pendingList = list.filter { it.status == DownloadStatus.PENDING }.take(availableSlots)
+                    val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
+
+                    for (nextPending in pendingList) {
+                        val targetFile = resolveDestinationFile(nextPending, savedFolderPath)
+                        val toStart = nextPending.copy(
+                            localFilePath = targetFile.absolutePath,
+                            status = DownloadStatus.DOWNLOADING,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        preferences.addOrUpdateDownload(toStart)
+                        enqueueWorker(toStart, targetFile)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     private fun showPausedNotification(item: DownloadItem) {

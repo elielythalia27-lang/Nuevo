@@ -282,17 +282,17 @@ class DownloadWorker(
 
         if (isStopped) {
             DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
-            val finalDownloaded = if (destFile.exists()) destFile.length() else 0L
             val currentList = preferences.downloads.first()
             val existing = currentList.find { it.id == downloadId }
-            val total = if (existing != null && existing.totalBytes > 0) existing.totalBytes else finalDownloaded
-            val progress = if (total > 0) ((finalDownloaded * 100) / total).toInt().coerceIn(0, 99) else 0
 
-            // If cancelled or paused
-            val isPaused = existing?.status == DownloadStatus.PAUSED || existing == null
-            if (isPaused) {
-                val pausedItem = initialItem.copy(
-                    status = DownloadStatus.PAUSED,
+            if (existing == null || existing.status == DownloadStatus.CANCELLED) {
+                // Item was cancelled/deleted: dismiss progress notification and do NOT recreate
+                notificationManager.cancel(getNotificationId(downloadId))
+            } else if (existing.status == DownloadStatus.PAUSED) {
+                val finalDownloaded = if (destFile.exists()) destFile.length() else existing.downloadedBytes
+                val total = if (existing.totalBytes > 0) existing.totalBytes else finalDownloaded
+                val progress = if (total > 0) ((finalDownloaded * 100) / total).toInt().coerceIn(0, 99) else existing.progress
+                val pausedItem = existing.copy(
                     downloadedBytes = finalDownloaded,
                     totalBytes = total,
                     progress = progress,
@@ -301,6 +301,9 @@ class DownloadWorker(
                 )
                 preferences.addOrUpdateDownload(pausedItem)
                 showPausedNotification(pausedItem)
+            } else if (existing.status == DownloadStatus.PENDING) {
+                // Item was queued / demoted: dismiss progress notification
+                notificationManager.cancel(getNotificationId(downloadId))
             }
             DownloadHelper.getActiveInstance(appContext).notifyTaskFinished(downloadId)
         }
