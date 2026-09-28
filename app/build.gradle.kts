@@ -25,28 +25,41 @@ android {
 
   signingConfigs {
     create("release") {
-      val configuredPath = System.getenv("KEYSTORE_PATH")
-        ?: (if (file("${rootDir}/my-upload-key.jks").exists()) "${rootDir}/my-upload-key.jks"
-            else if (file("${rootDir}/release.keystore").exists()) "${rootDir}/release.keystore"
-            else "${rootDir}/debug.keystore")
-      val targetFile = file(configuredPath)
-      if (targetFile.exists()) {
-        storeFile = targetFile
-        storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: System.getenv("STORE_PASSWORD") ?: "android"
-        keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: System.getenv("KEY_ALIAS") ?: "uploadKey"
-        keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD") ?: "android"
-      } else {
-        val debugKs = file("${rootDir}/debug.keystore")
-        if (debugKs.exists()) {
-          storeFile = debugKs
-          storePassword = "android"
-          keyAlias = "androiddebugkey"
-          keyPassword = "android"
-        }
+      val envPath = System.getenv("KEYSTORE_PATH")
+      val keystoreFile = when {
+        !envPath.isNullOrBlank() && file(envPath).isAbsolute && file(envPath).exists() -> file(envPath)
+        !envPath.isNullOrBlank() && rootProject.file(envPath).exists() -> rootProject.file(envPath)
+        !envPath.isNullOrBlank() && file(envPath).exists() -> file(envPath)
+        rootProject.file("my-upload-key.jks").exists() -> rootProject.file("my-upload-key.jks")
+        file("my-upload-key.jks").exists() -> file("my-upload-key.jks")
+        rootProject.file("release.keystore").exists() -> rootProject.file("release.keystore")
+        file("release.keystore").exists() -> file("release.keystore")
+        rootProject.file("debug.keystore").exists() -> rootProject.file("debug.keystore")
+        file("debug.keystore").exists() -> file("debug.keystore")
+        !envPath.isNullOrBlank() && file(envPath).isAbsolute -> file(envPath)
+        !envPath.isNullOrBlank() -> rootProject.file(envPath)
+        else -> rootProject.file("my-upload-key.jks")
       }
+
+      storeFile = keystoreFile
+      storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+        ?: System.getenv("STORE_PASSWORD")
+        ?: "android"
+      keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+        ?: System.getenv("KEY_ALIAS")
+        ?: "uploadKey"
+      keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+        ?: System.getenv("KEY_PASSWORD")
+        ?: "android"
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+      storeFile = if (rootProject.file("debug.keystore").exists()) {
+        rootProject.file("debug.keystore")
+      } else if (file("debug.keystore").exists()) {
+        file("debug.keystore")
+      } else {
+        rootProject.file("my-upload-key.jks")
+      }
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"

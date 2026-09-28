@@ -57,21 +57,23 @@ jobs:
             echo "Generando almacén de claves Release automatizado con keytool..."
             keytool -genkeypair -v \
               -keystore my-upload-key.jks \
-              -alias uploadKey \
+              -alias "${{ secrets.KEY_ALIAS || 'uploadKey' }}" \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
-              -storepass android \
-              -keypass android \
+              -storepass "${{ secrets.STORE_PASSWORD || 'android' }}" \
+              -keypass "${{ secrets.KEY_PASSWORD || 'android' }}" \
               -dname "CN=DownloadFree, OU=Mobile, O=Eliel, L=Havana, ST=Havana, C=CU"
           fi
+          # Asegurar copia en app/ para redundancia en cualquier contexto de ejecución
+          cp -f my-upload-key.jks app/my-upload-key.jks || true
 
       - name: Compilar APK Release
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'uploadKey' }}
-          KEYSTORE_PATH: "my-upload-key.jks"
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
         run: |
           if [ -f "./gradlew" ]; then
             ./gradlew :app:assembleRelease --no-daemon -Dkotlin.compiler.execution.strategy=daemon -Dksp.incremental=false -Dksp.incremental.intermodule=false --stacktrace
