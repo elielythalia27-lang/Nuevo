@@ -274,10 +274,9 @@ class DownloadWorker(
                         speedBytesPerSec = 0L,
                         etaSeconds = 0L
                     )
-                    preferences.addOrUpdateDownload(completed)
+                    DownloadHelper.getActiveInstance(appContext).markCompleted(completed)
                     notificationManager.cancel(getNotificationId(downloadId))
                     showCompletedNotification(completed)
-                    DownloadHelper.getActiveInstance(appContext).notifyTaskFinished(downloadId)
                     completedSuccessfully = true
                     return@withContext Result.success()
                 }
@@ -286,25 +285,30 @@ class DownloadWorker(
                 // Handled in finally / outer
                 break
             } catch (e: Exception) {
-                if (isStopped) break
+                val helper = DownloadHelper.getActiveInstance(appContext)
+                if (isStopped || helper.isPaused(downloadId) || helper.isCancelled(downloadId)) {
+                    break
+                }
                 retryCount++
                 if (retryCount < maxRetries) {
                     delay(1500L)
                 } else {
                     DownloadBandwidthCoordinator.unregisterStream(downloadId)
-                    DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
-                    val failedItem = initialItem.copy(
-                        localFilePath = actualFile.absolutePath,
-                        status = DownloadStatus.FAILED,
-                        downloadedBytes = if (actualFile.exists()) actualFile.length() else 0L,
-                        totalBytes = if (actualFile.exists()) actualFile.length() else 0L,
-                        speedBytesPerSec = 0L,
-                        etaSeconds = 0L
-                    )
-                    preferences.addOrUpdateDownload(failedItem)
-                    notificationManager.cancel(getNotificationId(downloadId))
-                    showFailedNotification(failedItem, e.localizedMessage ?: "Error de red")
-                    DownloadHelper.getActiveInstance(appContext).notifyTaskFinished(downloadId)
+                    helper.clearLiveProgress(downloadId)
+                    if (!helper.isPaused(downloadId) && !helper.isCancelled(downloadId)) {
+                        val failedItem = initialItem.copy(
+                            localFilePath = actualFile.absolutePath,
+                            status = DownloadStatus.FAILED,
+                            downloadedBytes = if (actualFile.exists()) actualFile.length() else 0L,
+                            totalBytes = if (actualFile.exists()) actualFile.length() else 0L,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        preferences.addOrUpdateDownload(failedItem)
+                        notificationManager.cancel(getNotificationId(downloadId))
+                        showFailedNotification(failedItem, e.localizedMessage ?: "Error de red")
+                    }
+                    helper.notifyTaskFinished(downloadId)
                     return@withContext Result.failure()
                 }
             } finally {
@@ -316,19 +320,20 @@ class DownloadWorker(
         DownloadBandwidthCoordinator.unregisterStream(downloadId)
 
         if (isStopped) {
-            DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
-            val currentList = preferences.downloads.first()
-            val existing = currentList.find { it.id == downloadId }
+            val helper = DownloadHelper.getActiveInstance(appContext)
+            helper.clearLiveProgress(downloadId)
 
-            if (existing == null || existing.status == DownloadStatus.CANCELLED) {
+            if (helper.isCancelled(downloadId)) {
                 // Item was cancelled/deleted: dismiss progress notification and do NOT recreate
                 notificationManager.cancel(getNotificationId(downloadId))
-            } else if (existing.status == DownloadStatus.PAUSED) {
-                val finalDownloaded = if (actualFile.exists()) actualFile.length() else existing.downloadedBytes
-                val total = if (existing.totalBytes > 0) existing.totalBytes else finalDownloaded
-                val progress = if (total > 0) ((finalDownloaded * 100) / total).toInt().coerceIn(0, 99) else existing.progress
-                val pausedItem = existing.copy(
+            } else if (helper.isPaused(downloadId)) {
+                val memItem = helper.getItem(downloadId)
+                val finalDownloaded = if (actualFile.exists()) actualFile.length() else (memItem?.downloadedBytes ?: 0L)
+                val total = if ((memItem?.totalBytes ?: 0L) > 0) memItem!!.totalBytes else finalDownloaded
+                val progress = if (total > 0) ((finalDownloaded * 100) / total).toInt().coerceIn(0, 99) else (memItem?.progress ?: 0)
+                val pausedItem = (memItem ?: initialItem).copy(
                     localFilePath = actualFile.absolutePath,
+                    status = DownloadStatus.PAUSED,
                     downloadedBytes = finalDownloaded,
                     totalBytes = total,
                     progress = progress,
@@ -337,11 +342,8 @@ class DownloadWorker(
                 )
                 preferences.addOrUpdateDownload(pausedItem)
                 showPausedNotification(pausedItem)
-            } else if (existing.status == DownloadStatus.PENDING) {
-                // Item was queued / demoted: dismiss progress notification
-                notificationManager.cancel(getNotificationId(downloadId))
             }
-            DownloadHelper.getActiveInstance(appContext).notifyTaskFinished(downloadId)
+            helper.notifyTaskFinished(downloadId)
         }
 
         Result.success()
@@ -615,12 +617,10 @@ class DownloadWorker(
                     getCancelPendingIntent(item.id)
                 )
                 .setAutoCancel(false)
-                .setOngoing(true)
+                .setOngoing(false)
                 .setShowWhen(false)
                 .setWhen(0L)
                 .setSortKey("download_${item.id}")
-                .setGroup("active_downloads_group")
-                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
                 .setOnlyAlertOnce(true)
                 .build()
             notificationManager.notify(getNotificationId(item.id), notification)
