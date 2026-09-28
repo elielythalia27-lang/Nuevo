@@ -188,6 +188,7 @@ class DownloadHelper(
 
     fun clearLiveProgress(downloadId: String) {
         liveProgressMap.remove(downloadId)
+        DownloadBandwidthCoordinator.unregisterStream(downloadId)
     }
 
     private fun createNotificationChannels() {

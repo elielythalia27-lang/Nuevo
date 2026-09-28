@@ -91,8 +91,11 @@ class DownloadWorker(
         val maxRetries = 3
         var completedSuccessfully = false
 
+        DownloadBandwidthCoordinator.registerStream(downloadId)
+
         while (isActive && retryCount < maxRetries && !completedSuccessfully && !isStopped) {
             if (VpnProxyDetector.isVpnOrProxyActive(appContext)) {
+                DownloadBandwidthCoordinator.unregisterStream(downloadId)
                 handlePausedOnVpn(downloadId, title, coverUrl, year, type, destFile)
                 return@withContext Result.success()
             }
@@ -126,6 +129,7 @@ class DownloadWorker(
                 }
 
                 if (completedSuccessfully) {
+                    DownloadBandwidthCoordinator.unregisterStream(downloadId)
                     val finalSize = destFile.length()
                     val completed = initialItem.copy(
                         status = DownloadStatus.COMPLETED,
@@ -179,6 +183,9 @@ class DownloadWorker(
                     downloaded += bytesRead
                     bytesSinceLastUpdate += bytesRead
 
+                    // Equitable Bandwidth Balancer: pace stream dynamically to ensure equal speed share across all active downloads
+                    DownloadBandwidthCoordinator.paceTransfer(downloadId, bytesRead)
+
                     val now = System.currentTimeMillis()
                     val timeDiff = now - lastTime
 
@@ -222,6 +229,7 @@ class DownloadWorker(
                 }
 
                 if (bytesRead == -1 && !isStopped) {
+                    DownloadBandwidthCoordinator.unregisterStream(downloadId)
                     DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
                     val finalSize = destFile.length()
                     val completed = initialItem.copy(
@@ -249,6 +257,7 @@ class DownloadWorker(
                 if (retryCount < maxRetries) {
                     delay(1500L)
                 } else {
+                    DownloadBandwidthCoordinator.unregisterStream(downloadId)
                     DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
                     val failedItem = initialItem.copy(
                         status = DownloadStatus.FAILED,
@@ -268,6 +277,8 @@ class DownloadWorker(
                 try { raf?.close() } catch (_: Exception) {}
             }
         }
+
+        DownloadBandwidthCoordinator.unregisterStream(downloadId)
 
         if (isStopped) {
             DownloadHelper.getActiveInstance(appContext).clearLiveProgress(downloadId)
