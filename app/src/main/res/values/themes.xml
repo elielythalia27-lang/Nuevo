@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
+        <!-- Prevent black flash on launch while Activity window initializes -->
+        <item name="android:windowBackground">@color/app_window_bg</item>
+        <item name="android:colorBackground">@color/app_window_bg</item>
+    </style>
 </resources>
