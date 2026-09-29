@@ -1847,6 +1847,13 @@ fun DownloadedMovieCard(
                                 .shimmerEffect(RoundedCornerShape(10.dp), isDark = isDarkTheme)
                         )
                     },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .shimmerEffect(RoundedCornerShape(10.dp), isDark = isDarkTheme)
+                        )
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }

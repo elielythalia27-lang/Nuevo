@@ -277,8 +277,16 @@ fun AjustesScreen(
                                 ) {
                                     modes.forEach { (mode, label, icon) ->
                                         val isSelected = themeMode == mode
-                                        val activeBg = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                                        val activeText = if (isSelected) MaterialTheme.colorScheme.onPrimary else textSecondary
+                                        val activeBg by animateColorAsState(
+                                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                                            label = "active_mode_bg"
+                                        )
+                                        val activeText by animateColorAsState(
+                                            targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else textSecondary,
+                                            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                                            label = "active_mode_text"
+                                        )
 
                                         Row(
                                             modifier = Modifier
@@ -286,7 +294,9 @@ fun AjustesScreen(
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(activeBg)
                                                 .clickable {
-                                                    onThemeModeChange(mode)
+                                                    if (themeMode != mode) {
+                                                        onThemeModeChange(mode)
+                                                    }
                                                 }
                                                 .padding(vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically,

@@ -102,8 +102,8 @@ data class DownloadItem(
             if (status != DownloadStatus.DOWNLOADING) return "-- KB/s"
             if (speedBytesPerSec <= 0L) return "Iniciando..."
             return when {
-                speedBytesPerSec >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB/s", speedBytesPerSec / (1024.0 * 1024.0))
-                else -> String.format(Locale.US, "%d KB/s", (speedBytesPerSec / 1024).coerceAtLeast(1L))
+                speedBytesPerSec >= 1024 * 1024 -> "${Math.round(speedBytesPerSec / (1024.0 * 1024.0))} MB/s"
+                else -> "${(speedBytesPerSec / 1024).coerceAtLeast(1L)} KB/s"
             }
         }
 
@@ -145,6 +145,10 @@ data class DownloadItem(
         }
 }
 
+/**
+ * Clean byte size formatting without decimals (.0 eliminated), strictly showing integer units.
+ * Examples: 500 MB, 12 GB, 800 KB, 0 MB
+ */
 fun formatByteSize(bytes: Long): String {
     if (bytes <= 0L) return "0 MB"
     val kb = bytes / 1024.0

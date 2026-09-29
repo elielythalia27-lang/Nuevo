@@ -1,11 +1,11 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -35,12 +35,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Dynamic App Logo Vector:
- * - Synchronizes with the active theme's chosen primary color and Dark/Light mode
- * - Features the iconic red play button and dynamic theme media loop
+ * AppLauncherIconVector:
+ * Exactly identical to the launcher icon (ic_launcher_foreground.xml).
+ * Shows the emerald/teal anchor spine & download loop with the centered 3D ruby red play jewel.
+ * Premium, clean vector drawing without black colors.
  */
 @Composable
-fun AppLogoVector(
+fun AppLauncherIconVector(
     modifier: Modifier = Modifier,
     primaryColor: Color = Color(0xFF009688),
     isDark: Boolean = true
@@ -49,186 +50,203 @@ fun AppLogoVector(
         val w = size.width
         val h = size.height
 
-        // 0. 3D Soft Ambient Ground Shadow
+        // 0. Soft Ambient Ground Shadow (Tonal, zero black)
         val groundShadow = Brush.radialGradient(
             colors = listOf(
-                if (isDark) Color(0x50000000) else Color(0x35004D40),
+                if (isDark) Color(0x35004D40) else Color(0x20004D40),
                 Color.Transparent
             ),
-            center = Offset(w * 0.50f, h * 0.88f),
-            radius = w * 0.40f
+            center = Offset(w * 0.50f, h * 0.77f),
+            radius = w * 0.35f
         )
         drawOval(
             brush = groundShadow,
-            topLeft = Offset(w * 0.15f, h * 0.82f),
-            size = Size(w * 0.70f, h * 0.12f)
+            topLeft = Offset(w * 0.28f, h * 0.73f),
+            size = Size(w * 0.44f, h * 0.08f)
         )
 
-        // 1. 3D Dynamic Anchor Pillar - Back Depth Layer
+        // 1a. 3D Isometric Teal Anchor Spine - Back Depth Layer
         drawRoundRect(
-            color = if (isDark) Color(0xFF00382E) else Color(0xFF004D40),
-            topLeft = Offset(w * 0.25f, h * 0.26f),
-            size = Size(w * 0.11f, h * 0.51f),
+            color = Color(0xFF004D40),
+            topLeft = Offset(w * 0.287f, h * 0.273f),
+            size = Size(w * 0.106f, h * 0.444f),
             cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
         )
 
-        // 1b. 3D Dynamic Anchor Pillar - Front Face with Gloss Gradient
+        // 1b. 3D Isometric Teal Anchor Spine - Front Face
         val spineGradient = Brush.linearGradient(
             colors = listOf(
-                primaryColor.copy(alpha = 1f),
-                primaryColor.copy(alpha = 0.85f),
-                Color(0xFF00695C)
+                Color(0xFF00E676),
+                primaryColor,
+                Color(0xFF00796B)
             ),
-            start = Offset(w * 0.23f, h * 0.24f),
-            end = Offset(w * 0.35f, h * 0.75f)
+            start = Offset(w * 0.277f, h * 0.259f),
+            end = Offset(w * 0.380f, h * 0.704f)
         )
         drawRoundRect(
             brush = spineGradient,
-            topLeft = Offset(w * 0.23f, h * 0.24f),
-            size = Size(w * 0.11f, h * 0.50f),
+            topLeft = Offset(w * 0.277f, h * 0.259f),
+            size = Size(w * 0.097f, h * 0.444f),
             cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
         )
 
-        // 1c. 3D Anchor Pillar - Top Chamfer Highlight
+        // 1c. Spine Top Highlight Chamfer
         drawRoundRect(
-            color = Color(0x70FFFFFF),
-            topLeft = Offset(w * 0.23f, h * 0.24f),
-            size = Size(w * 0.11f, h * 0.06f),
-            cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
+            color = Color(0x80E0F2F1),
+            topLeft = Offset(w * 0.287f, h * 0.268f),
+            size = Size(w * 0.088f, h * 0.023f),
+            cornerRadius = CornerRadius(w * 0.02f, h * 0.02f)
         )
 
-        // 2. 3D Dynamic Media Curve Loop - Depth Layer
+        // 2a. 3D Teal Download/Media Loop - Depth Shadow Layer
         val loopDepthPath = Path().apply {
-            moveTo(w * 0.35f, h * 0.27f)
-            lineTo(w * 0.56f, h * 0.27f)
-            cubicTo(w * 0.73f, h * 0.27f, w * 0.83f, h * 0.40f, w * 0.83f, h * 0.52f)
-            cubicTo(w * 0.83f, h * 0.66f, w * 0.73f, h * 0.77f, w * 0.56f, h * 0.77f)
-            lineTo(w * 0.35f, h * 0.77f)
-            lineTo(w * 0.35f, h * 0.69f)
-            lineTo(w * 0.56f, h * 0.69f)
-            cubicTo(w * 0.66f, h * 0.69f, w * 0.74f, h * 0.61f, w * 0.74f, h * 0.52f)
-            cubicTo(w * 0.74f, h * 0.43f, w * 0.66f, h * 0.35f, w * 0.56f, h * 0.35f)
-            lineTo(w * 0.35f, h * 0.35f)
+            moveTo(w * 0.380f, h * 0.282f)
+            cubicTo(w * 0.528f, h * 0.282f, w * 0.690f, h * 0.329f, w * 0.727f, h * 0.458f)
+            cubicTo(w * 0.764f, h * 0.579f, w * 0.699f, h * 0.681f, w * 0.597f, h * 0.727f)
+            cubicTo(w * 0.523f, h * 0.755f, w * 0.444f, h * 0.736f, w * 0.389f, h * 0.736f)
+            lineTo(w * 0.407f, h * 0.662f)
+            cubicTo(w * 0.444f, h * 0.662f, w * 0.500f, h * 0.681f, w * 0.560f, h * 0.653f)
+            cubicTo(w * 0.634f, h * 0.616f, w * 0.671f, h * 0.542f, w * 0.644f, h * 0.458f)
+            cubicTo(w * 0.616f, h * 0.375f, w * 0.495f, h * 0.338f, w * 0.389f, h * 0.347f)
             close()
         }
-        drawPath(path = loopDepthPath, color = Color(0xFF00382E))
+        drawPath(path = loopDepthPath, color = Color(0xFF004D40))
 
-        // 2b. 3D Dynamic Media Curve Loop - Main Face
+        // 2b. 3D Teal Download/Media Loop - Main Body
         val loopGradient = Brush.linearGradient(
             colors = listOf(
                 Color(0xFF1DE9B6),
                 primaryColor,
-                Color(0xFF004D40)
+                Color(0xFF00897B),
+                Color(0xFF00695C)
             ),
-            start = Offset(w * 0.33f, h * 0.24f),
-            end = Offset(w * 0.82f, h * 0.76f)
+            start = Offset(w * 0.370f, h * 0.259f),
+            end = Offset(w * 0.722f, h * 0.713f)
         )
         val loopPath = Path().apply {
-            moveTo(w * 0.33f, h * 0.24f)
-            lineTo(w * 0.55f, h * 0.24f)
-            cubicTo(w * 0.72f, h * 0.24f, w * 0.82f, h * 0.37f, w * 0.82f, h * 0.49f)
-            cubicTo(w * 0.82f, h * 0.63f, w * 0.72f, h * 0.74f, w * 0.55f, h * 0.74f)
-            lineTo(w * 0.33f, h * 0.74f)
-            lineTo(w * 0.33f, h * 0.66f)
-            lineTo(w * 0.55f, h * 0.66f)
-            cubicTo(w * 0.65f, h * 0.66f, w * 0.73f, h * 0.58f, w * 0.73f, h * 0.49f)
-            cubicTo(w * 0.73f, h * 0.40f, w * 0.65f, h * 0.32f, w * 0.55f, h * 0.32f)
-            lineTo(w * 0.33f, h * 0.32f)
+            moveTo(w * 0.370f, h * 0.259f)
+            cubicTo(w * 0.519f, h * 0.259f, w * 0.681f, h * 0.306f, w * 0.718f, h * 0.435f)
+            cubicTo(w * 0.755f, h * 0.556f, w * 0.690f, h * 0.657f, w * 0.588f, h * 0.704f)
+            cubicTo(w * 0.514f, h * 0.731f, w * 0.435f, h * 0.713f, w * 0.380f, h * 0.713f)
+            lineTo(w * 0.398f, h * 0.639f)
+            cubicTo(w * 0.435f, h * 0.639f, w * 0.491f, h * 0.657f, w * 0.551f, h * 0.630f)
+            cubicTo(w * 0.625f, h * 0.593f, w * 0.662f, h * 0.519f, w * 0.634f, h * 0.435f)
+            cubicTo(w * 0.606f, h * 0.352f, w * 0.486f, h * 0.315f, w * 0.380f, h * 0.324f)
             close()
         }
         drawPath(path = loopPath, brush = loopGradient)
 
-        // 2c. 3D Loop Top Specular Highlight
-        val highlightPath = Path().apply {
-            moveTo(w * 0.34f, h * 0.24f)
-            lineTo(w * 0.55f, h * 0.24f)
-            cubicTo(w * 0.68f, h * 0.24f, w * 0.78f, h * 0.33f, w * 0.80f, h * 0.45f)
-            cubicTo(w * 0.77f, h * 0.35f, w * 0.65f, h * 0.27f, w * 0.55f, h * 0.27f)
-            lineTo(w * 0.34f, h * 0.27f)
+        // 2c. 3D Loop Top Specular Edge Highlight
+        val loopHighlightPath = Path().apply {
+            moveTo(w * 0.380f, h * 0.259f)
+            cubicTo(w * 0.509f, h * 0.259f, w * 0.657f, h * 0.301f, w * 0.699f, h * 0.417f)
+            cubicTo(w * 0.681f, h * 0.324f, w * 0.556f, h * 0.282f, w * 0.380f, h * 0.282f)
             close()
         }
-        drawPath(path = highlightPath, color = Color(0x90FFFFFF))
+        drawPath(path = loopHighlightPath, color = Color(0x90FFFFFF))
 
-        // 3. 3D Download Arrow Pointer - Depth Edge
+        // 3a. 3D Download Arrow Pointer - Depth Edge
         val arrowDepthPath = Path().apply {
-            moveTo(w * 0.55f, h * 0.68f)
-            lineTo(w * 0.65f, h * 0.77f)
-            lineTo(w * 0.52f, h * 0.79f)
+            moveTo(w * 0.519f, h * 0.648f)
+            lineTo(w * 0.606f, h * 0.727f)
+            lineTo(w * 0.491f, h * 0.745f)
+            lineTo(w * 0.509f, h * 0.657f)
             close()
         }
-        drawPath(path = arrowDepthPath, color = Color(0xFF00332A))
+        drawPath(path = arrowDepthPath, color = Color(0xFF004D40))
 
-        // 3b. 3D Download Arrow Pointer - Front Face
-        val arrowPath = Path().apply {
-            moveTo(w * 0.54f, h * 0.66f)
-            lineTo(w * 0.64f, h * 0.75f)
-            lineTo(w * 0.51f, h * 0.77f)
-            close()
-        }
-        val arrowGradient = Brush.linearGradient(
-            colors = listOf(Color(0xFF00E676), primaryColor, Color(0xFF00796B)),
-            start = Offset(w * 0.51f, h * 0.66f),
-            end = Offset(w * 0.64f, h * 0.77f)
+        // 3b. 3D Download Arrow Pointer - Front
+        val arrowFrontGradient = Brush.linearGradient(
+            colors = listOf(Color(0xFF69F0AE), Color(0xFF00E676), primaryColor),
+            start = Offset(w * 0.481f, h * 0.634f),
+            end = Offset(w * 0.593f, h * 0.727f)
         )
-        drawPath(path = arrowPath, brush = arrowGradient)
-
-        // 4. 3D Ruby Red Cinema Play Button - Soft Shadow
-        val rubyShadowPath = Path().apply {
-            moveTo(w * 0.43f, h * 0.40f)
-            lineTo(w * 0.67f, h * 0.52f)
-            lineTo(w * 0.43f, h * 0.64f)
+        val arrowFrontPath = Path().apply {
+            moveTo(w * 0.509f, h * 0.634f)
+            lineTo(w * 0.593f, h * 0.708f)
+            lineTo(w * 0.481f, h * 0.727f)
+            lineTo(w * 0.500f, h * 0.644f)
             close()
         }
-        drawPath(path = rubyShadowPath, color = Color(0x40000000))
+        drawPath(path = arrowFrontPath, brush = arrowFrontGradient)
 
-        // 4b. 3D Ruby Red Cinema Play Button - 3D Jewel Body
+        // 4a. 3D Ruby Red Play Button Jewel - Soft Colored Drop Shadow (Zero black)
+        val playShadowBrush = Brush.linearGradient(
+            colors = listOf(Color(0x35B71C1C), Color(0x10B71C1C)),
+            start = Offset(w * 0.431f, h * 0.389f),
+            end = Offset(w * 0.634f, h * 0.620f)
+        )
+        val playShadowPath = Path().apply {
+            moveTo(w * 0.449f, h * 0.403f)
+            cubicTo(w * 0.458f, h * 0.394f, w * 0.472f, h * 0.394f, w * 0.481f, h * 0.403f)
+            lineTo(w * 0.625f, h * 0.486f)
+            cubicTo(w * 0.639f, h * 0.495f, w * 0.639f, h * 0.519f, w * 0.625f, h * 0.528f)
+            lineTo(w * 0.481f, h * 0.611f)
+            cubicTo(w * 0.472f, h * 0.620f, w * 0.458f, h * 0.620f, w * 0.449f, h * 0.611f)
+            cubicTo(w * 0.440f, h * 0.602f, w * 0.435f, h * 0.593f, w * 0.435f, h * 0.579f)
+            lineTo(w * 0.435f, h * 0.435f)
+            cubicTo(w * 0.435f, h * 0.421f, w * 0.440f, h * 0.412f, w * 0.449f, h * 0.403f)
+            close()
+        }
+        drawPath(path = playShadowPath, brush = playShadowBrush)
+
+        // 4b. 3D Ruby Red Play Button Jewel - 3D Bevel Body (Centered, vibrant red tones)
         val rubyBrush = Brush.linearGradient(
             colors = listOf(
                 Color(0xFFFF5252),
                 Color(0xFFFF1744),
-                Color(0xFFD50000),
-                Color(0xFF8B0000)
+                Color(0xFFE53935),
+                Color(0xFFC62828)
             ),
-            start = Offset(w * 0.41f, h * 0.38f),
-            end = Offset(w * 0.66f, h * 0.63f)
+            start = Offset(w * 0.426f, h * 0.375f),
+            end = Offset(w * 0.630f, h * 0.593f)
         )
         val playPath = Path().apply {
-            moveTo(w * 0.41f, h * 0.38f)
-            lineTo(w * 0.65f, h * 0.50f)
-            lineTo(w * 0.41f, h * 0.62f)
+            moveTo(w * 0.440f, h * 0.384f)
+            cubicTo(w * 0.449f, h * 0.375f, w * 0.463f, h * 0.375f, w * 0.472f, h * 0.384f)
+            lineTo(w * 0.616f, h * 0.468f)
+            cubicTo(w * 0.630f, h * 0.477f, w * 0.630f, h * 0.500f, w * 0.616f, h * 0.509f)
+            lineTo(w * 0.472f, h * 0.593f)
+            cubicTo(w * 0.463f, h * 0.602f, w * 0.449f, h * 0.602f, w * 0.440f, h * 0.593f)
+            cubicTo(w * 0.431f, h * 0.583f, w * 0.426f, h * 0.574f, w * 0.426f, h * 0.560f)
+            lineTo(w * 0.426f, h * 0.417f)
+            cubicTo(w * 0.426f, h * 0.403f, w * 0.431f, h * 0.394f, w * 0.440f, h * 0.384f)
             close()
         }
         drawPath(path = playPath, brush = rubyBrush)
 
-        // 4c. 3D Ruby Red - Top Specular Bevel
+        // 4c. 3D Ruby Red Top Gloss Facet
+        val glossBrush = Brush.linearGradient(
+            colors = listOf(Color(0x80FFFFFF), Color(0x00FFFFFF)),
+            start = Offset(w * 0.440f, h * 0.384f),
+            end = Offset(w * 0.611f, h * 0.486f)
+        )
         val playGlossPath = Path().apply {
-            moveTo(w * 0.41f, h * 0.38f)
-            lineTo(w * 0.65f, h * 0.50f)
-            lineTo(w * 0.41f, h * 0.50f)
+            moveTo(w * 0.440f, h * 0.384f)
+            lineTo(w * 0.611f, h * 0.486f)
+            lineTo(w * 0.440f, h * 0.486f)
             close()
         }
-        val glossBrush = Brush.linearGradient(
-            colors = listOf(Color(0x80FFFFFF), Color.Transparent),
-            start = Offset(w * 0.41f, h * 0.38f),
-            end = Offset(w * 0.65f, h * 0.50f)
-        )
         drawPath(path = playGlossPath, brush = glossBrush)
 
-        // 4d. Specular Center Sparkle
-        val playInnerPath = Path().apply {
-            moveTo(w * 0.43f, h * 0.42f)
-            lineTo(w * 0.54f, h * 0.48f)
-            lineTo(w * 0.43f, h * 0.54f)
+        // 4d. Specular Center Highlight Dot
+        val sparklePath = Path().apply {
+            moveTo(w * 0.454f, h * 0.412f)
+            cubicTo(w * 0.454f, h * 0.405f, w * 0.461f, h * 0.405f, w * 0.466f, h * 0.409f)
+            lineTo(w * 0.523f, h * 0.444f)
+            cubicTo(w * 0.528f, h * 0.448f, w * 0.528f, h * 0.454f, w * 0.523f, h * 0.457f)
+            lineTo(w * 0.466f, h * 0.493f)
+            cubicTo(w * 0.461f, h * 0.497f, w * 0.454f, h * 0.497f, w * 0.454f, h * 0.490f)
             close()
         }
-        drawPath(path = playInnerPath, color = Color(0x35FFFFFF))
+        drawPath(path = sparklePath, color = Color(0x40FFFFFF))
     }
 }
 
 /**
- * Startup Screen synchronized with the selected App Theme and Color:
- * Exclusively displays the App Icon centered on screen, adapting dynamically
- * to the user's chosen theme color and dark/light mode.
+ * Startup Splash Screen synchronized with the selected App Theme and Color:
+ * Displays the exact App Launcher Icon centered on screen, adapting smoothly
+ * to dark and light mode without flash or artifacts.
  */
 @Composable
 fun SplashScreen(
@@ -238,7 +256,7 @@ fun SplashScreen(
     val themePrimary = MaterialTheme.colorScheme.primary
     val themeBackground = MaterialTheme.colorScheme.background
 
-    val logoScale = remember { Animatable(0.65f) }
+    val logoScale = remember { Animatable(0.70f) }
     val logoAlpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
@@ -246,7 +264,7 @@ fun SplashScreen(
         launch {
             logoAlpha.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing)
             )
         }
         launch {
@@ -259,22 +277,22 @@ fun SplashScreen(
             )
         }
 
-        // Display for a couple seconds before opening the app
-        delay(1600)
+        // Display before transitioning to main content
+        delay(1500)
 
         // Seamless exit transition
         launch {
             logoScale.animateTo(
                 targetValue = 1.05f,
-                animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
             )
             logoAlpha.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
             )
         }
 
-        delay(250)
+        delay(240)
         onTimeout()
     }
 
@@ -285,37 +303,37 @@ fun SplashScreen(
             .testTag("splash_screen"),
         contentAlignment = Alignment.Center
     ) {
-        val emblemBg = if (isDarkTheme) Color(0xFF131D33) else Color.White
+        val emblemBg = if (isDarkTheme) Color(0xFF1E293B) else Color.White
         val emblemBorder = if (isDarkTheme) {
-            BorderStroke(1.5.dp, Color.White.copy(alpha = 0.12f))
+            BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
         } else {
             BorderStroke(1.dp, Color(0xFFE2E8F0))
         }
 
-        // App Icon Emblem: Adapts background and accents cleanly according to current theme
+        // App Icon Emblem: Matches the exact app launcher icon styling
         Surface(
             shape = RoundedCornerShape(32.dp),
             color = emblemBg,
             border = emblemBorder,
-            shadowElevation = if (isDarkTheme) 20.dp else 12.dp,
+            shadowElevation = if (isDarkTheme) 16.dp else 10.dp,
             modifier = Modifier
                 .size(136.dp)
                 .scale(logoScale.value)
                 .alpha(logoAlpha.value)
                 .shadow(
-                    elevation = if (isDarkTheme) 24.dp else 14.dp,
+                    elevation = if (isDarkTheme) 20.dp else 12.dp,
                     shape = RoundedCornerShape(32.dp),
-                    spotColor = themePrimary.copy(alpha = 0.45f),
-                    ambientColor = if (isDarkTheme) themePrimary.copy(alpha = 0.25f) else Color(0xFFE53935).copy(alpha = 0.20f)
+                    spotColor = themePrimary.copy(alpha = 0.40f),
+                    ambientColor = if (isDarkTheme) themePrimary.copy(alpha = 0.20f) else Color(0xFFE53935).copy(alpha = 0.15f)
                 )
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(18.dp),
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                AppLogoVector(
+                AppLauncherIconVector(
                     primaryColor = themePrimary,
                     isDark = isDarkTheme,
                     modifier = Modifier.fillMaxSize()

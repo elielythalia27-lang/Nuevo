@@ -21,6 +21,7 @@ import com.example.data.model.DownloadStatus
 import com.example.data.model.formatByteSize
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
+import com.example.utils.NetworkUtils
 import com.example.utils.NotificationUtils
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
@@ -223,6 +224,14 @@ class DownloadWorker(
 
                     // Update cadence: exactly every 700 milliseconds
                     if (timeDiff >= 700L) {
+                        val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+                        if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(appContext)) {
+                            throw Exception("Conexión Wi-Fi perdida")
+                        }
+                        if (!NetworkUtils.isConnected(appContext)) {
+                            throw Exception("Conexión a internet perdida")
+                        }
+
                         lastSpeed = (bytesSinceLastUpdate * 1000L) / timeDiff.coerceAtLeast(1L)
                         val remainingBytes = (totalBytes - downloaded).coerceAtLeast(0L)
                         lastEta = if (lastSpeed > 2048 && remainingBytes > 0) remainingBytes / lastSpeed else 0L

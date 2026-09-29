@@ -212,22 +212,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                     is Resource.Error -> {
                         _uiState.update { state ->
-                            val currentItems = state.allPeliculas
-                            if (currentItems.isNotEmpty()) {
-                                state.copy(
-                                    isLoading = false,
-                                    errorMessage = null,
-                                    isDataOffline = true
-                                )
-                            } else {
-                                state.copy(
-                                    isLoading = false,
-                                    errorMessage = resource.message,
-                                    allPeliculas = emptyList(),
-                                    filteredPeliculas = emptyList(),
-                                    isDataOffline = true
-                                )
-                            }
+                            state.copy(
+                                isLoading = false,
+                                errorMessage = resource.message,
+                                allPeliculas = emptyList(),
+                                filteredPeliculas = emptyList(),
+                                isDataOffline = true
+                            )
                         }
                     }
                 }
@@ -500,12 +491,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playPelicula(pelicula: Pelicula, initialPositionMs: Long = 0L) {
         val isOnline = pelicula.safeVideoUrl.startsWith("http", ignoreCase = true)
-        if (isOnline && _uiState.value.wifiOnly && !NetworkUtils.isWifiOrEthernet(getApplication())) {
-            AppToastManager.show(
-                "Reproducción bloqueada: 'Solo Wi-Fi' está activo y estás conectado por datos móviles",
-                ToastType.ERROR
-            )
-            return
+        if (isOnline) {
+            if (!NetworkUtils.isConnected(getApplication())) {
+                AppToastManager.show(
+                    "Sin conexión a internet. No se puede reproducir en línea.",
+                    ToastType.ERROR
+                )
+                return
+            }
+            if (_uiState.value.wifiOnly && !NetworkUtils.isWifiOrEthernet(getApplication())) {
+                AppToastManager.show(
+                    "Reproducción bloqueada: 'Solo Wi-Fi' está activo y estás conectado por datos móviles",
+                    ToastType.ERROR
+                )
+                return
+            }
         }
         val savedPos = if (initialPositionMs > 0L) initialPositionMs else {
             val cw = _uiState.value.continueWatching

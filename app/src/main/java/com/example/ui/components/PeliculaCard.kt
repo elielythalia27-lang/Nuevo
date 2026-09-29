@@ -149,16 +149,8 @@ fun PeliculaCard(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = if (isDarkTheme) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.2f),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
+                                    .shimmerEffect(RoundedCornerShape(9.dp), isDark = isDarkTheme)
+                            )
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -350,16 +342,11 @@ fun PeliculaCard(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = if (isDarkTheme) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.2f),
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
+                                    .shimmerEffect(
+                                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+                                        isDark = isDarkTheme
+                                    )
+                            )
                         },
                         modifier = Modifier.fillMaxSize()
                     )

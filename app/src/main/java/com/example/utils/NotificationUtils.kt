@@ -186,16 +186,16 @@ object NotificationUtils {
             val minutes = (eta % 3600) / 60
             val seconds = eta % 60
             when {
-                hours > 0 -> "⏳ ${hours}h ${minutes}m"
-                minutes > 0 -> "⏳ ${minutes}m ${seconds}s"
-                else -> "⏳ ${seconds}s"
+                hours > 0 -> "${hours}h ${minutes}m restantes"
+                minutes > 0 -> "${minutes}m ${seconds}s restantes"
+                else -> "${seconds}s restantes"
             }
-        } else "⏳ Calculando..."
+        } else "Calculando tiempo..."
 
-        val subtitle = "$progress% - $sizeStr - $speedStr | $etaStr"
+        val subtitle = "$progress% • $sizeStr • $speedStr • $etaStr"
 
         return createCompatBuilder(context, CHANNEL_PROGRESS_ID)
-            .setContentTitle("📥 Descargando: $displayTitle")
+            .setContentTitle("Descargando: $displayTitle")
             .setContentText(subtitle)
             .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
             .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -245,10 +245,10 @@ object NotificationUtils {
         } else {
             formatByteSize(item.downloadedBytes)
         }
-        val subtitle = "${item.progress}% • $sizeInfo • Pausada"
+        val subtitle = "${item.progress}% • $sizeInfo • En pausa"
 
         return createCompatBuilder(context, CHANNEL_PROGRESS_ID)
-            .setContentTitle("⏸ En pausa: $displayTitle")
+            .setContentTitle("En pausa: $displayTitle")
             .setContentText(subtitle)
             .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
             .setSmallIcon(R.drawable.ic_notification_pause)
@@ -289,11 +289,11 @@ object NotificationUtils {
             item.title
         }
         val sizeStr = formatByteSize(item.totalBytes.coerceAtLeast(item.downloadedBytes))
-        val detail = "$sizeStr • Lista para ver sin conexión"
+        val detail = "$sizeStr • Descarga completada. Lista para ver sin conexión."
 
         return createCompatBuilder(context, CHANNEL_SUCCESS_ID)
-            .setContentTitle("✅ Descarga completada")
-            .setContentText("$displayTitle • $detail")
+            .setContentTitle("Descarga completada")
+            .setContentText("$displayTitle • $sizeStr")
             .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$detail"))
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setColor(0xFF10B981.toInt())
@@ -322,9 +322,9 @@ object NotificationUtils {
         val subtitle = "$displayTitle: Conexión interrumpida (Progreso guardado)"
 
         return createCompatBuilder(context, CHANNEL_ERROR_ID)
-            .setContentTitle("❌ Descarga detenida")
+            .setContentTitle("Descarga detenida")
             .setContentText(subtitle)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$errorMessage - Progreso guardado para reanudar."))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$errorMessage. El progreso ha sido guardado para reanudar."))
             .setSmallIcon(R.drawable.ic_notification_error)
             .setColor(0xFFEF4444.toInt())
             .setContentIntent(createOpenDownloadsPendingIntent(context))

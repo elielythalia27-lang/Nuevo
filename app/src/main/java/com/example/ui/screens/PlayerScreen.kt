@@ -58,12 +58,15 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
@@ -150,7 +153,14 @@ fun PlayerScreen(
 
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
-    var playbackError by remember { mutableStateOf<String?>(null) }
+    var playbackError by remember {
+        val isOnlineStream = videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true)
+        if (isOnlineStream && !com.example.utils.NetworkUtils.isConnected(context)) {
+            mutableStateOf<String?>("Sin conexión a internet. Conéctate a una red Wi-Fi o datos para reproducir este video.")
+        } else {
+            mutableStateOf<String?>(null)
+        }
+    }
     var currentPositionMs by remember { mutableLongStateOf(initialPositionMs) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var bufferedPositionMs by remember { mutableLongStateOf(0L) }
@@ -161,6 +171,12 @@ fun PlayerScreen(
     var isScreenLocked by remember { mutableStateOf(false) }
     var isLockIconVisible by remember { mutableStateOf(false) }
     var currentResizeMode by remember { mutableStateOf(VideoResizeMode.FIT) }
+    var toastMessage by remember { mutableStateOf<String?>(null) }
+
+    // Resume playback pill banner ("Continuando desde [tiempo] • Empezar de nuevo")
+    var showResumeBanner by remember {
+        mutableStateOf(initialPositionMs > 10_000L) // Only show if user has watched more than 10 seconds
+    }
 
     // Fast-forward (Press & Hold) state
     var isHoldingFastForward by remember { mutableStateOf(false) }
@@ -172,18 +188,24 @@ fun PlayerScreen(
     val configuration = LocalConfiguration.current
     val isOrientationLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var isLandscape by remember { mutableStateOf(false) }
+    val sharedPrefs = remember { context.getSharedPreferences("VideoPlayerPrefs", Context.MODE_PRIVATE) }
     val initialBrightness = remember {
         try {
-            val winBrightness = activity?.window?.attributes?.screenBrightness ?: -1f
-            if (winBrightness in 0.05f..1f) {
-                winBrightness
+            if (sharedPrefs.contains("brillo_global")) {
+                val savedPercent = sharedPrefs.getInt("brillo_global", 50)
+                (savedPercent / 100f).coerceIn(0.05f, 1f)
             } else {
-                val sysBrightness = android.provider.Settings.System.getInt(
-                    context.contentResolver,
-                    android.provider.Settings.System.SCREEN_BRIGHTNESS,
-                    128
-                )
-                (sysBrightness / 255f).coerceIn(0.05f, 1f)
+                val winBrightness = activity?.window?.attributes?.screenBrightness ?: -1f
+                if (winBrightness in 0.05f..1f) {
+                    winBrightness
+                } else {
+                    val sysBrightness = android.provider.Settings.System.getInt(
+                        context.contentResolver,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                        128
+                    )
+                    (sysBrightness / 255f).coerceIn(0.05f, 1f)
+                }
             }
         } catch (e: Exception) {
             0.5f
@@ -226,7 +248,6 @@ fun PlayerScreen(
 
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
-            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         }
 
         val loadControl = DefaultLoadControl.Builder()
@@ -278,26 +299,52 @@ fun PlayerScreen(
         }
     }
 
-    // Keep screen on and configure system bars for seamless video playback
+    // Keep screen on, full cutout edge-to-edge and configure immersive sticky system bars
     val window = activity?.window
     val insetsController = remember(window) {
         window?.let { WindowCompat.getInsetsController(it, it.decorView) }
     }
 
     DisposableEffect(Unit) {
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
-        insetsController?.let { controller ->
-            controller.isAppearanceLightStatusBars = false
-            controller.isAppearanceLightNavigationBars = false
-        }
-        onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.window?.attributes?.let { lp ->
-                lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-                activity.window.attributes = lp
+        try {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            
+            // Full screen cutout: extend video behind camera punch-hole/notch without black letterboxing
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                activity?.window?.attributes?.let { lp ->
+                    lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    activity.window.attributes = lp
+                }
             }
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
+            // Start in comfortable landscape by default (SENSOR_LANDSCAPE lets user rotate 180° for charger cable)
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            isLandscape = true
+
+            insetsController?.let { controller ->
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.isAppearanceLightStatusBars = false
+                controller.isAppearanceLightNavigationBars = false
+            }
+        } catch (_: Exception) {}
+
+        onDispose {
+            try {
+                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    activity?.window?.attributes?.let { lp ->
+                        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                        activity.window.attributes = lp
+                    }
+                }
+                activity?.window?.attributes?.let { lp ->
+                    lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    activity.window.attributes = lp
+                }
+                insetsController?.show(WindowInsetsCompat.Type.systemBars())
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            } catch (_: Exception) {}
         }
     }
 
@@ -397,8 +444,24 @@ fun PlayerScreen(
     // Dismiss double tap feedback badge
     LaunchedEffect(doubleTapFeedback) {
         if (doubleTapFeedback != null) {
-            delay(800)
+            delay(900)
             doubleTapFeedback = null
+        }
+    }
+
+    // Auto-dismiss resume banner after 5.5 seconds
+    LaunchedEffect(showResumeBanner) {
+        if (showResumeBanner) {
+            delay(5500)
+            showResumeBanner = false
+        }
+    }
+
+    // Auto-dismiss mini toast after 2 seconds
+    LaunchedEffect(toastMessage) {
+        if (toastMessage != null) {
+            delay(2000)
+            toastMessage = null
         }
     }
 
@@ -547,6 +610,7 @@ fun PlayerScreen(
                                                 lp.screenBrightness = brightnessLevel
                                                 activity.window.attributes = lp
                                             }
+                                            sharedPrefs.edit().putInt("brillo_global", (brightnessLevel * 100).toInt()).apply()
                                         }
                                     }
                                 }
@@ -591,39 +655,82 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Modern Cinematic Buffering Indicator with smooth orbital spinner and glowing core
+            // Modern Cinematic Loading Screen with Header (Back, Title, Year/Name) and Buffering Indicator
             AnimatedVisibility(
                 visible = isBuffering && playbackError == null,
                 enter = fadeIn(tween(250)),
                 exit = fadeOut(tween(250))
             ) {
-                PlayerBufferingIndicator()
-            }
+                val loadingDisplayTitle = remember(title, year) {
+                    val y = year.trim()
+                    if (y.isNotBlank() && !title.contains("($y)")) {
+                        "$title ($y)"
+                    } else {
+                        title
+                    }
+                }
 
-            // Safe exit button while buffering or error
-            AnimatedVisibility(
-                visible = (isBuffering || playbackError != null) && !isScreenLocked,
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(200)),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 20.dp, start = 16.dp)
-            ) {
-                IconButton(
-                    onClick = {
-                        onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-                        onBack()
-                    },
+                Box(
                     modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.55f))
+                        .fillMaxSize()
+                        .background(Color.Black)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                    // Top Header: Back Button + Title + Year / YouTuber Name
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopStart)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            onClick = {
+                                onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
+                                onBack()
+                            },
+                            shape = CircleShape,
+                            color = Color(0x990A0A0A),
+                            border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                            shadowElevation = 8.dp,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Volver",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = loadingDisplayTitle,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (year.isNotBlank() && !title.contains("($year)")) {
+                                Text(
+                                    text = year,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Center Animated Spinner
+                    PlayerBufferingIndicator(
+                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
             }
@@ -657,19 +764,47 @@ fun PlayerScreen(
                                 fontSize = 13.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            androidx.compose.material3.Button(
-                                onClick = {
-                                    playbackError = null
-                                    isBuffering = true
-                                    exoPlayer.prepare()
-                                    exoPlayer.play()
-                                },
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Reintentar")
+                                androidx.compose.material3.OutlinedButton(
+                                    onClick = {
+                                        onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
+                                        onBack()
+                                    },
+                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.35f)),
+                                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text("SALIR", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+
+                                androidx.compose.material3.Button(
+                                    onClick = {
+                                        val isOnlineStream = videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true)
+                                        if (isOnlineStream && !com.example.utils.NetworkUtils.isConnected(context)) {
+                                            playbackError = "Sin conexión a internet. Conéctate a una red para reproducir."
+                                            return@Button
+                                        }
+                                        playbackError = null
+                                        isBuffering = true
+                                        exoPlayer.prepare()
+                                        exoPlayer.play()
+                                    },
+                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text("REINTENTAR", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
                             }
                         }
                     }
@@ -753,130 +888,189 @@ fun PlayerScreen(
                 }
             }
 
-            // Vertical HUD: Volume Bar (System-synced with progress bar)
+            // Vertical HUD: Volume Side Pill (System-synced with cyber pill styling)
             AnimatedVisibility(
                 visible = showVolumeHud,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = fadeIn() + scaleIn(initialScale = 0.9f),
+                exit = fadeOut() + scaleOut(targetScale = 0.9f),
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 28.dp)
+                .align(Alignment.CenterEnd)
+                .padding(end = 28.dp)
             ) {
+                val volFraction = (currentVolume.toFloat() / maxVolume.toFloat()).coerceIn(0f, 1f)
+                val volPercent = (volFraction * 100).toInt()
+                val volIcon = when {
+                    currentVolume == 0 -> Icons.Default.VolumeMute
+                    volPercent <= 50 -> Icons.Default.VolumeDown
+                    else -> Icons.Default.VolumeUp
+                }
+
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.8f)
+                    shape = RoundedCornerShape(22.dp),
+                    color = Color(0xE60A0A0A),
+                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                    shadowElevation = 14.dp,
+                    modifier = Modifier.width(46.dp).height(170.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = if (currentVolume == 0) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
-                            contentDescription = "Volumen",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        // Vertical progress bar for volume
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Background track fill from bottom
                         Box(
                             modifier = Modifier
-                                .width(6.dp)
-                                .height(90.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(Color.White.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.BottomCenter
+                                .fillMaxWidth()
+                                .fillMaxHeight(volFraction)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            Color(0xFF1565C0)
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Top percent pill
+                        Surface(
+                            shape = RoundedCornerShape(7.dp),
+                            color = Color(0xDD0A1916),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 8.dp)
                         ) {
-                            val fraction = (currentVolume.toFloat() / maxVolume.toFloat()).coerceIn(0f, 1f)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .fillMaxHeight(fraction)
-                                    .background(MaterialTheme.colorScheme.primary)
+                            Text(
+                                text = "$volPercent%",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "${((currentVolume.toFloat() / maxVolume.toFloat()) * 100).toInt()}%",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+
+                        // Bottom dynamic sound icon
+                        Icon(
+                            imageVector = volIcon,
+                            contentDescription = "Volumen",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 12.dp)
+                                .size(22.dp)
                         )
                     }
                 }
             }
 
-            // Vertical HUD: Brightness Bar (System-synced with progress bar)
+            // Vertical HUD: Brightness Side Pill (System-synced with cyber pill styling)
             AnimatedVisibility(
                 visible = showBrightnessHud,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = fadeIn() + scaleIn(initialScale = 0.9f),
+                exit = fadeOut() + scaleOut(targetScale = 0.9f),
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 28.dp)
             ) {
+                val brightPercent = (brightnessLevel.coerceIn(0f, 1f) * 100).toInt()
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.8f)
+                    shape = RoundedCornerShape(22.dp),
+                    color = Color(0xE60A0A0A),
+                    border = BorderStroke(1.2.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+                    shadowElevation = 14.dp,
+                    modifier = Modifier.width(46.dp).height(170.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Background track fill from bottom
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(brightnessLevel.coerceIn(0f, 1f))
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color(0xFFF59E0B),
+                                            Color(0xFFD97706)
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Top percent pill
+                        Surface(
+                            shape = RoundedCornerShape(7.dp),
+                            color = Color(0xDD1E1B0E),
+                            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 8.dp)
+                        ) {
+                            Text(
+                                text = "$brightPercent%",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        // Bottom brightness icon
                         Icon(
                             imageVector = Icons.Default.BrightnessMedium,
                             contentDescription = "Brillo",
-                            tint = Color(0xFFF59E0B),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        // Vertical progress bar for brightness
-                        Box(
+                            tint = Color.White,
                             modifier = Modifier
-                                .width(6.dp)
-                                .height(90.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(Color.White.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.BottomCenter
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .fillMaxHeight(brightnessLevel.coerceIn(0f, 1f))
-                                    .background(Color(0xFFF59E0B))
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "${(brightnessLevel * 100).toInt()}%",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 12.dp)
+                                .size(22.dp)
                         )
                     }
                 }
             }
 
-            // Double tap feedback badge (+10s or -10s) in corresponding corner
+            // Double tap feedback badge (±10s) with cyber edge box & glowing typography
             doubleTapFeedback?.let { feedback ->
-                val isRewind = feedback.startsWith("-")
+                val isRewind = feedback.contains("-")
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 48.dp),
+                        .padding(horizontal = 52.dp),
                     contentAlignment = if (isRewind) Alignment.CenterStart else Alignment.CenterEnd
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color.Black.copy(alpha = 0.85f),
-                        shadowElevation = 8.dp
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color(0xEB0A1916),
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                        shadowElevation = 16.dp
                     ) {
-                        Text(
-                            text = feedback,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Black,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (isRewind) {
+                                Icon(
+                                    imageVector = Icons.Default.FastRewind,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Text(
+                                text = feedback,
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.5.sp
+                            )
+                            if (!isRewind) {
+                                Icon(
+                                    imageVector = Icons.Default.FastForward,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -993,6 +1187,11 @@ fun PlayerScreen(
                                             val nextIndex = (currentResizeMode.ordinal + 1) % modes.size
                                             currentResizeMode = modes[nextIndex]
                                             playerViewRef?.resizeMode = currentResizeMode.mode
+                                            toastMessage = when (currentResizeMode) {
+                                                VideoResizeMode.FIT -> "Ajustar a la pantalla"
+                                                VideoResizeMode.ZOOM -> "Rellenar pantalla"
+                                                VideoResizeMode.FILL -> "Estirar (16:9)"
+                                            }
                                             resetControlsTimer()
                                         }
                                 ) {
@@ -1276,6 +1475,106 @@ fun PlayerScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // Floating Resume Pill Banner ("Continuando desde [tiempo] • EMPEZAR DE NUEVO")
+            AnimatedVisibility(
+                visible = showResumeBanner && !isScreenLocked,
+                enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f),
+                exit = fadeOut(tween(200)) + scaleOut(targetScale = 0.92f),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (areControlsVisible) 96.dp else 28.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color(0xF20A101D),
+                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+                    shadowElevation = 14.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        IconButton(
+                            onClick = { showResumeBanner = false },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cerrar",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "Continuando desde ${formatTimestamp(initialPositionMs)}",
+                            color = Color.White,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                            modifier = Modifier.clickable {
+                                exoPlayer.seekTo(0L)
+                                currentPositionMs = 0L
+                                showResumeBanner = false
+                                toastMessage = "Reproducción iniciada desde el principio"
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Replay,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "EMPEZAR DE NUEVO",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Cyber Toast floating notification (for zoom mode changes, errors, reloads)
+            AnimatedVisibility(
+                visible = toastMessage != null,
+                enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.88f),
+                exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.88f),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (showResumeBanner) 130.dp else if (areControlsVisible) 90.dp else 40.dp)
+            ) {
+                toastMessage?.let { msg ->
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xF20A101D),
+                        border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                        shadowElevation = 12.dp
+                    ) {
+                        Text(
+                            text = msg,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                        )
                     }
                 }
             }

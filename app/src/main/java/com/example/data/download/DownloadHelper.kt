@@ -294,9 +294,14 @@ class DownloadHelper(
             return
         }
 
+        if (!NetworkUtils.isConnected(context)) {
+            AppToastManager.show("Sin conexión a internet. Conéctate a una red para descargar.", ToastType.WARNING)
+            return
+        }
+
         val isWifiOnlySync = try { kotlinx.coroutines.runBlocking { preferences.wifiOnly.first() } } catch (_: Exception) { false }
         if (isWifiOnlySync && !NetworkUtils.isWifiOrEthernet(context)) {
-            AppToastManager.show("Descarga bloqueada: 'Solo Wi-Fi' está activo y estás conectado a datos móviles", ToastType.ERROR)
+            AppToastManager.show("Descarga en espera: 'Solo Wi-Fi' está activo y estás conectado a datos móviles", ToastType.ERROR)
             return
         }
 
@@ -487,6 +492,17 @@ class DownloadHelper(
     fun resumeDownload(item: DownloadItem) {
         if (VpnProxyDetector.isVpnOrProxyActive(context)) {
             AppToastManager.show("Desactiva la VPN o Proxy para reanudar la descarga", ToastType.WARNING)
+            return
+        }
+
+        if (!NetworkUtils.isConnected(context)) {
+            AppToastManager.show("Sin conexión a internet. Conéctate a una red para reanudar.", ToastType.WARNING)
+            return
+        }
+
+        val isWifiOnlySync = try { kotlinx.coroutines.runBlocking { preferences.wifiOnly.first() } } catch (_: Exception) { false }
+        if (isWifiOnlySync && !NetworkUtils.isWifiOrEthernet(context)) {
+            AppToastManager.show("Descarga en espera: 'Solo Wi-Fi' está activo y estás en datos móviles", ToastType.ERROR)
             return
         }
 

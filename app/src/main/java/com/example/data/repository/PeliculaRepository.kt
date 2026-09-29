@@ -75,13 +75,15 @@ class PeliculaRepository(
     }
 
     fun getPeliculasFlow(forceRefresh: Boolean = false): Flow<Resource<List<Pelicula>>> = flow {
-        // Emit cached data first for 0ms immediate startup and smooth layout changes
-        val cached = readDiskCache()
-        if (cached.isNotEmpty()) {
-            emit(Resource.Success(cached, isOffline = true))
-        } else {
-            emit(Resource.Loading)
+        // Verificar primero que el dispositivo cuente con conexión y que el servidor sea alcanzable
+        val isNetworkAvailable = com.example.utils.NetworkUtils.isConnected(context)
+        if (!isNetworkAvailable) {
+            emit(Resource.Error("Sin conexión a internet. Conéctate a una red para ver el catálogo."))
+            return@flow
         }
+
+        // Emitir estado de carga
+        emit(Resource.Loading)
 
         try {
             // Cargar y desencriptar desde el endpoint seguro
@@ -91,13 +93,11 @@ class PeliculaRepository(
                 writeDiskCache(remoteList)
                 preferences.saveCachedPeliculas(remoteList)
                 emit(Resource.Success(remoteList, isOffline = false))
-            } else if (cached.isEmpty()) {
+            } else {
                 emit(Resource.Error("No se pudo obtener el catálogo del servidor"))
             }
         } catch (e: Exception) {
-            if (cached.isEmpty()) {
-                emit(Resource.Error("Sin conexión con el catálogo: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
-            }
+            emit(Resource.Error("Sin conexión con el servidor: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
         }
     }
 
