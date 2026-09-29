@@ -726,28 +726,6 @@ fun AjustesScreen(
                                 textSecondary = textSecondary,
                                 onCheckedChange = { hardwareAcceleration = it }
                             )
-                            HorizontalDivider(color = dividerColor)
-                            SettingsSwitchRow(
-                                icon = Icons.Default.TouchApp,
-                                title = "Gestos en pantalla",
-                                subtitle = "Control táctil de brillo, volumen y avance con doble toque.",
-                                checked = screenGestures,
-                                isDarkTheme = isDarkTheme,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
-                                onCheckedChange = { screenGestures = it }
-                            )
-                            HorizontalDivider(color = dividerColor)
-                            SettingsSwitchRow(
-                                icon = Icons.Default.PlayCircleOutline,
-                                title = "Recordar posición",
-                                subtitle = "Reanudar videos automáticamente desde donde los dejaste.",
-                                checked = autoResume,
-                                isDarkTheme = isDarkTheme,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
-                                onCheckedChange = { autoResume = it }
-                            )
                         }
                     }
                 }

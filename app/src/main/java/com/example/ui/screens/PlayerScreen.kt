@@ -142,6 +142,7 @@ fun PlayerScreen(
     year: String,
     type: String,
     initialPositionMs: Long = 0L,
+    volumeKeyTrigger: Int = 0,
     onBack: () -> Unit,
     onSavePosition: (Long, Long) -> Unit,
     modifier: Modifier = Modifier
@@ -153,6 +154,7 @@ fun PlayerScreen(
 
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
+    var hasFirstFrameRendered by remember { mutableStateOf(false) }
     var playbackError by remember {
         val isOnlineStream = videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true)
         if (isOnlineStream && !com.example.utils.NetworkUtils.isConnected(context)) {
@@ -220,6 +222,7 @@ fun PlayerScreen(
     var isSeekingHorizontal by remember { mutableStateOf(false) }
     var horizontalSeekTargetMs by remember { mutableLongStateOf(0L) }
     var horizontalSeekDeltaMs by remember { mutableLongStateOf(0L) }
+    var lastLiveSeekTime by remember { mutableLongStateOf(0L) }
 
     // Volume state synced with system
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
@@ -374,6 +377,17 @@ fun PlayerScreen(
         }
     }
 
+    // Sync volume HUD with hardware buttons triggered from Activity or System
+    LaunchedEffect(volumeKeyTrigger) {
+        if (volumeKeyTrigger > 0) {
+            val newVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            currentVolume = newVol
+            volumeAccumulator = newVol.toFloat()
+            showVolumeHud = true
+            volumeHudCounter++
+        }
+    }
+
     // Auto-hide volume HUD after physical button press
     LaunchedEffect(volumeHudCounter) {
         if (volumeHudCounter > 0) {
@@ -386,6 +400,10 @@ fun PlayerScreen(
     // Player event listener
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                hasFirstFrameRendered = true
+            }
+
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
             }
@@ -393,6 +411,7 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
+                    hasFirstFrameRendered = true
                     isBuffering = false
                     playbackError = null
                     durationMs = exoPlayer.duration.coerceAtLeast(0L)
@@ -657,25 +676,16 @@ fun PlayerScreen(
 
             // Modern Cinematic Loading Screen with Header (Back, Title, Year/Name) and Buffering Indicator
             AnimatedVisibility(
-                visible = isBuffering && playbackError == null,
+                visible = isBuffering && playbackError == null && !hasFirstFrameRendered,
                 enter = fadeIn(tween(250)),
                 exit = fadeOut(tween(250))
             ) {
-                val loadingDisplayTitle = remember(title, year) {
-                    val y = year.trim()
-                    if (y.isNotBlank() && !title.contains("($y)")) {
-                        "$title ($y)"
-                    } else {
-                        title
-                    }
-                }
-
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.Black)
                 ) {
-                    // Top Header: Back Button + Title + Year / YouTuber Name
+                    // Top Header: Back Button + Title
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -710,14 +720,14 @@ fun PlayerScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = loadingDisplayTitle,
+                                text = title,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (year.isNotBlank() && !title.contains("($year)")) {
+                            if (year.isNotBlank()) {
                                 Text(
                                     text = year,
                                     color = MaterialTheme.colorScheme.primary,

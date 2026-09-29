@@ -73,6 +73,21 @@ import com.example.utils.VpnProxyDetector
 import com.example.viewmodel.HomeViewModel
 
 class MainActivity : ComponentActivity() {
+    private val _volumeKeyTrigger = mutableStateOf(0)
+    val volumeKeyTrigger: androidx.compose.runtime.State<Int> = _volumeKeyTrigger
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+            if (event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP ||
+                event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
+            ) {
+                _volumeKeyTrigger.value++
+                return true // Consume the event to prevent system UI
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -208,6 +223,9 @@ fun MainAppNavigation(
         ThemeMode.LIGHT -> false
     }
 
+    val activity = LocalContext.current as? MainActivity
+    val volumeKeyTriggerVal by activity?.volumeKeyTrigger ?: remember { mutableStateOf(0) }
+
     val activePlayback = uiState.activePlayback
 
     if (vpnStatus.isBlocked) {
@@ -226,6 +244,7 @@ fun MainAppNavigation(
             year = activePlayback.year,
             type = activePlayback.type,
             initialPositionMs = activePlayback.initialPositionMs,
+            volumeKeyTrigger = volumeKeyTriggerVal,
             onBack = { viewModel.closePlayer() },
             onSavePosition = { pos, dur ->
                 viewModel.savePlaybackPosition(
