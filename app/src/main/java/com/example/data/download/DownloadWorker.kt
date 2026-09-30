@@ -212,6 +212,11 @@ class DownloadWorker(
                 var lastEta = 0L
 
                 while (isActive && !isStopped) {
+                    val currentHelper = DownloadHelper.getActiveInstance(appContext)
+                    if (currentHelper.isPaused(downloadId) || currentHelper.isCancelled(downloadId)) {
+                        break
+                    }
+
                     bytesRead = input.read(buffer)
                     if (bytesRead == -1) break
 
@@ -224,6 +229,10 @@ class DownloadWorker(
 
                     // Update cadence: exactly every 700 milliseconds
                     if (timeDiff >= 700L) {
+                        if (currentHelper.isPaused(downloadId) || currentHelper.isCancelled(downloadId)) {
+                            break
+                        }
+
                         val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
                         if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(appContext)) {
                             throw Exception("Conexión Wi-Fi perdida")
@@ -252,7 +261,7 @@ class DownloadWorker(
                         )
 
                         // Report to in-memory Live Progress StateFlow tracker for strict 700ms smooth UI rendering
-                        DownloadHelper.getActiveInstance(appContext).reportProgress(
+                        currentHelper.reportProgress(
                             downloadId = downloadId,
                             downloadedBytes = downloaded,
                             totalBytes = totalBytes,
@@ -401,6 +410,8 @@ class DownloadWorker(
         eta: Long
     ) {
         if (!PermissionHelper.hasNotificationPermission(appContext)) return
+        val helper = DownloadHelper.getActiveInstance(appContext)
+        if (isStopped || helper.isPaused(item.id) || helper.isCancelled(item.id)) return
         try {
             val notif = NotificationUtils.buildProgressNotification(appContext, item, progress, speed, eta)
             notificationManager.notify(getNotificationId(item.id), notif)
@@ -414,23 +425,26 @@ class DownloadWorker(
         eta: Long
     ): ForegroundInfo {
         NotificationUtils.initNotificationChannels(appContext)
-        val summaryNotification = NotificationUtils.buildSummaryNotification(appContext)
+        val notifId = getNotificationId(item.id)
+        val progressNotification = NotificationUtils.buildProgressNotification(appContext, item, progress, speed, eta)
 
-        val foregroundInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // Cancel old legacy summary ID 4001 if present
+        try {
+            notificationManager.cancel(DownloadHelper.FOREGROUND_SERVICE_NOTIFICATION_ID)
+        } catch (_: Exception) {}
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ForegroundInfo(
-                DownloadHelper.FOREGROUND_SERVICE_NOTIFICATION_ID,
-                summaryNotification,
+                notifId,
+                progressNotification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             )
         } else {
             ForegroundInfo(
-                DownloadHelper.FOREGROUND_SERVICE_NOTIFICATION_ID,
-                summaryNotification
+                notifId,
+                progressNotification
             )
         }
-
-        updateProgressNotification(item, progress, speed, eta)
-        return foregroundInfo
     }
 
     private fun ensureNotificationChannels() {

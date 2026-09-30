@@ -42,6 +42,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -144,6 +146,7 @@ fun DescargasScreen(
     onExploreClick: () -> Unit,
     isDarkTheme: Boolean = true,
     onRequestPermissions: () -> Unit = {},
+    onBottomNavVisibilityChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -174,6 +177,11 @@ fun DescargasScreen(
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(selectedTab) {
+        onBottomNavVisibilityChange(true)
+    }
+
     var itemToCancel by remember { mutableStateOf<DownloadItem?>(null) }
     var itemToDelete by remember { mutableStateOf<DownloadItem?>(null) }
     var showCancelAllConfirm by remember { mutableStateOf(false) }
@@ -469,7 +477,8 @@ fun DescargasScreen(
                             cardBg = cardBg,
                             cardBorder = cardBorder,
                             textPrimary = textPrimary,
-                            textSecondary = textSecondary
+                            textSecondary = textSecondary,
+                            onBottomNavVisibilityChange = onBottomNavVisibilityChange
                         )
                     }
                     1 -> {
@@ -484,7 +493,8 @@ fun DescargasScreen(
                             cardBg = cardBg,
                             cardBorder = cardBorder,
                             textPrimary = textPrimary,
-                            textSecondary = textSecondary
+                            textSecondary = textSecondary,
+                            onBottomNavVisibilityChange = onBottomNavVisibilityChange
                         )
                     }
                 }
@@ -761,7 +771,8 @@ private fun ActiveDownloadsTab(
     cardBg: Color,
     cardBorder: Color,
     textPrimary: Color,
-    textSecondary: Color
+    textSecondary: Color,
+    onBottomNavVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val downloadingOrPaused = activeList.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PAUSED }
     val pendingItems = activeList.filter { it.status == DownloadStatus.PENDING }
@@ -769,6 +780,20 @@ private fun ActiveDownloadsTab(
 
     val hasActiveDownloads = activeList.any { it.status == DownloadStatus.DOWNLOADING }
     val hasPausedOrPending = activeList.any { it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING || it.status == DownloadStatus.FAILED }
+
+    val listState = rememberLazyListState()
+    val hideOnScrollConnection = com.example.ui.components.rememberHideOnScrollConnection(
+        onVisibilityChange = onBottomNavVisibilityChange,
+        canScrollBackward = { listState.canScrollBackward },
+        canScrollForward = { listState.canScrollForward },
+        thresholdPx = 10f
+    )
+
+    LaunchedEffect(listState.canScrollBackward, listState.canScrollForward) {
+        if (!listState.canScrollBackward || !listState.canScrollForward) {
+            onBottomNavVisibilityChange(true)
+        }
+    }
 
     if (activeList.isEmpty()) {
         Box(
@@ -791,10 +816,12 @@ private fun ActiveDownloadsTab(
         }
     } else {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(hideOnScrollConnection)
                 .testTag("active_downloads_list"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Speed indicator card
@@ -1115,11 +1142,26 @@ private fun DownloadedTab(
     cardBg: Color,
     cardBorder: Color,
     textPrimary: Color,
-    textSecondary: Color
+    textSecondary: Color,
+    onBottomNavVisibilityChange: (Boolean) -> Unit = {}
 ) {
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
+
+    val listState = rememberLazyListState()
+    val hideOnScrollConnection = com.example.ui.components.rememberHideOnScrollConnection(
+        onVisibilityChange = onBottomNavVisibilityChange,
+        canScrollBackward = { listState.canScrollBackward },
+        canScrollForward = { listState.canScrollForward },
+        thresholdPx = 10f
+    )
+
+    LaunchedEffect(listState.canScrollBackward, listState.canScrollForward) {
+        if (!listState.canScrollBackward || !listState.canScrollForward) {
+            onBottomNavVisibilityChange(true)
+        }
+    }
 
     if (downloadedList.isEmpty()) {
         Box(
@@ -1235,10 +1277,12 @@ private fun DownloadedTab(
             }
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(hideOnScrollConnection)
                     .testTag("downloaded_movies_list"),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Header row when not in selection mode

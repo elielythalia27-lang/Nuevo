@@ -73,16 +73,38 @@ import com.example.utils.VpnProxyDetector
 import com.example.viewmodel.HomeViewModel
 
 class MainActivity : ComponentActivity() {
-    private val _volumeKeyTrigger = mutableStateOf(0)
-    val volumeKeyTrigger: androidx.compose.runtime.State<Int> = _volumeKeyTrigger
+    private var isPlayerActive: Boolean = false
+    private var onPlayerVolumeKey: ((Int) -> Unit)? = null
+
+    fun registerPlayerVolumeHandler(handler: (Int) -> Unit) {
+        isPlayerActive = true
+        onPlayerVolumeKey = handler
+    }
+
+    fun unregisterPlayerVolumeHandler() {
+        isPlayerActive = false
+        onPlayerVolumeKey = null
+    }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-            if (event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP ||
-                event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
-            ) {
-                _volumeKeyTrigger.value++
-                return true // Consume the event to prevent system UI
+        if (isPlayerActive && onPlayerVolumeKey != null) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                when (event.keyCode) {
+                    android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
+                        onPlayerVolumeKey?.invoke(1)
+                        return true
+                    }
+                    android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                        onPlayerVolumeKey?.invoke(-1)
+                        return true
+                    }
+                }
+            } else if (event.action == android.view.KeyEvent.ACTION_UP) {
+                if (event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP ||
+                    event.keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
+                ) {
+                    return true
+                }
             }
         }
         return super.dispatchKeyEvent(event)
@@ -224,7 +246,6 @@ fun MainAppNavigation(
     }
 
     val activity = LocalContext.current as? MainActivity
-    val volumeKeyTriggerVal by activity?.volumeKeyTrigger ?: remember { mutableStateOf(0) }
 
     val activePlayback = uiState.activePlayback
 
@@ -244,7 +265,6 @@ fun MainAppNavigation(
             year = activePlayback.year,
             type = activePlayback.type,
             initialPositionMs = activePlayback.initialPositionMs,
-            volumeKeyTrigger = volumeKeyTriggerVal,
             onBack = { viewModel.closePlayer() },
             onSavePosition = { pos, dur ->
                 viewModel.savePlaybackPosition(
@@ -261,7 +281,7 @@ fun MainAppNavigation(
     } else {
         NavHost(
             navController = navController,
-            startDestination = if (skipSplash) "main" else "splash",
+            startDestination = "main",
             modifier = modifier
         ) {
             composable("splash") {
@@ -280,6 +300,13 @@ fun MainAppNavigation(
                     initialPage = if (skipSplash) initialTab else 0,
                     pageCount = { 3 }
                 )
+
+                var isBottomNavVisible by remember { mutableStateOf(true) }
+
+                // Rule 5: Al cambiar de pantalla, ya sea tocando la barra o deslizando el ViewPager, la barra debe mostrarse de nuevo.
+                LaunchedEffect(pagerState.currentPage, pagerState.targetPage) {
+                    isBottomNavVisible = true
+                }
 
                 BackHandler(enabled = pagerState.currentPage != 0) {
                     coroutineScope.launch {
@@ -334,7 +361,8 @@ fun MainAppNavigation(
                                         }
                                     },
                                     onDismissContinueWatching = { viewModel.clearContinueWatching() },
-                                    onLayoutModeChange = { viewModel.setCatalogLayoutMode(it) }
+                                    onLayoutModeChange = { viewModel.setCatalogLayoutMode(it) },
+                                    onBottomNavVisibilityChange = { isBottomNavVisible = it }
                                 )
                             }
 
@@ -375,7 +403,8 @@ fun MainAppNavigation(
                                     isDarkTheme = isDark,
                                     onRequestPermissions = {
                                         showPermissionDialog = true
-                                    }
+                                    },
+                                    onBottomNavVisibilityChange = { isBottomNavVisible = it }
                                 )
                             }
 
@@ -402,7 +431,8 @@ fun MainAppNavigation(
                                         viewModel.setDownloadFolder(name, path)
                                     },
                                     wifiOnly = uiState.wifiOnly,
-                                    onWifiOnlyChange = { viewModel.setWifiOnly(it) }
+                                    onWifiOnlyChange = { viewModel.setWifiOnly(it) },
+                                    onBottomNavVisibilityChange = { isBottomNavVisible = it }
                                 )
                             }
                         }
@@ -421,6 +451,7 @@ fun MainAppNavigation(
                         },
                         downloadsCount = uiState.activeDownloadsCount,
                         isDarkTheme = isDark,
+                        isVisible = isBottomNavVisible,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
 

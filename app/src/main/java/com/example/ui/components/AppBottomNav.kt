@@ -56,14 +56,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -84,11 +88,90 @@ enum class ScreenRoute(
 }
 
 /**
+ * NestedScrollConnection that tracks scroll movements:
+ * - Hides nav bar on scroll down (> thresholdPx, e.g. 10px).
+ * - Reveals nav bar on scroll up (> thresholdPx).
+ * - Always keeps nav bar visible when at the top or bottom of the list.
+ * - Always keeps nav bar visible when list cannot scroll (little/empty content).
+ */
+@Composable
+fun rememberHideOnScrollConnection(
+    onVisibilityChange: (Boolean) -> Unit,
+    canScrollBackward: () -> Boolean = { true },
+    canScrollForward: () -> Boolean = { true },
+    thresholdPx: Float = 10f
+): NestedScrollConnection {
+    val currentOnVisibilityChange by rememberUpdatedState(onVisibilityChange)
+    val currentCanScrollBackward by rememberUpdatedState(canScrollBackward)
+    val currentCanScrollForward by rememberUpdatedState(canScrollForward)
+
+    return remember {
+        object : NestedScrollConnection {
+            private var accumulatedDelta = 0f
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val deltaY = available.y
+
+                // If content cannot scroll both directions (empty or short list), stay visible
+                if (!currentCanScrollBackward() && !currentCanScrollForward()) {
+                    currentOnVisibilityChange(true)
+                    accumulatedDelta = 0f
+                    return Offset.Zero
+                }
+
+                // If at the very top of the list, always visible
+                if (!currentCanScrollBackward()) {
+                    currentOnVisibilityChange(true)
+                    accumulatedDelta = 0f
+                    return Offset.Zero
+                }
+
+                // Reset accumulation when reversing scroll direction
+                if ((deltaY > 0 && accumulatedDelta < 0) || (deltaY < 0 && accumulatedDelta > 0)) {
+                    accumulatedDelta = 0f
+                }
+                accumulatedDelta += deltaY
+
+                if (accumulatedDelta < -thresholdPx) {
+                    // Scrolling down (finger moving up) -> hide if not at bottom
+                    if (currentCanScrollForward()) {
+                        currentOnVisibilityChange(false)
+                    } else {
+                        currentOnVisibilityChange(true)
+                    }
+                    accumulatedDelta = 0f
+                } else if (accumulatedDelta > thresholdPx) {
+                    // Scrolling up (finger moving down) -> reveal
+                    currentOnVisibilityChange(true)
+                    accumulatedDelta = 0f
+                }
+
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                // If scroll hit top or bottom boundary, keep visible
+                if (!currentCanScrollBackward() || !currentCanScrollForward()) {
+                    currentOnVisibilityChange(true)
+                    accumulatedDelta = 0f
+                }
+                return Offset.Zero
+            }
+        }
+    }
+}
+
+/**
  * Modern Translucent Floating Navigation Bar.
  * - Elegant rounded capsule with subtle frosted-glass transparency.
  * - Soft pill active indicator around the icon (no harsh rectangular boxes).
  * - Smooth spring physics on tab changes.
- * - Animated breathing badge for active downloads.
+ * - Animated breathing badge for active downloads matching empty list animations.
+ * - Fluid 250ms hide/reveal animation with smooth easing (FastOutSlowInEasing).
  */
 @Composable
 fun AppBottomNav(
@@ -96,10 +179,24 @@ fun AppBottomNav(
     onNavigate: (Int) -> Unit,
     downloadsCount: Int,
     isDarkTheme: Boolean = true,
+    isVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val activeColor = MaterialTheme.colorScheme.primary
     val navAnimSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
+    val motionAnimSpec = tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
+
+    val navOffsetY by animateFloatAsState(
+        targetValue = if (isVisible) 0f else 140f,
+        animationSpec = motionAnimSpec,
+        label = "nav_offset_y"
+    )
+
+    val navAlpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = motionAnimSpec,
+        label = "nav_alpha"
+    )
 
     val inactiveColor by animateColorAsState(
         targetValue = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF334155),
@@ -152,6 +249,10 @@ fun AppBottomNav(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
+            .graphicsLayer {
+                translationY = navOffsetY.dp.toPx()
+                alpha = navAlpha
+            }
             .padding(horizontal = 24.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -270,6 +371,27 @@ fun AppBottomNav(
                                             label = "downloads_badge_scale"
                                         )
 
+                                        // Badge gentle floating bobbing & breathing pulse matching empty state lists
+                                        val badgeInfiniteTransition = rememberInfiniteTransition(label = "badge_empty_style_pulse")
+                                        val badgePulseScale by badgeInfiniteTransition.animateFloat(
+                                            initialValue = 0.92f,
+                                            targetValue = 1.10f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(1600, easing = FastOutSlowInEasing),
+                                                repeatMode = RepeatMode.Reverse
+                                            ),
+                                            label = "badge_pulse_scale"
+                                        )
+                                        val badgeFloatY by badgeInfiniteTransition.animateFloat(
+                                            initialValue = -1.5f,
+                                            targetValue = 1.5f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(2000, easing = FastOutSlowInEasing),
+                                                repeatMode = RepeatMode.Reverse
+                                            ),
+                                            label = "badge_float_y"
+                                        )
+
                                         BadgedBox(
                                             badge = {
                                                 if (badgeScale > 0.01f) {
@@ -279,8 +401,9 @@ fun AppBottomNav(
                                                         modifier = Modifier
                                                             .offset(x = 2.dp, y = (-2).dp)
                                                             .graphicsLayer {
-                                                                scaleX = badgeScale
-                                                                scaleY = badgeScale
+                                                                scaleX = badgeScale * badgePulseScale
+                                                                scaleY = badgeScale * badgePulseScale
+                                                                translationY = badgeFloatY
                                                                 alpha = badgeScale.coerceIn(0f, 1f)
                                                             }
                                                     ) {

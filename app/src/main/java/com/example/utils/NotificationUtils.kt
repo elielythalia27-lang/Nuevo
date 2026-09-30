@@ -198,7 +198,7 @@ object NotificationUtils {
             .setContentTitle("Descargando: $displayTitle")
             .setContentText(subtitle)
             .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_notification_download)
             .setColor(0xFF00897B.toInt())
             .setProgress(100, progress, item.totalBytes <= 0)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
@@ -217,8 +217,6 @@ object NotificationUtils {
             .setShowWhen(false)
             .setWhen(0L)
             .setSortKey("download_${item.id}")
-            .setGroup(GROUP_DOWNLOADS)
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
@@ -253,10 +251,10 @@ object NotificationUtils {
             .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
             .setSmallIcon(R.drawable.ic_notification_pause)
             .setColor(0xFFF59E0B.toInt())
-            .setProgress(100, item.progress, item.totalBytes <= 0)
+            .setProgress(100, item.progress, false)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .addAction(
-                android.R.drawable.ic_media_play,
+                R.drawable.ic_notification_download,
                 "Reanudar",
                 createResumePendingIntent(context, item.id)
             )
@@ -265,7 +263,7 @@ object NotificationUtils {
                 "Cancelar",
                 createCancelPendingIntent(context, item.id)
             )
-            .setAutoCancel(false)
+            .setAutoCancel(true)
             .setOngoing(false)
             .setShowWhen(false)
             .setWhen(0L)
@@ -295,7 +293,7 @@ object NotificationUtils {
             .setContentTitle("Descarga completada")
             .setContentText("$displayTitle • $sizeStr")
             .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$detail"))
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(R.drawable.ic_notification_done)
             .setColor(0xFF10B981.toInt())
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .setAutoCancel(true)
@@ -343,7 +341,7 @@ object NotificationUtils {
         return createCompatBuilder(context, CHANNEL_PROGRESS_ID)
             .setContentTitle("Download Free")
             .setContentText("Servicio de descargas activo")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_notification_download)
             .setColor(0xFF00897B.toInt())
             .setGroup(GROUP_DOWNLOADS)
             .setGroupSummary(true)

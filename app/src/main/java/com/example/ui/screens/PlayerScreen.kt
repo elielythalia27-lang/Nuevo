@@ -1,10 +1,7 @@
 package com.example.ui.screens
 
 import android.app.Activity
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.AudioManager
@@ -12,27 +9,13 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.example.ui.components.SleekVideoPlayerProgressBar
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -41,43 +24,15 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.BrightnessMedium
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.ScreenRotation
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -87,52 +42,60 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.example.MainActivity
+import com.example.ui.player.NextPlayerAudioTrack
+import com.example.ui.player.NextPlayerAudioTrackDialog
+import com.example.ui.player.NextPlayerBottomBar
+import com.example.ui.player.NextPlayerBrightnessHud
+import com.example.ui.player.NextPlayerBufferingSpinner
+import com.example.ui.player.NextPlayerCenterControls
+import com.example.ui.player.NextPlayerDoubleTapBadge
+import com.example.ui.player.NextPlayerInitialLoadingOverlay
+import com.example.ui.player.NextPlayerLockOverlay
+import com.example.ui.player.NextPlayerResizeMode
+import com.example.ui.player.NextPlayerSeekHud
+import com.example.ui.player.NextPlayerSpeedBoostBadge
+import com.example.ui.player.NextPlayerSpeedDialog
+import com.example.ui.player.NextPlayerSubtitleDialog
+import com.example.ui.player.NextPlayerSubtitleTrack
+import com.example.ui.player.NextPlayerTopBar
+import com.example.ui.player.NextPlayerVolumeHud
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.Locale
-
-enum class VideoResizeMode(val displayName: String, val mode: Int) {
-    FIT("Ajustar", AspectRatioFrameLayout.RESIZE_MODE_FIT),
-    ZOOM("Rellenar", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-    FILL("16:9 Estirar", AspectRatioFrameLayout.RESIZE_MODE_FILL)
-}
 
 @Composable
 fun PlayerScreen(
@@ -149,15 +112,27 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val mainActivity = context as? MainActivity
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val coroutineScope = rememberCoroutineScope()
 
+    // Title display: clean, single title without duplicating year or channel
+    val displayTitle = remember(title, year) {
+        val y = year.trim()
+        if (y.isNotBlank() && !title.contains(y)) {
+            "$title ($y)"
+        } else {
+            title
+        }
+    }
+
+    // Playback state
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
     var hasFirstFrameRendered by remember { mutableStateOf(false) }
     var playbackError by remember {
-        val isOnlineStream = videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true)
-        if (isOnlineStream && !com.example.utils.NetworkUtils.isConnected(context)) {
+        val isOnline = videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true)
+        if (isOnline && !com.example.utils.NetworkUtils.isConnected(context)) {
             mutableStateOf<String?>("Sin conexión a internet. Conéctate a una red Wi-Fi o datos para reproducir este video.")
         } else {
             mutableStateOf<String?>(null)
@@ -167,29 +142,39 @@ fun PlayerScreen(
     var durationMs by remember { mutableLongStateOf(0L) }
     var bufferedPositionMs by remember { mutableLongStateOf(0L) }
     var isDraggingSlider by remember { mutableStateOf(false) }
-    var sliderPosition by remember { mutableFloatStateOf(0f) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
-    var showSpeedMenu by remember { mutableStateOf(false) }
-    var isScreenLocked by remember { mutableStateOf(false) }
-    var isLockIconVisible by remember { mutableStateOf(false) }
-    var currentResizeMode by remember { mutableStateOf(VideoResizeMode.FIT) }
-    var toastMessage by remember { mutableStateOf<String?>(null) }
+    var currentResizeMode by remember { mutableStateOf(NextPlayerResizeMode.FIT) }
 
-    // Resume playback pill banner ("Continuando desde [tiempo] • Empezar de nuevo")
-    var showResumeBanner by remember {
-        mutableStateOf(initialPositionMs > 10_000L) // Only show if user has watched more than 10 seconds
+    // Screen locking
+    var isScreenLocked by remember { mutableStateOf(false) }
+    var showUnlockButton by remember { mutableStateOf(false) }
+
+    // Dialogs state
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showAudioTrackDialog by remember { mutableStateOf(false) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
+
+    // Tracks
+    val audioTracks = remember { mutableStateListOf<NextPlayerAudioTrack>() }
+    val subtitleTracks = remember { mutableStateListOf<NextPlayerSubtitleTrack>() }
+    var areSubtitlesDisabled by remember { mutableStateOf(true) }
+
+    // Controls visibility
+    var areControlsVisible by remember { mutableStateOf(true) }
+    var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    // Gestures state: Brightness, Volume, Horizontal Seek Scrub
+    val configuration = LocalConfiguration.current
+    var isLandscape by remember {
+        mutableStateOf(configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
     }
 
-    // Fast-forward (Press & Hold) state
-    var isHoldingFastForward by remember { mutableStateOf(false) }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    var currentVolume by remember { mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
+    var volumeAccumulator by remember { mutableFloatStateOf(currentVolume.toFloat()) }
+    var showVolumeHud by remember { mutableStateOf(false) }
+    var volumeHudCounter by remember { mutableIntStateOf(0) }
 
-    // Double tap ripple/badge feedback
-    var doubleTapFeedback by remember { mutableStateOf<String?>(null) }
-
-    // Gestures state: Brightness, Volume, Horizontal Scrub
-    val configuration = LocalConfiguration.current
-    val isOrientationLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    var isLandscape by remember { mutableStateOf(false) }
     val sharedPrefs = remember { context.getSharedPreferences("VideoPlayerPrefs", Context.MODE_PRIVATE) }
     val initialBrightness = remember {
         try {
@@ -198,25 +183,14 @@ fun PlayerScreen(
                 (savedPercent / 100f).coerceIn(0.05f, 1f)
             } else {
                 val winBrightness = activity?.window?.attributes?.screenBrightness ?: -1f
-                if (winBrightness in 0.05f..1f) {
-                    winBrightness
-                } else {
-                    val sysBrightness = android.provider.Settings.System.getInt(
-                        context.contentResolver,
-                        android.provider.Settings.System.SCREEN_BRIGHTNESS,
-                        128
-                    )
-                    (sysBrightness / 255f).coerceIn(0.05f, 1f)
-                }
+                if (winBrightness in 0.05f..1f) winBrightness else 0.5f
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             0.5f
         }
     }
     var brightnessLevel by remember { mutableFloatStateOf(initialBrightness) }
     var showBrightnessHud by remember { mutableStateOf(false) }
-    var showVolumeHud by remember { mutableStateOf(false) }
-    var volumeHudCounter by remember { mutableIntStateOf(0) }
 
     // Horizontal Seek swipe state
     var isSeekingHorizontal by remember { mutableStateOf(false) }
@@ -224,26 +198,16 @@ fun PlayerScreen(
     var horizontalSeekDeltaMs by remember { mutableLongStateOf(0L) }
     var lastLiveSeekTime by remember { mutableLongStateOf(0L) }
 
-    // Volume state synced with system
-    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
-    var currentVolume by remember {
-        mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
-    }
-    var volumeAccumulator by remember {
-        mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat())
-    }
+    // Double-tap & Speed Boost feedback
+    var doubleTapFeedback by remember { mutableStateOf<Pair<Boolean, Int>?>(null) } // isForward to seconds
+    var isSpeedBoosting by remember { mutableStateOf(false) }
 
-    // Controls visibility
-    var areControlsVisible by remember { mutableStateOf(true) }
-    var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-
-    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
-
+    // Initialize ExoPlayer
     val exoPlayer = remember {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-            .setConnectTimeoutMs(30000)
-            .setReadTimeoutMs(30000)
+            .setConnectTimeoutMs(25000)
+            .setReadTimeoutMs(25000)
             .setAllowCrossProtocolRedirects(true)
 
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
@@ -282,37 +246,43 @@ fun PlayerScreen(
             }
     }
 
-    // Lifecycle handling: pause on background, save position
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, exoPlayer) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            when (event) {
-                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
-                    exoPlayer.playWhenReady = false
-                }
-                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
-                    onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-                }
-                else -> {}
-            }
+    // Physical Volume Keys interception via MainActivity
+    DisposableEffect(mainActivity) {
+        mainActivity?.registerPlayerVolumeHandler { direction ->
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            val curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            val targetVol = (curVol + direction).coerceIn(0, maxVol)
+            try {
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+            } catch (_: Exception) {}
+            currentVolume = targetVol
+            volumeAccumulator = targetVol.toFloat()
+            showVolumeHud = true
+            volumeHudCounter++
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+            mainActivity?.unregisterPlayerVolumeHandler()
         }
     }
 
-    // Keep screen on, full cutout edge-to-edge and configure immersive sticky system bars
-    val window = activity?.window
-    val insetsController = remember(window) {
-        window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+    // Auto-hide volume HUD
+    LaunchedEffect(volumeHudCounter) {
+        if (volumeHudCounter > 0) {
+            showVolumeHud = true
+            delay(1800L)
+            showVolumeHud = false
+        }
+    }
+
+    // Window, Screen On, Immersive System Bars and Default Landscape
+    val insetsController = remember(activity) {
+        activity?.window?.let { WindowCompat.getInsetsController(it, it.decorView) }
     }
 
     DisposableEffect(Unit) {
         try {
             activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            
-            // Full screen cutout: extend video behind camera punch-hole/notch without black letterboxing
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                 activity?.window?.attributes?.let { lp ->
                     lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -320,7 +290,7 @@ fun PlayerScreen(
                 }
             }
 
-            // Start in comfortable landscape by default (SENSOR_LANDSCAPE lets user rotate 180° for charger cable)
+            // NextPlayer defaults to Landscape
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             isLandscape = true
 
@@ -351,57 +321,38 @@ fun PlayerScreen(
         }
     }
 
-    // Intercept physical volume buttons with BroadcastReceiver for VOLUME_CHANGED_ACTION
-    DisposableEffect(context) {
-        val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                val newVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                currentVolume = newVol
-                showVolumeHud = true
-                volumeHudCounter++
-            }
-        }
+    // Apply brightness to window
+    LaunchedEffect(brightnessLevel) {
         try {
-            context.registerReceiver(receiver, filter)
-        } catch (e: Exception) {
-            // ignore if not permitted
-        }
-
-        onDispose {
-            try {
-                context.unregisterReceiver(receiver)
-            } catch (e: Exception) {
-                // ignore
+            activity?.window?.attributes?.let { lp ->
+                lp.screenBrightness = brightnessLevel.coerceIn(0.05f, 1f)
+                activity.window.attributes = lp
             }
+        } catch (_: Exception) {}
+    }
+
+    // Auto-hide controls timer (3.5 seconds)
+    LaunchedEffect(areControlsVisible, lastInteractionTime, isPlaying, isScreenLocked) {
+        if (areControlsVisible && isPlaying && !isScreenLocked) {
+            delay(3500L)
+            areControlsVisible = false
         }
     }
 
-    // Sync volume HUD with hardware buttons triggered from Activity or System
-    LaunchedEffect(volumeKeyTrigger) {
-        if (volumeKeyTrigger > 0) {
-            val newVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-            currentVolume = newVol
-            volumeAccumulator = newVol.toFloat()
-            showVolumeHud = true
-            volumeHudCounter++
+    // Auto-hide unlock button when locked
+    LaunchedEffect(showUnlockButton) {
+        if (showUnlockButton) {
+            delay(3000L)
+            showUnlockButton = false
         }
     }
 
-    // Auto-hide volume HUD after physical button press
-    LaunchedEffect(volumeHudCounter) {
-        if (volumeHudCounter > 0) {
-            showVolumeHud = true
-            delay(1800)
-            showVolumeHud = false
-        }
-    }
-
-    // Player event listener
+    // Player Event Listener
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 hasFirstFrameRendered = true
+                isBuffering = false
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
@@ -422,9 +373,62 @@ fun PlayerScreen(
                 }
             }
 
+            override fun onTracksChanged(tracks: Tracks) {
+                // Populate audio tracks
+                audioTracks.clear()
+                var audioIndex = 1
+                tracks.groups.forEachIndexed { groupIdx, group ->
+                    if (group.type == C.TRACK_TYPE_AUDIO) {
+                        for (trackIdx in 0 until group.length) {
+                            val format = group.getTrackFormat(trackIdx)
+                            val trackName = format.label ?: "Pista $audioIndex"
+                            val lang = format.language ?: ""
+                            val isSelected = group.isTrackSelected(trackIdx)
+                            audioTracks.add(
+                                NextPlayerAudioTrack(
+                                    groupIndex = groupIdx,
+                                    trackIndex = trackIdx,
+                                    name = trackName,
+                                    language = lang,
+                                    isSelected = isSelected
+                                )
+                            )
+                            audioIndex++
+                        }
+                    }
+                }
+
+                // Populate subtitle tracks
+                subtitleTracks.clear()
+                var subIndex = 1
+                var anySubSelected = false
+                tracks.groups.forEachIndexed { groupIdx, group ->
+                    if (group.type == C.TRACK_TYPE_TEXT) {
+                        for (trackIdx in 0 until group.length) {
+                            val format = group.getTrackFormat(trackIdx)
+                            val trackName = format.label ?: "Subtítulo $subIndex"
+                            val lang = format.language ?: ""
+                            val isSelected = group.isTrackSelected(trackIdx)
+                            if (isSelected) anySubSelected = true
+                            subtitleTracks.add(
+                                NextPlayerSubtitleTrack(
+                                    groupIndex = groupIdx,
+                                    trackIndex = trackIdx,
+                                    name = trackName,
+                                    language = lang,
+                                    isSelected = isSelected
+                                )
+                            )
+                            subIndex++
+                        }
+                    }
+                }
+                areSubtitlesDisabled = !anySubSelected
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isBuffering = false
-                playbackError = "Error al reproducir el video (${error.errorCodeName}). Verifica tu conexión o intenta con otra película."
+                playbackError = "Error al reproducir video (${error.errorCodeName}). Revisa tu conexión a internet o el archivo."
             }
         }
         exoPlayer.addListener(listener)
@@ -436,7 +440,7 @@ fun PlayerScreen(
         }
     }
 
-    // Progress update loop
+    // Time ticker loop
     LaunchedEffect(exoPlayer) {
         while (isActive) {
             if (!isDraggingSlider && !isSeekingHorizontal) {
@@ -445,64 +449,16 @@ fun PlayerScreen(
                 val dur = exoPlayer.duration.coerceAtLeast(0L)
                 if (dur > 0) {
                     durationMs = dur
-                    sliderPosition = (currentPositionMs.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
                 }
             }
-            delay(350)
+            delay(250L)
         }
     }
 
-    // Auto-hide controls after user interaction or when playback resumes
-    LaunchedEffect(areControlsVisible, lastInteractionTime, isScreenLocked, isHoldingFastForward, isPlaying) {
-        if (areControlsVisible && isPlaying && !isScreenLocked && !isHoldingFastForward) {
-            delay(3500)
-            areControlsVisible = false
-        }
-    }
-
-    // Dismiss double tap feedback badge
-    LaunchedEffect(doubleTapFeedback) {
-        if (doubleTapFeedback != null) {
-            delay(900)
-            doubleTapFeedback = null
-        }
-    }
-
-    // Auto-dismiss resume banner after 5.5 seconds
-    LaunchedEffect(showResumeBanner) {
-        if (showResumeBanner) {
-            delay(5500)
-            showResumeBanner = false
-        }
-    }
-
-    // Auto-dismiss mini toast after 2 seconds
-    LaunchedEffect(toastMessage) {
-        if (toastMessage != null) {
-            delay(2000)
-            toastMessage = null
-        }
-    }
-
-    // Auto-hide lock icon when locked so it doesn't disturb viewing experience
-    LaunchedEffect(isLockIconVisible, isScreenLocked) {
-        if (isScreenLocked && isLockIconVisible) {
-            delay(2500)
-            isLockIconVisible = false
-        }
-    }
-
-    fun resetControlsTimer() {
-        areControlsVisible = true
-        lastInteractionTime = System.currentTimeMillis()
-    }
-
+    // Back handler
     BackHandler {
         if (isScreenLocked) {
-            isScreenLocked = false
-            isLockIconVisible = false
-            areControlsVisible = true
-            resetControlsTimer()
+            showUnlockButton = true
         } else {
             onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
             onBack()
@@ -514,122 +470,150 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Drag state holders
-        var dragStartX by remember { mutableFloatStateOf(0f) }
-        var dragStartY by remember { mutableFloatStateOf(0f) }
-        var initialSeekPosMs by remember { mutableLongStateOf(0L) }
-        var isDragDirectionDetermined by remember { mutableStateOf(false) }
-        var isHorizontalDrag by remember { mutableStateOf(false) }
+        val screenWidth = maxWidth
+        val screenHeight = maxHeight
 
-        // Video Surface & Touch Gesture System
+        var totalDeltaX by remember { mutableFloatStateOf(0f) }
+        var isDragDirectionDetermined by remember { mutableStateOf(false) }
+        var isVerticalDrag by remember { mutableStateOf(false) }
+        var isLeftScreenDrag by remember { mutableStateOf(false) }
+
+        // Root Gestures Overlay (Tap, Double Tap, Drag, Press & Hold)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // 1. Tap, Double-Tap and Press & Hold (Fast forward 2x)
-                .pointerInput(isScreenLocked, isBuffering) {
-                    detectTapGestures(
-                        onDoubleTap = { offset ->
-                            if (!isScreenLocked && !isBuffering) {
-                                val isRightSide = offset.x > (size.width / 2)
-                                if (isRightSide) {
-                                    val newPos = (exoPlayer.currentPosition + 10_000L).coerceAtMost(exoPlayer.duration)
-                                    exoPlayer.seekTo(newPos)
-                                    doubleTapFeedback = "+10s ▶▶"
-                                } else {
-                                    val newPos = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                                    exoPlayer.seekTo(newPos)
-                                    doubleTapFeedback = "◀◀ -10s"
-                                }
-                                resetControlsTimer()
+                .pointerInput(isScreenLocked, isPlaying, playbackSpeed) {
+                    if (isScreenLocked) {
+                        detectTapGestures(
+                            onTap = {
+                                showUnlockButton = !showUnlockButton
                             }
-                        },
-                        onPress = {
-                            if (!isScreenLocked && !isBuffering) {
-                                // Press & Hold for fast forward (2x speed like YouTube)
-                                val holdJob = coroutineScope.launch {
-                                    delay(350)
-                                    if (isPlaying) {
-                                        isHoldingFastForward = true
-                                        exoPlayer.playbackParameters = PlaybackParameters(2.0f)
-                                    }
-                                }
-                                try {
-                                    awaitRelease()
-                                } finally {
-                                    holdJob.cancel()
-                                    if (isHoldingFastForward) {
-                                        isHoldingFastForward = false
-                                        exoPlayer.playbackParameters = PlaybackParameters(playbackSpeed)
-                                    }
-                                }
-                            }
-                        },
-                        onTap = {
-                            if (isScreenLocked) {
-                                isLockIconVisible = !isLockIconVisible
-                            } else if (!isBuffering) {
+                        )
+                    } else {
+                        detectTapGestures(
+                            onTap = {
                                 areControlsVisible = !areControlsVisible
-                                if (areControlsVisible) resetControlsTimer()
+                                lastInteractionTime = System.currentTimeMillis()
+                            },
+                            onDoubleTap = { offset ->
+                                val xFrac = offset.x / size.width
+                                when {
+                                    xFrac < 0.35f -> {
+                                        // Left 1/3: Rewind 10s
+                                        val newPos = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
+                                        exoPlayer.seekTo(newPos)
+                                        currentPositionMs = newPos
+                                        doubleTapFeedback = false to 10
+                                        coroutineScope.launch {
+                                            delay(700L)
+                                            doubleTapFeedback = null
+                                        }
+                                    }
+                                    xFrac > 0.65f -> {
+                                        // Right 1/3: Forward 10s
+                                        val newPos = (exoPlayer.currentPosition + 10_000L).coerceAtMost(durationMs)
+                                        exoPlayer.seekTo(newPos)
+                                        currentPositionMs = newPos
+                                        doubleTapFeedback = true to 10
+                                        coroutineScope.launch {
+                                            delay(700L)
+                                            doubleTapFeedback = null
+                                        }
+                                    }
+                                    else -> {
+                                        // Center: Toggle Play / Pause
+                                        if (exoPlayer.isPlaying) {
+                                            exoPlayer.pause()
+                                        } else {
+                                            exoPlayer.play()
+                                        }
+                                        areControlsVisible = true
+                                        lastInteractionTime = System.currentTimeMillis()
+                                    }
+                                }
+                            },
+                            onPress = {
+                                // NextPlayer Press & Hold for 2X Speed Boost
+                                val pressStartTime = System.currentTimeMillis()
+                                try {
+                                    val isReleased = tryAwaitRelease()
+                                    if (System.currentTimeMillis() - pressStartTime > 400L && isSpeedBoosting) {
+                                        exoPlayer.playbackParameters = PlaybackParameters(playbackSpeed)
+                                        isSpeedBoosting = false
+                                    }
+                                } catch (_: Exception) {
+                                    if (isSpeedBoosting) {
+                                        exoPlayer.playbackParameters = PlaybackParameters(playbackSpeed)
+                                        isSpeedBoosting = false
+                                    }
+                                }
+                            },
+                            onLongPress = {
+                                if (isPlaying) {
+                                    isSpeedBoosting = true
+                                    exoPlayer.playbackParameters = PlaybackParameters(2.0f)
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
-                // 2. Drag gestures: Horizontal (Swipe to Seek) & Vertical (Left=Brightness, Right=Volume)
-                .pointerInput(isScreenLocked, isBuffering) {
-                    if (!isScreenLocked && !isBuffering) {
+                .pointerInput(isScreenLocked) {
+                    if (!isScreenLocked) {
                         detectDragGestures(
                             onDragStart = { offset ->
-                                dragStartX = offset.x
-                                dragStartY = offset.y
-                                initialSeekPosMs = exoPlayer.currentPosition
+                                totalDeltaX = 0f
                                 isDragDirectionDetermined = false
-                                isHorizontalDrag = false
+                                isVerticalDrag = false
+                                isLeftScreenDrag = offset.x < size.width / 2f
+                                volumeAccumulator = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                val totalDeltaX = change.position.x - dragStartX
-                                val totalDeltaY = change.position.y - dragStartY
+                                lastInteractionTime = System.currentTimeMillis()
 
                                 if (!isDragDirectionDetermined) {
-                                    if (Math.abs(totalDeltaX) > 25f || Math.abs(totalDeltaY) > 25f) {
+                                    val absX = kotlin.math.abs(dragAmount.x)
+                                    val absY = kotlin.math.abs(dragAmount.y)
+                                    if (absX > 6f || absY > 6f) {
+                                        isVerticalDrag = absY > absX
                                         isDragDirectionDetermined = true
-                                        isHorizontalDrag = Math.abs(totalDeltaX) > Math.abs(totalDeltaY)
                                     }
                                 }
 
                                 if (isDragDirectionDetermined) {
-                                    if (isHorizontalDrag) {
-                                        // Horizontal swipe: Scrub seek position
+                                    if (!isVerticalDrag) {
+                                        // Horizontal Seek Scrubbing
                                         isSeekingHorizontal = true
-                                        val seekSeconds = (totalDeltaX / 12f).toLong()
-                                        val targetMs = (initialSeekPosMs + (seekSeconds * 1000L))
-                                            .coerceIn(0L, durationMs.coerceAtLeast(1000L))
+                                        totalDeltaX += dragAmount.x
+                                        val deltaMs = (totalDeltaX / 8f).toLong() * 1000L
+                                        val targetMs = (currentPositionMs + deltaMs).coerceIn(0L, durationMs.coerceAtLeast(1L))
+                                        horizontalSeekDeltaMs = deltaMs
                                         horizontalSeekTargetMs = targetMs
-                                        horizontalSeekDeltaMs = seekSeconds
-                                    } else {
-                                        // Vertical swipe: Left=Brightness, Right=Volume
-                                        val isRightSide = dragStartX > (size.width / 2)
-                                        val verticalDelta = -dragAmount.y / 260f
 
-                                        if (isRightSide) {
-                                            showVolumeHud = true
-                                            showBrightnessHud = false
-                                            volumeAccumulator = (volumeAccumulator + (verticalDelta * maxVolume))
-                                                .coerceIn(0f, maxVolume.toFloat())
+                                        // Throttled Live Video Seeking under finger
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastLiveSeekTime > 90L) {
+                                            exoPlayer.seekTo(targetMs)
+                                            lastLiveSeekTime = now
+                                        }
+                                    } else {
+                                        // Vertical Drag: Left = Brightness, Right = Volume
+                                        val deltaPercent = -dragAmount.y / (size.height * 0.75f)
+                                        if (isLeftScreenDrag) {
+                                            val newBrightness = (brightnessLevel + deltaPercent).coerceIn(0.05f, 1f)
+                                            brightnessLevel = newBrightness
+                                            showBrightnessHud = true
+                                            sharedPrefs.edit().putInt("brillo_global", (newBrightness * 100).toInt()).apply()
+                                        } else {
+                                            volumeAccumulator = (volumeAccumulator + deltaPercent * maxVolume).coerceIn(0f, maxVolume.toFloat())
                                             val newVol = volumeAccumulator.toInt().coerceIn(0, maxVolume)
                                             if (newVol != currentVolume) {
                                                 currentVolume = newVol
-                                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
+                                                try {
+                                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                                                } catch (_: Exception) {}
                                             }
-                                        } else {
-                                            showBrightnessHud = true
-                                            showVolumeHud = false
-                                            brightnessLevel = (brightnessLevel + verticalDelta).coerceIn(0.05f, 1.0f)
-                                            activity?.window?.attributes?.let { lp ->
-                                                lp.screenBrightness = brightnessLevel
-                                                activity.window.attributes = lp
-                                            }
-                                            sharedPrefs.edit().putInt("brillo_global", (brightnessLevel * 100).toInt()).apply()
+                                            showVolumeHud = true
                                         }
                                     }
                                 }
@@ -654,7 +638,7 @@ fun PlayerScreen(
                     }
                 }
         ) {
-            // ExoPlayer View
+            // ExoPlayer Video Surface
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -665,7 +649,6 @@ fun PlayerScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        playerViewRef = this
                     }
                 },
                 update = { view ->
@@ -674,93 +657,47 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Modern Cinematic Loading Screen with Header (Back, Title, Year/Name) and Buffering Indicator
+            // Initial Cinematic Loading Screen (ONLY shown before first frame)
             AnimatedVisibility(
-                visible = isBuffering && playbackError == null && !hasFirstFrameRendered,
-                enter = fadeIn(tween(250)),
+                visible = !hasFirstFrameRendered && isBuffering && playbackError == null,
+                enter = fadeIn(tween(200)),
                 exit = fadeOut(tween(250))
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black)
-                ) {
-                    // Top Header: Back Button + Title
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopStart)
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            onClick = {
-                                onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-                                onBack()
-                            },
-                            shape = CircleShape,
-                            color = Color(0x990A0A0A),
-                            border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                            shadowElevation = 8.dp,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Volver",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = title,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (year.isNotBlank()) {
-                                Text(
-                                    text = year,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
+                NextPlayerInitialLoadingOverlay(
+                    title = displayTitle,
+                    onBack = {
+                        onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
+                        onBack()
                     }
-
-                    // Center Animated Spinner
-                    PlayerBufferingIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
+                )
             }
 
-            // Playback Error Banner
+            // Mid-Stream Buffering Spinner (Video frame remains completely visible underneath!)
+            AnimatedVisibility(
+                visible = hasFirstFrameRendered && isBuffering && playbackError == null,
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150)),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                NextPlayerBufferingSpinner()
+            }
+
+            // Playback Error Overlay
             playbackError?.let { errText ->
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.Black.copy(alpha = 0.9f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.Black.copy(alpha = 0.90f),
+                        border = BorderStroke(1.2.dp, Color(0xFFEF4444).copy(alpha = 0.7f)),
                         modifier = Modifier.padding(32.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Text(
                                 text = "Error de reproducción",
@@ -771,15 +708,15 @@ fun PlayerScreen(
                             Text(
                                 text = errText,
                                 color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 13.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                fontSize = 13.5.sp,
+                                textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                androidx.compose.material3.OutlinedButton(
+                                OutlinedButton(
                                     onClick = {
                                         onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
                                         onBack()
@@ -787,20 +724,12 @@ fun PlayerScreen(
                                     modifier = Modifier.weight(1f).height(46.dp),
                                     shape = RoundedCornerShape(12.dp),
                                     border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.35f)),
-                                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                                        contentColor = Color.White
-                                    )
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                                 ) {
-                                    Text("SALIR", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("SALIR", fontWeight = FontWeight.Bold)
                                 }
-
-                                androidx.compose.material3.Button(
+                                Button(
                                     onClick = {
-                                        val isOnlineStream = videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true)
-                                        if (isOnlineStream && !com.example.utils.NetworkUtils.isConnected(context)) {
-                                            playbackError = "Sin conexión a internet. Conéctate a una red para reproducir."
-                                            return@Button
-                                        }
                                         playbackError = null
                                         isBuffering = true
                                         exoPlayer.prepare()
@@ -808,12 +737,9 @@ fun PlayerScreen(
                                     },
                                     modifier = Modifier.weight(1f).height(46.dp),
                                     shape = RoundedCornerShape(12.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = Color.White
-                                    )
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
-                                    Text("REINTENTAR", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("REINTENTAR", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -821,888 +747,227 @@ fun PlayerScreen(
                 }
             }
 
-            // Press & Hold Fast Forward (2x) Top Floating Pill
-            AnimatedVisibility(
-                visible = isHoldingFastForward,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
+            // HUDs
+            // Brightness HUD on Left Edge
+            NextPlayerBrightnessHud(
+                brightness = brightnessLevel,
+                visible = showBrightnessHud,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 24.dp)
+            )
+
+            // Volume HUD on Right Edge
+            NextPlayerVolumeHud(
+                volume = currentVolume,
+                maxVolume = maxVolume,
+                visible = showVolumeHud,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 24.dp)
+            )
+
+            // Horizontal Seek HUD in Center
+            NextPlayerSeekHud(
+                targetPositionMs = horizontalSeekTargetMs,
+                deltaMs = horizontalSeekDeltaMs,
+                durationMs = durationMs,
+                visible = isSeekingHorizontal,
+                modifier = Modifier.align(Alignment.Center)
+            )
+
+            // Speed Boost Badge at Top Center
+            NextPlayerSpeedBoostBadge(
+                visible = isSpeedBoosting,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 28.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.8f),
-                    shadowElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FastForward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "2X Avance Rápido",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-            }
+                    .padding(top = 16.dp)
+            )
 
-            // Horizontal Swipe Seek HUD Overlay
-            if (isSeekingHorizontal) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.Black.copy(alpha = 0.85f),
-                        shadowElevation = 10.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = if (horizontalSeekDeltaMs >= 0) "+${horizontalSeekDeltaMs}s" else "${horizontalSeekDeltaMs}s",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = formatTimestamp(horizontalSeekTargetMs),
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Text(
-                                    text = " / ${formatTimestamp(durationMs)}",
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    fontSize = 12.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Vertical HUD: Volume Side Pill (System-synced with cyber pill styling)
-            AnimatedVisibility(
-                visible = showVolumeHud,
-                enter = fadeIn() + scaleIn(initialScale = 0.9f),
-                exit = fadeOut() + scaleOut(targetScale = 0.9f),
-                modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 28.dp)
-            ) {
-                val volFraction = (currentVolume.toFloat() / maxVolume.toFloat()).coerceIn(0f, 1f)
-                val volPercent = (volFraction * 100).toInt()
-                val volIcon = when {
-                    currentVolume == 0 -> Icons.Default.VolumeMute
-                    volPercent <= 50 -> Icons.Default.VolumeDown
-                    else -> Icons.Default.VolumeUp
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = Color(0xE60A0A0A),
-                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
-                    shadowElevation = 14.dp,
-                    modifier = Modifier.width(46.dp).height(170.dp)
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Background track fill from bottom
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(volFraction)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            MaterialTheme.colorScheme.primary,
-                                            Color(0xFF1565C0)
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Top percent pill
-                        Surface(
-                            shape = RoundedCornerShape(7.dp),
-                            color = Color(0xDD0A1916),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 8.dp)
-                        ) {
-                            Text(
-                                text = "$volPercent%",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        // Bottom dynamic sound icon
-                        Icon(
-                            imageVector = volIcon,
-                            contentDescription = "Volumen",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 12.dp)
-                                .size(22.dp)
-                        )
-                    }
-                }
-            }
-
-            // Vertical HUD: Brightness Side Pill (System-synced with cyber pill styling)
-            AnimatedVisibility(
-                visible = showBrightnessHud,
-                enter = fadeIn() + scaleIn(initialScale = 0.9f),
-                exit = fadeOut() + scaleOut(targetScale = 0.9f),
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 28.dp)
-            ) {
-                val brightPercent = (brightnessLevel.coerceIn(0f, 1f) * 100).toInt()
-                Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = Color(0xE60A0A0A),
-                    border = BorderStroke(1.2.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
-                    shadowElevation = 14.dp,
-                    modifier = Modifier.width(46.dp).height(170.dp)
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Background track fill from bottom
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(brightnessLevel.coerceIn(0f, 1f))
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0xFFF59E0B),
-                                            Color(0xFFD97706)
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Top percent pill
-                        Surface(
-                            shape = RoundedCornerShape(7.dp),
-                            color = Color(0xDD1E1B0E),
-                            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 8.dp)
-                        ) {
-                            Text(
-                                text = "$brightPercent%",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        // Bottom brightness icon
-                        Icon(
-                            imageVector = Icons.Default.BrightnessMedium,
-                            contentDescription = "Brillo",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 12.dp)
-                                .size(22.dp)
-                        )
-                    }
-                }
-            }
-
-            // Double tap feedback badge (±10s) with cyber edge box & glowing typography
-            doubleTapFeedback?.let { feedback ->
-                val isRewind = feedback.contains("-")
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 52.dp),
-                    contentAlignment = if (isRewind) Alignment.CenterStart else Alignment.CenterEnd
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = Color(0xEB0A1916),
-                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                        shadowElevation = 16.dp
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (isRewind) {
-                                Icon(
-                                    imageVector = Icons.Default.FastRewind,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Text(
-                                text = feedback,
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp
-                            )
-                            if (!isRewind) {
-                                Icon(
-                                    imageVector = Icons.Default.FastForward,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Lock Screen Floating Button
-            val showLockButton = if (isScreenLocked) isLockIconVisible else (areControlsVisible && !isBuffering)
-            AnimatedVisibility(
-                visible = showLockButton,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 16.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(if (isScreenLocked) Color(0xFFEF4444).copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.6f))
-                        .clickable {
-                            if (isScreenLocked) {
-                                isScreenLocked = false
-                                isLockIconVisible = false
-                                areControlsVisible = true
-                                resetControlsTimer()
-                            } else {
-                                isScreenLocked = true
-                                isLockIconVisible = true
-                                areControlsVisible = false
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isScreenLocked) Icons.Default.Lock else Icons.Default.LockOpen,
-                        contentDescription = if (isScreenLocked) "Desbloquear controles" else "Bloquear controles",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-
-            // Controls UI (Hidden when screen is locked or when buffering)
-            if (!isScreenLocked) {
-                AnimatedVisibility(
-                    visible = areControlsVisible && !isBuffering,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Top Gradient Bar: Back, Title, Resize mode, Speed, Rotate
-                        val topBarPaddingTop = if (isOrientationLandscape || isLandscape) 8.dp else 40.dp
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent)
-                                    )
-                                )
-                                .padding(start = 14.dp, end = 14.dp, top = topBarPaddingTop, bottom = 8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-                                        onBack()
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Regresar",
-                                        tint = Color.White
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(6.dp))
-
-                                val playerDisplayTitle = remember(title, year) {
-                                    val y = year.trim()
-                                    if (y.isNotBlank() && !title.contains("($y)")) {
-                                        "$title ($y)"
-                                    } else {
-                                        title
-                                    }
-                                }
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = playerDisplayTitle,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            fontSize = 15.sp
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                // Aspect ratio toggle button (Ajustar / Rellenar / Estirar)
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color.White.copy(alpha = 0.18f),
-                                    modifier = Modifier
-                                        .padding(end = 8.dp)
-                                        .clickable {
-                                            val modes = VideoResizeMode.values()
-                                            val nextIndex = (currentResizeMode.ordinal + 1) % modes.size
-                                            currentResizeMode = modes[nextIndex]
-                                            playerViewRef?.resizeMode = currentResizeMode.mode
-                                            toastMessage = when (currentResizeMode) {
-                                                VideoResizeMode.FIT -> "Ajustar a la pantalla"
-                                                VideoResizeMode.ZOOM -> "Rellenar pantalla"
-                                                VideoResizeMode.FILL -> "Estirar (16:9)"
-                                            }
-                                            resetControlsTimer()
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AspectRatio,
-                                            contentDescription = "Escala de pantalla",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(5.dp))
-                                        Text(
-                                            text = currentResizeMode.displayName,
-                                            fontSize = 11.sp,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-
-                                // Speed button
-                                Box {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color.White.copy(alpha = 0.15f),
-                                        modifier = Modifier.clickable {
-                                            showSpeedMenu = true
-                                            resetControlsTimer()
-                                        }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Speed,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "${playbackSpeed}x",
-                                                color = Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = showSpeedMenu,
-                                        onDismissRequest = { showSpeedMenu = false }
-                                    ) {
-                                        listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        text = "${speed}x ${if (speed == 1.0f) "(Normal)" else ""}",
-                                                        fontWeight = if (playbackSpeed == speed) FontWeight.Bold else FontWeight.Normal
-                                                    )
-                                                },
-                                                onClick = {
-                                                    playbackSpeed = speed
-                                                    exoPlayer.playbackParameters = PlaybackParameters(speed)
-                                                    showSpeedMenu = false
-                                                    resetControlsTimer()
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Screen rotation / orientation switch
-                                IconButton(
-                                    onClick = {
-                                        val currentLandscape = activity?.resources?.configuration?.orientation == Configuration.ORIENTATION_LANDSCAPE
-                                        activity?.requestedOrientation = if (currentLandscape) {
-                                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                                        } else {
-                                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                        }
-                                        resetControlsTimer()
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ScreenRotation,
-                                        contentDescription = "Rotar pantalla",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Center Controls: Rewind (-10s), Play/Pause/Replay, Fast Forward (+10s)
-                        Row(
-                            modifier = Modifier.align(Alignment.Center),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(28.dp)
-                        ) {
-                            // Rewind 10s
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.55f))
-                                    .clickable {
-                                        val newPos = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                                        exoPlayer.seekTo(newPos)
-                                        currentPositionMs = newPos
-                                        doubleTapFeedback = "◀◀ -10s"
-                                        resetControlsTimer()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        imageVector = Icons.Default.FastRewind,
-                                        contentDescription = "Retroceder 10s",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Text(
-                                        text = "10s",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            // Center Play / Pause / Replay button
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                                    .clickable {
-                                        if (exoPlayer.playbackState == Player.STATE_ENDED) {
-                                            exoPlayer.seekTo(0L)
-                                            exoPlayer.play()
-                                        } else {
-                                            if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                        }
-                                        resetControlsTimer()
-                                    }
-                                    .testTag("play_pause_button"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (isPlaying) "Pausar" else "Reproducir",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(40.dp)
-                                )
-                            }
-
-                            // Forward 10s
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.55f))
-                                    .clickable {
-                                        val newPos = (exoPlayer.currentPosition + 10_000L).coerceAtMost(exoPlayer.duration)
-                                        exoPlayer.seekTo(newPos)
-                                        currentPositionMs = newPos
-                                        doubleTapFeedback = "+10s ▶▶"
-                                        resetControlsTimer()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        imageVector = Icons.Default.FastForward,
-                                        contentDescription = "Adelantar 10s",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Text(
-                                        text = "10s",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        // Bottom Gradient Bar with Timeline Scrub Bar and Controls
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.95f))
-                                    )
-                                )
-                                .padding(horizontal = 16.dp, vertical = 12.dp)
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                // Sleek Interactive Video Player Scrub Bar
-                                SleekVideoPlayerProgressBar(
-                                    positionMs = currentPositionMs,
-                                    durationMs = durationMs,
-                                    bufferedPositionMs = bufferedPositionMs,
-                                    onSeek = { targetMs ->
-                                        currentPositionMs = targetMs
-                                        exoPlayer.seekTo(targetMs)
-                                        resetControlsTimer()
-                                    },
-                                    onSeekingChange = { isSeeking ->
-                                        isDraggingSlider = isSeeking
-                                        if (isSeeking) {
-                                            resetControlsTimer()
-                                        }
-                                    },
-                                    activeColor = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("player_progress_slider")
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                // Time and Status Info
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text(
-                                            text = formatTimestamp(currentPositionMs),
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "/",
-                                            color = Color.White.copy(alpha = 0.5f),
-                                            fontSize = 12.sp
-                                        )
-                                        Text(
-                                            text = formatTimestamp(durationMs),
-                                            color = Color.White.copy(alpha = 0.7f),
-                                            fontSize = 12.sp,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-
-                                    // Quick Fullscreen toggle
-                                    IconButton(
-                                        onClick = {
-                                            isLandscape = !isLandscape
-                                            activity?.requestedOrientation = if (isLandscape) {
-                                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                            } else {
-                                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                                            }
-                                            resetControlsTimer()
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                            contentDescription = "Pantalla completa",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Floating Resume Pill Banner ("Continuando desde [tiempo] • EMPEZAR DE NUEVO")
-            AnimatedVisibility(
-                visible = showResumeBanner && !isScreenLocked,
-                enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f),
-                exit = fadeOut(tween(200)) + scaleOut(targetScale = 0.92f),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = if (areControlsVisible) 96.dp else 28.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0xF20A101D),
-                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
-                    shadowElevation = 14.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        IconButton(
-                            onClick = { showResumeBanner = false },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Cerrar",
-                                tint = Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        Text(
-                            text = "Continuando desde ${formatTimestamp(initialPositionMs)}",
-                            color = Color.White,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
-                            modifier = Modifier.clickable {
-                                exoPlayer.seekTo(0L)
-                                currentPositionMs = 0L
-                                showResumeBanner = false
-                                toastMessage = "Reproducción iniciada desde el principio"
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Replay,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "EMPEZAR DE NUEVO",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Cyber Toast floating notification (for zoom mode changes, errors, reloads)
-            AnimatedVisibility(
-                visible = toastMessage != null,
-                enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.88f),
-                exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.88f),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = if (showResumeBanner) 130.dp else if (areControlsVisible) 90.dp else 40.dp)
-            ) {
-                toastMessage?.let { msg ->
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color(0xF20A101D),
-                        border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
-                        shadowElevation = 12.dp
-                    ) {
-                        Text(
-                            text = msg,
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun formatTimestamp(ms: Long): String {
-    val totalSeconds = (ms / 1000).coerceAtLeast(0)
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-
-    return if (hours > 0) {
-        String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format(Locale.US, "%02d:%02d", minutes, seconds)
-    }
-}
-
-@Composable
-private fun PlayerBufferingIndicator(
-    modifier: Modifier = Modifier
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "player_buffering")
-
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1100, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "orbital_rotation"
-    )
-
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.88f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 850, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "inner_pulse"
-    )
-
-    val primaryColor = MaterialTheme.colorScheme.primary
-
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier.size(52.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Outer rotating gradient arc
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(rotationZ = rotation)
-                ) {
-                    drawArc(
-                        brush = Brush.sweepGradient(
-                            listOf(
-                                primaryColor.copy(alpha = 0.05f),
-                                primaryColor.copy(alpha = 0.4f),
-                                primaryColor,
-                                Color(0xFF38BDF8)
-                            )
-                        ),
-                        startAngle = 0f,
-                        sweepAngle = 280f,
-                        useCenter = false,
-                        style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                }
-
-                // Inner counter-rotating breathing glowing ring
-                Canvas(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .graphicsLayer(
-                            scaleX = pulseScale,
-                            scaleY = pulseScale,
-                            rotationZ = -rotation * 0.6f
-                        )
-                ) {
-                    drawArc(
-                        color = primaryColor.copy(alpha = 0.6f),
-                        startAngle = 180f,
-                        sweepAngle = 160f,
-                        useCenter = false,
-                        style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                }
-
-                // Center luminous core dot
-                Box(
-                    modifier = Modifier
-                        .size(9.dp)
-                        .clip(CircleShape)
-                        .background(primaryColor)
+            // Double Tap Seeking Ripple Feedback
+            doubleTapFeedback?.let { (isForward, secs) ->
+                NextPlayerDoubleTapBadge(
+                    isForward = isForward,
+                    seconds = secs,
+                    visible = true,
+                    modifier = Modifier.align(if (isForward) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = 48.dp)
                 )
             }
 
-            Text(
-                text = "Cargando...",
-                color = Color.White.copy(alpha = 0.92f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.6.sp
+            // NextPlayer Main Controls (Top Bar, Center Play/Pause, Bottom Bar)
+            AnimatedVisibility(
+                visible = areControlsVisible && !isScreenLocked,
+                enter = fadeIn(tween(180)),
+                exit = fadeOut(tween(220))
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Top Bar
+                    NextPlayerTopBar(
+                        title = displayTitle,
+                        resizeMode = currentResizeMode,
+                        currentSpeed = playbackSpeed,
+                        hasAudioTracks = audioTracks.size > 1,
+                        hasSubtitleTracks = subtitleTracks.isNotEmpty(),
+                        onBack = {
+                            onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
+                            onBack()
+                        },
+                        onCycleResizeMode = {
+                            currentResizeMode = when (currentResizeMode) {
+                                NextPlayerResizeMode.FIT -> NextPlayerResizeMode.ZOOM
+                                NextPlayerResizeMode.ZOOM -> NextPlayerResizeMode.STRETCH
+                                NextPlayerResizeMode.STRETCH -> NextPlayerResizeMode.FIT
+                            }
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onShowAudioTracks = {
+                            showAudioTrackDialog = true
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onShowSubtitles = {
+                            showSubtitleDialog = true
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onShowSpeedMenu = {
+                            showSpeedDialog = true
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onToggleLock = {
+                            isScreenLocked = true
+                            areControlsVisible = false
+                            showUnlockButton = true
+                        },
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+
+                    // Center Controls
+                    NextPlayerCenterControls(
+                        isPlaying = isPlaying,
+                        onPlayPause = {
+                            if (exoPlayer.isPlaying) {
+                                exoPlayer.pause()
+                            } else {
+                                exoPlayer.play()
+                            }
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onRewind10 = {
+                            val newPos = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
+                            exoPlayer.seekTo(newPos)
+                            currentPositionMs = newPos
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onForward10 = {
+                            val newPos = (exoPlayer.currentPosition + 10_000L).coerceAtMost(durationMs)
+                            exoPlayer.seekTo(newPos)
+                            currentPositionMs = newPos
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+
+                    // Bottom Bar
+                    NextPlayerBottomBar(
+                        currentPositionMs = currentPositionMs,
+                        bufferedPositionMs = bufferedPositionMs,
+                        durationMs = durationMs,
+                        isLandscape = isLandscape,
+                        isPiPSupported = true,
+                        onSeek = { targetMs ->
+                            exoPlayer.seekTo(targetMs)
+                            currentPositionMs = targetMs
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onToggleOrientation = {
+                            if (isLandscape) {
+                                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                                isLandscape = false
+                            } else {
+                                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                isLandscape = true
+                            }
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onEnterPiP = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                try {
+                                    val params = android.app.PictureInPictureParams.Builder().build()
+                                    activity?.enterPictureInPictureMode(params)
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
+            }
+
+            // Locked Screen Floating Unlock Button
+            NextPlayerLockOverlay(
+                visible = isScreenLocked && showUnlockButton,
+                onUnlock = {
+                    isScreenLocked = false
+                    areControlsVisible = true
+                    showUnlockButton = false
+                    lastInteractionTime = System.currentTimeMillis()
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(24.dp)
             )
         }
+    }
+
+    // Dialogs
+    if (showSpeedDialog) {
+        NextPlayerSpeedDialog(
+            currentSpeed = playbackSpeed,
+            onSpeedSelected = { speed ->
+                playbackSpeed = speed
+                exoPlayer.playbackParameters = PlaybackParameters(speed)
+            },
+            onDismiss = { showSpeedDialog = false }
+        )
+    }
+
+    if (showAudioTrackDialog) {
+        NextPlayerAudioTrackDialog(
+            tracks = audioTracks,
+            onTrackSelected = { track ->
+                val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                    .buildUpon()
+                    .setOverrideForType(
+                        TrackSelectionOverride(trackGroup, listOf(track.trackIndex))
+                    )
+                    .build()
+            },
+            onDismiss = { showAudioTrackDialog = false }
+        )
+    }
+
+    if (showSubtitleDialog) {
+        NextPlayerSubtitleDialog(
+            tracks = subtitleTracks,
+            areSubtitlesDisabled = areSubtitlesDisabled,
+            onDisableSubtitles = {
+                areSubtitlesDisabled = true
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .build()
+            },
+            onTrackSelected = { track ->
+                areSubtitlesDisabled = false
+                val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(
+                        TrackSelectionOverride(trackGroup, listOf(track.trackIndex))
+                    )
+                    .build()
+            },
+            onDismiss = { showSubtitleDialog = false }
+        )
     }
 }

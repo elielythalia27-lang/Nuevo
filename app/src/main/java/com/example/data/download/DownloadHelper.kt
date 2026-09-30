@@ -475,6 +475,9 @@ class DownloadHelper(
         }
 
         // 2. Immediately mutate notification in place without cancellation
+        try {
+            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
+        } catch (_: Exception) {}
         showPausedNotification(pausedItem)
 
         // 3. Stop background worker and persist state to DataStore
@@ -554,7 +557,10 @@ class DownloadHelper(
         _liveDownloadsState.update { list ->
             list.filterNot { it.id == item.id }
         }
-        notificationManager.cancel(getNotificationId(item.id))
+        try {
+            notificationManager.cancel(getNotificationId(item.id))
+            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
+        } catch (_: Exception) {}
 
         // 2. Cancel worker, delete local file and persist removal
         scope.launch(Dispatchers.IO) {
@@ -764,6 +770,12 @@ class DownloadHelper(
         }
     }
 
+    fun syncConcurrentDownloadsLimit(newLimit: Int) {
+        scope.launch(Dispatchers.IO) {
+            checkAndStartNextPending()
+        }
+    }
+
     private suspend fun checkAndStartNextPending() {
         if (VpnProxyDetector.isVpnOrProxyActive(context)) return
         queueMutex.withLock {
@@ -777,7 +789,32 @@ class DownloadHelper(
                     notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
                 }
 
-                if (activeCount < maxLimit) {
+                if (activeCount > maxLimit) {
+                    // Excess downloads must be cleanly paused/moved back to PENDING
+                    val excessCount = activeCount - maxLimit
+                    val excessList = downloadingList.takeLast(excessCount)
+                    for (excessItem in excessList) {
+                        clearLiveProgress(excessItem.id)
+                        try {
+                            workManager.cancelUniqueWork(getWorkName(excessItem.id))
+                        } catch (_: Exception) {}
+                        try {
+                            notificationManager.cancel(getNotificationId(excessItem.id))
+                        } catch (_: Exception) {}
+                        val file = File(excessItem.localFilePath)
+                        val curBytes = if (file.exists()) file.length() else excessItem.downloadedBytes
+                        val pendingItem = excessItem.copy(
+                            status = DownloadStatus.PENDING,
+                            downloadedBytes = curBytes,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        _liveDownloadsState.update { liveList ->
+                            liveList.map { if (it.id == excessItem.id) pendingItem else it }
+                        }
+                        preferences.addOrUpdateDownload(pendingItem)
+                    }
+                } else if (activeCount < maxLimit) {
                     val availableSlots = maxLimit - activeCount
                     val pendingList = list.filter { it.status == DownloadStatus.PENDING }.take(availableSlots)
                     val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
@@ -785,11 +822,14 @@ class DownloadHelper(
                     for (nextPending in pendingList) {
                         val targetFile = resolveDestinationFile(nextPending, savedFolderPath)
                         val toStart = nextPending.copy(
-                             localFilePath = targetFile.absolutePath,
+                            localFilePath = targetFile.absolutePath,
                             status = DownloadStatus.DOWNLOADING,
                             speedBytesPerSec = 0L,
                             etaSeconds = 0L
                         )
+                        _liveDownloadsState.update { liveList ->
+                            liveList.map { if (it.id == toStart.id) toStart else it }
+                        }
                         preferences.addOrUpdateDownload(toStart)
                         enqueueWorker(toStart, targetFile)
                     }

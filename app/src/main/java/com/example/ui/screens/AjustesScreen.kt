@@ -64,6 +64,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -155,6 +156,7 @@ fun AjustesScreen(
     onDownloadFolderChange: (name: String, path: String) -> Unit = { _, _ -> },
     wifiOnly: Boolean = false,
     onWifiOnlyChange: (Boolean) -> Unit = {},
+    onBottomNavVisibilityChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -193,6 +195,20 @@ fun AjustesScreen(
         animationSpec = tween<androidx.compose.ui.unit.Dp>(220),
         label = "card_elevation"
     )
+
+    val listState = rememberLazyListState()
+    val hideOnScrollConnection = com.example.ui.components.rememberHideOnScrollConnection(
+        onVisibilityChange = onBottomNavVisibilityChange,
+        canScrollBackward = { listState.canScrollBackward },
+        canScrollForward = { listState.canScrollForward },
+        thresholdPx = 10f
+    )
+
+    LaunchedEffect(listState.canScrollBackward, listState.canScrollForward) {
+        if (!listState.canScrollBackward || !listState.canScrollForward) {
+            onBottomNavVisibilityChange(true)
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -234,10 +250,12 @@ fun AjustesScreen(
         }
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(hideOnScrollConnection)
                 .padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Section 1: Apariencia y Personalización
@@ -766,20 +784,15 @@ fun AjustesScreen(
                             ) {
                                 Image(
                                     painter = painterResource(id = R.drawable.telegram),
-                                    contentDescription = "Telegram Oficial",
+                                    contentDescription = "Telegram oficial",
                                     modifier = Modifier.size(38.dp)
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Canal Oficial de Telegram",
+                                        text = "Canal oficial de Telegram",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.5.sp,
                                         color = textPrimary
-                                    )
-                                    Text(
-                                        text = "Novedades, estrenos y enlaces actualizados",
-                                        fontSize = 12.sp,
-                                        color = textSecondary
                                     )
                                 }
                                 Icon(

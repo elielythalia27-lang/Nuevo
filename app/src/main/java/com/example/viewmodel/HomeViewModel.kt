@@ -299,6 +299,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun setMaxConcurrentDownloads(count: Int) {
         viewModelScope.launch {
             repository.setMaxConcurrentDownloads(count)
+            downloadHelper.syncConcurrentDownloadsLimit(count)
         }
     }
 
