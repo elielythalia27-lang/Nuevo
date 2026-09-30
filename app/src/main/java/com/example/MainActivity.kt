@@ -2,7 +2,10 @@ package com.example
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -115,11 +118,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         NotificationUtils.initNotificationChannels(this)
 
+        val syncPrefs = getSharedPreferences("theme_sync_prefs", Context.MODE_PRIVATE)
+        val savedThemeMode = syncPrefs.getString("theme_mode", null)
+        val systemIsDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val initialIsDark = when (savedThemeMode) {
+            ThemeMode.DARK.name -> true
+            ThemeMode.LIGHT.name -> false
+            else -> systemIsDark
+        }
+        val windowBgColor = if (initialIsDark) android.graphics.Color.parseColor("#0B1120") else android.graphics.Color.parseColor("#F8FAFC")
+        window.setBackgroundDrawable(ColorDrawable(windowBgColor))
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 setTaskDescription(
                     ActivityManager.TaskDescription.Builder()
-                        .setPrimaryColor(android.graphics.Color.WHITE)
+                        .setPrimaryColor(windowBgColor)
                         .build()
                 )
             } else {
@@ -128,7 +142,7 @@ class MainActivity : ComponentActivity() {
                     ActivityManager.TaskDescription(
                         getString(R.string.app_name),
                         null,
-                        android.graphics.Color.WHITE
+                        windowBgColor
                     )
                 )
             }
@@ -303,8 +317,8 @@ fun MainAppNavigation(
 
                 var isBottomNavVisible by remember { mutableStateOf(true) }
 
-                // Rule 5: Al cambiar de pantalla, ya sea tocando la barra o deslizando el ViewPager, la barra debe mostrarse de nuevo.
-                LaunchedEffect(pagerState.currentPage, pagerState.targetPage) {
+                // Rule 5(b): La barra solo se muestra de forma forzada cuando la pagina realmente cambio (no mientras se arrastra)
+                LaunchedEffect(pagerState.currentPage) {
                     isBottomNavVisible = true
                 }
 
@@ -442,6 +456,7 @@ fun MainAppNavigation(
                     AppBottomNav(
                         currentPage = pagerState.currentPage,
                         onNavigate = { targetPage ->
+                            isBottomNavVisible = true
                             coroutineScope.launch {
                                 pagerState.animateScrollToPage(
                                     page = targetPage,

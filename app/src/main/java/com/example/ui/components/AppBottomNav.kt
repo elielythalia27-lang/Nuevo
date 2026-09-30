@@ -88,11 +88,11 @@ enum class ScreenRoute(
 }
 
 /**
- * NestedScrollConnection that tracks scroll movements:
- * - Hides nav bar on scroll down (> thresholdPx, e.g. 10px).
- * - Reveals nav bar on scroll up (> thresholdPx).
- * - Always keeps nav bar visible when at the top or bottom of the list.
- * - Always keeps nav bar visible when list cannot scroll (little/empty content).
+ * NestedScrollConnection that tracks vertical scroll movements:
+ * - Hides nav bar on vertical scroll down (> thresholdPx, e.g. 10px).
+ * - Reveals nav bar on vertical scroll up (> thresholdPx).
+ * - Does NOT reveal nav bar when reaching the bottom of the list.
+ * - Always keeps nav bar visible when at the top (position 0) or if content cannot scroll.
  */
 @Composable
 fun rememberHideOnScrollConnection(
@@ -110,19 +110,27 @@ fun rememberHideOnScrollConnection(
             private var accumulatedDelta = 0f
 
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Rule 1: Depende ÚNICAMENTE de la dirección del scroll VERTICAL
                 val deltaY = available.y
 
-                // If content cannot scroll both directions (empty or short list), stay visible
+                // Rule 5(d): Si la pantalla no tiene suficiente contenido para desplazarse
                 if (!currentCanScrollBackward() && !currentCanScrollForward()) {
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
                     return Offset.Zero
                 }
 
-                // If at the very top of the list, always visible
+                // Rule 5(a): Si está en la parte superior (posición 0), forzar visible
                 if (!currentCanScrollBackward()) {
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
+                    if (deltaY < 0) {
+                        accumulatedDelta += deltaY
+                        if (accumulatedDelta < -thresholdPx) {
+                            currentOnVisibilityChange(false)
+                            accumulatedDelta = 0f
+                        }
+                    }
                     return Offset.Zero
                 }
 
@@ -132,16 +140,13 @@ fun rememberHideOnScrollConnection(
                 }
                 accumulatedDelta += deltaY
 
+                // Rule 3: Scroll hacia abajo (más allá del umbral) -> ocultar la barra
+                // Rule 4: Al llegar al final de la lista, la barra NO debe reaparecer (si estaba oculta se queda oculta)
                 if (accumulatedDelta < -thresholdPx) {
-                    // Scrolling down (finger moving up) -> hide if not at bottom
-                    if (currentCanScrollForward()) {
-                        currentOnVisibilityChange(false)
-                    } else {
-                        currentOnVisibilityChange(true)
-                    }
+                    currentOnVisibilityChange(false)
                     accumulatedDelta = 0f
                 } else if (accumulatedDelta > thresholdPx) {
-                    // Scrolling up (finger moving down) -> reveal
+                    // Rule 3: Scroll hacia arriba (más allá del umbral) -> mostrarla
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
                 }
@@ -154,8 +159,9 @@ fun rememberHideOnScrollConnection(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                // If scroll hit top or bottom boundary, keep visible
-                if (!currentCanScrollBackward() || !currentCanScrollForward()) {
+                // Rule 4 & 5(a): Solo reaparece forzadamente si el scroll llegó a la parte superior (posición 0).
+                // Al llegar al final de la lista (canScrollForward == false), NO debe reaparecer.
+                if (!currentCanScrollBackward()) {
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
                 }

@@ -1,6 +1,8 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.res.Configuration
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.ApiService
@@ -73,7 +75,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return items.count { it.status == DownloadStatus.DOWNLOADING }
     }
 
-    private val _uiState = MutableStateFlow(HomeUiState())
+    private val initialThemeMode = repository.getSyncThemeMode()
+    private val initialThemeColor = AppThemeColor.fromId(repository.getSyncThemeColor())
+    private val initialIsDark = when (initialThemeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> {
+            val uiMode = application.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+            uiMode == Configuration.UI_MODE_NIGHT_YES
+        }
+    }
+
+    private val _uiState = MutableStateFlow(
+        HomeUiState(
+            themeMode = initialThemeMode,
+            themeColor = initialThemeColor,
+            isDarkTheme = initialIsDark
+        )
+    )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
@@ -457,6 +476,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setThemeMode(mode: ThemeMode, targetIsDark: Boolean? = null) {
+        val appCompatMode = when (mode) {
+            ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+        AppCompatDelegate.setDefaultNightMode(appCompatMode)
+
         val current = _uiState.value
         val isDark = targetIsDark ?: when (mode) {
             ThemeMode.SYSTEM -> current.isDarkTheme

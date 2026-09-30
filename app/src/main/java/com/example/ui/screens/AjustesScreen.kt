@@ -204,8 +204,8 @@ fun AjustesScreen(
         thresholdPx = 10f
     )
 
-    LaunchedEffect(listState.canScrollBackward, listState.canScrollForward) {
-        if (!listState.canScrollBackward || !listState.canScrollForward) {
+    LaunchedEffect(listState.canScrollBackward) {
+        if (!listState.canScrollBackward) {
             onBottomNavVisibilityChange(true)
         }
     }

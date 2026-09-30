@@ -120,6 +120,7 @@ class PeliculaPreferences(private val context: Context) {
         }
 
     suspend fun setThemeColor(colorId: String) {
+        syncPrefs.edit().putString("theme_color", colorId).apply()
         context.dataStore.edit { preferences ->
             preferences[THEME_COLOR_KEY] = colorId
         }
@@ -291,6 +292,25 @@ class PeliculaPreferences(private val context: Context) {
         }
     }
 
+    private val syncPrefs = context.getSharedPreferences("theme_sync_prefs", Context.MODE_PRIVATE)
+
+    fun getSyncThemeMode(): ThemeMode {
+        val raw = syncPrefs.getString("theme_mode", null)
+        return if (raw != null) {
+            try {
+                ThemeMode.valueOf(raw)
+            } catch (_: Exception) {
+                ThemeMode.SYSTEM
+            }
+        } else {
+            ThemeMode.SYSTEM
+        }
+    }
+
+    fun getSyncThemeColor(): String {
+        return syncPrefs.getString("theme_color", "teal") ?: "teal"
+    }
+
     val themeMode: Flow<ThemeMode> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) emit(emptyPreferences()) else throw exception
@@ -309,6 +329,7 @@ class PeliculaPreferences(private val context: Context) {
         }
 
     suspend fun setThemeMode(mode: ThemeMode) {
+        syncPrefs.edit().putString("theme_mode", mode.name).apply()
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE_KEY] = mode.name
             when (mode) {

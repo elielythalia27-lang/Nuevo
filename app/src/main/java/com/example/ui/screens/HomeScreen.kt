@@ -168,8 +168,8 @@ fun HomeScreen(
         thresholdPx = 10f
     )
 
-    LaunchedEffect(activeGridState.canScrollBackward, activeGridState.canScrollForward) {
-        if (!activeGridState.canScrollBackward || !activeGridState.canScrollForward) {
+    LaunchedEffect(activeGridState.canScrollBackward) {
+        if (!activeGridState.canScrollBackward) {
             onBottomNavVisibilityChange(true)
         }
     }
@@ -219,7 +219,9 @@ fun HomeScreen(
                             trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both
                         )
                     ),
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .offset(y = 5.dp)
                 )
 
                 Row(

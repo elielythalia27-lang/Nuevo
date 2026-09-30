@@ -117,6 +117,9 @@ class PeliculaRepository(
         preferences.setDarkTheme(enabled)
     }
 
+    fun getSyncThemeMode(): ThemeMode = preferences.getSyncThemeMode()
+    fun getSyncThemeColor(): String = preferences.getSyncThemeColor()
+
     suspend fun setThemeMode(mode: ThemeMode) {
         preferences.setThemeMode(mode)
     }
