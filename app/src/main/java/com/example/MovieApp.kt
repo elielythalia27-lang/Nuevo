@@ -18,9 +18,11 @@ class MovieApp : Application(), ImageLoaderFactory {
         // before any Activity Window is created so the OS splash and window match the theme.
         val prefs = getSharedPreferences("theme_sync_prefs", Context.MODE_PRIVATE)
         val savedMode = prefs.getString("theme_mode", null)
+        val savedColor = prefs.getString("theme_color", null)
         val nightMode = when (savedMode) {
             ThemeMode.DARK.name -> AppCompatDelegate.MODE_NIGHT_YES
             ThemeMode.LIGHT.name -> AppCompatDelegate.MODE_NIGHT_NO
+            ThemeMode.SYSTEM.name -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
             else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
         }
         AppCompatDelegate.setDefaultNightMode(nightMode)

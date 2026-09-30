@@ -113,6 +113,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -156,6 +158,8 @@ fun AjustesScreen(
     onDownloadFolderChange: (name: String, path: String) -> Unit = { _, _ -> },
     wifiOnly: Boolean = false,
     onWifiOnlyChange: (Boolean) -> Unit = {},
+    barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
+    isCurrentPage: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -197,16 +201,27 @@ fun AjustesScreen(
     )
 
     val listState = rememberLazyListState()
-    val hideOnScrollConnection = com.example.ui.components.rememberHideOnScrollConnection(
-        onVisibilityChange = onBottomNavVisibilityChange,
-        canScrollBackward = { listState.canScrollBackward },
-        canScrollForward = { listState.canScrollForward },
-        thresholdPx = 10f
-    )
 
-    LaunchedEffect(listState.canScrollBackward) {
-        if (!listState.canScrollBackward) {
-            onBottomNavVisibilityChange(true)
+    // Point 4: Llegar al final de la lista -> barBehavior.atEnd = alFinal; if (alFinal) barBehavior.show()
+    LaunchedEffect(listState, isCurrentPage) {
+        if (isCurrentPage && barBehavior != null) {
+            snapshotFlow { !listState.canScrollForward }
+                .distinctUntilChanged()
+                .collect { alFinal ->
+                    barBehavior.atEnd = alFinal
+                    if (alFinal) barBehavior.show()
+                }
+        }
+    }
+
+    // Point 5(d): En la parte superior (posición 0) o sin contenido suficiente para desplazarse
+    LaunchedEffect(listState, isCurrentPage) {
+        if (isCurrentPage && barBehavior != null) {
+            snapshotFlow { !listState.canScrollBackward }
+                .distinctUntilChanged()
+                .collect { atTop ->
+                    if (atTop) barBehavior.show()
+                }
         }
     }
 
@@ -253,7 +268,6 @@ fun AjustesScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .nestedScroll(hideOnScrollConnection)
                 .padding(innerPadding),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)

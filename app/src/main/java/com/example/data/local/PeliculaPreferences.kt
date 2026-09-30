@@ -120,7 +120,7 @@ class PeliculaPreferences(private val context: Context) {
         }
 
     suspend fun setThemeColor(colorId: String) {
-        syncPrefs.edit().putString("theme_color", colorId).apply()
+        syncPrefs.edit().putString("theme_color", colorId).commit()
         context.dataStore.edit { preferences ->
             preferences[THEME_COLOR_KEY] = colorId
         }
@@ -328,8 +328,21 @@ class PeliculaPreferences(private val context: Context) {
             }
         }
 
+    fun saveSyncTheme(mode: ThemeMode, colorId: String) {
+        syncPrefs.edit()
+            .putString("theme_mode", mode.name)
+            .putString("theme_color", colorId)
+            .commit()
+    }
+
+    fun saveSyncThemeColor(colorId: String) {
+        syncPrefs.edit()
+            .putString("theme_color", colorId)
+            .commit()
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
-        syncPrefs.edit().putString("theme_mode", mode.name).apply()
+        syncPrefs.edit().putString("theme_mode", mode.name).commit()
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE_KEY] = mode.name
             when (mode) {

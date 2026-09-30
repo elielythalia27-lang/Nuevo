@@ -77,6 +77,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.example.utils.NetworkUtils
 import androidx.compose.ui.Alignment
@@ -132,6 +134,8 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onDismissContinueWatching: () -> Unit,
     onLayoutModeChange: (String) -> Unit = {},
+    barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
+    isCurrentPage: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {},
     onPauseDownload: ((com.example.data.model.DownloadItem) -> Unit)? = null,
     onResumeDownload: ((com.example.data.model.DownloadItem) -> Unit)? = null,
@@ -161,21 +165,31 @@ fun HomeScreen(
 
     val activeGridState = if (uiState.searchQuery.isNotEmpty()) gridStateSearch else catalogGridState
 
-    val hideOnScrollConnection = com.example.ui.components.rememberHideOnScrollConnection(
-        onVisibilityChange = onBottomNavVisibilityChange,
-        canScrollBackward = { activeGridState.canScrollBackward },
-        canScrollForward = { activeGridState.canScrollForward },
-        thresholdPx = 10f
-    )
+    // Point 4: Llegar al final de la lista -> barBehavior.atEnd = alFinal; if (alFinal) barBehavior.show()
+    LaunchedEffect(activeGridState, isCurrentPage) {
+        if (isCurrentPage && barBehavior != null) {
+            snapshotFlow { !activeGridState.canScrollForward }
+                .distinctUntilChanged()
+                .collect { alFinal ->
+                    barBehavior.atEnd = alFinal
+                    if (alFinal) barBehavior.show()
+                }
+        }
+    }
 
-    LaunchedEffect(activeGridState.canScrollBackward) {
-        if (!activeGridState.canScrollBackward) {
-            onBottomNavVisibilityChange(true)
+    // Point 5(d): En la parte superior (posición 0) o sin contenido suficiente para desplazarse
+    LaunchedEffect(activeGridState, isCurrentPage) {
+        if (isCurrentPage && barBehavior != null) {
+            snapshotFlow { !activeGridState.canScrollBackward }
+                .distinctUntilChanged()
+                .collect { atTop ->
+                    if (atTop) barBehavior.show()
+                }
         }
     }
 
     LaunchedEffect(uiState.searchQuery, uiState.selectedType) {
-        onBottomNavVisibilityChange(true)
+        barBehavior?.show()
     }
 
     // When starting a new search, scroll the search results to the top
@@ -414,7 +428,6 @@ fun HomeScreen(
                             state = activeGridState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .nestedScroll(hideOnScrollConnection)
                                 .testTag("movies_grid"),
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
                             horizontalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else 14.dp),
@@ -730,7 +743,7 @@ fun HomeScreen(
                                                 text = "Descargando (${downloadItem?.progress ?: 0}%)",
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 14.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             val speedText = if (!downloadItem?.formattedSpeed.isNullOrBlank() && downloadItem?.formattedSpeed != "0 B") {
                                                 "${downloadItem?.formattedSpeed} • ${downloadItem?.formattedEta}"

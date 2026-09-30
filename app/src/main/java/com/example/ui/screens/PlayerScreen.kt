@@ -72,7 +72,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.example.MainActivity
 import com.example.ui.player.NextPlayerAudioTrack
@@ -202,19 +202,38 @@ fun PlayerScreen(
     var doubleTapFeedback by remember { mutableStateOf<Pair<Boolean, Int>?>(null) } // isForward to seconds
     var isSpeedBoosting by remember { mutableStateOf(false) }
 
+    // Clean and validate video URL / file
+    val cleanUrl = remember(videoUrl) { videoUrl.trim() }
+    val mediaUri = remember(cleanUrl) {
+        when {
+            cleanUrl.startsWith("http://", ignoreCase = true) || cleanUrl.startsWith("https://", ignoreCase = true) -> {
+                Uri.parse(cleanUrl.replace(" ", "%20"))
+            }
+            cleanUrl.startsWith("content://", ignoreCase = true) || cleanUrl.startsWith("file://", ignoreCase = true) -> {
+                Uri.parse(cleanUrl)
+            }
+            else -> {
+                val f = File(cleanUrl)
+                if (f.exists()) Uri.fromFile(f) else Uri.parse(cleanUrl)
+            }
+        }
+    }
+    val mediaItem = remember(mediaUri) { MediaItem.fromUri(mediaUri) }
+
     // Initialize ExoPlayer
     val exoPlayer = remember {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-            .setConnectTimeoutMs(25000)
-            .setReadTimeoutMs(25000)
+            .setConnectTimeoutMs(30000)
+            .setReadTimeoutMs(30000)
             .setAllowCrossProtocolRedirects(true)
 
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
-        val mediaSourceFactory = ProgressiveMediaSource.Factory(dataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         }
 
         val loadControl = DefaultLoadControl.Builder()
@@ -231,16 +250,10 @@ fun PlayerScreen(
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             .build().apply {
-                val uri = when {
-                    videoUrl.startsWith("http://") || videoUrl.startsWith("https://") -> Uri.parse(videoUrl)
-                    videoUrl.startsWith("content://") || videoUrl.startsWith("file://") -> Uri.parse(videoUrl)
-                    else -> Uri.fromFile(File(videoUrl))
-                }
-                val mediaItem = MediaItem.fromUri(uri)
                 setMediaItem(mediaItem)
                 prepare()
                 playWhenReady = true
-                if (initialPositionMs > 0) {
+                if (initialPositionMs > 0L) {
                     seekTo(initialPositionMs)
                 }
             }
@@ -369,7 +382,9 @@ fun PlayerScreen(
                 } else if (state == Player.STATE_ENDED) {
                     isBuffering = false
                     isPlaying = false
-                    areControlsVisible = true
+                    // Auto-exit back to the previous screen when video ends
+                    onSavePosition(0L, durationMs)
+                    onBack()
                 }
             }
 
@@ -428,7 +443,22 @@ fun PlayerScreen(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isBuffering = false
-                playbackError = "Error al reproducir video (${error.errorCodeName}). Revisa tu conexión a internet o el archivo."
+                val isOnline = cleanUrl.startsWith("http://", ignoreCase = true) || cleanUrl.startsWith("https://", ignoreCase = true)
+                val msg = when {
+                    isOnline && !com.example.utils.NetworkUtils.isConnected(context) ->
+                        "Sin conexión a internet. Conéctate a una red Wi-Fi o datos para reproducir este video."
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                        "Error de conexión con el servidor. Revisa tu red o intenta de nuevo."
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+                        "El archivo de video no existe o fue eliminado del almacenamiento."
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED ->
+                        "Formato o códec de video no compatible con el dispositivo."
+                    else ->
+                        "Error al reproducir video (${error.errorCodeName}). Revisa tu conexión o el archivo."
+                }
+                playbackError = msg
             }
         }
         exoPlayer.addListener(listener)
@@ -732,6 +762,7 @@ fun PlayerScreen(
                                     onClick = {
                                         playbackError = null
                                         isBuffering = true
+                                        exoPlayer.setMediaItem(mediaItem)
                                         exoPlayer.prepare()
                                         exoPlayer.play()
                                     },
@@ -796,7 +827,7 @@ fun PlayerScreen(
 
             // NextPlayer Main Controls (Top Bar, Center Play/Pause, Bottom Bar)
             AnimatedVisibility(
-                visible = areControlsVisible && !isScreenLocked,
+                visible = areControlsVisible && !isScreenLocked && !isBuffering,
                 enter = fadeIn(tween(180)),
                 exit = fadeOut(tween(220))
             ) {

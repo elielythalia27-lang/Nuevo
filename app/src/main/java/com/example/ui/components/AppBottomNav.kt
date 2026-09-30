@@ -55,8 +55,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import kotlin.math.abs
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,6 +88,45 @@ enum class ScreenRoute(
     HOME("home", "Catálogo", 0, Icons.Filled.Movie, Icons.Outlined.Movie),
     DOWNLOADS("downloads", "Descargas", 1, Icons.Filled.CloudDownload, Icons.Outlined.CloudDownload),
     SETTINGS("settings", "Ajustes", 2, Icons.Filled.Tune, Icons.Outlined.Tune)
+}
+
+/**
+ * BottomBarScrollBehavior:
+ * Tracks vertical scroll movements on the container wrapping the HorizontalPager.
+ * Completely ignores horizontal movements (e.g. horizontal swipes in pager).
+ * Keeps nav bar visible when at the end of the list (atEnd = true).
+ */
+class BottomBarScrollBehavior(private val thresholdPx: Float) : NestedScrollConnection {
+    var isVisible by mutableStateOf(true)
+        private set
+    // La lista de la página actual está en su final
+    var atEnd by mutableStateOf(false)
+    private var accumulated = 0f
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        val dx = available.x
+        val dy = available.y
+        // Ignorar por completo gestos horizontales o sin componente vertical
+        if (dy == 0f || abs(dx) > abs(dy)) return Offset.Zero
+        // Mientras la lista esté en el final, seguir empujando hacia abajo no debe ocultar la barra
+        if (dy < 0f && atEnd) return Offset.Zero
+        // Si cambia la dirección, reiniciar el acumulado
+        if (accumulated * dy < 0f) accumulated = 0f
+        accumulated += dy
+        if (accumulated <= -thresholdPx && isVisible) {
+            isVisible = false
+            accumulated = 0f
+        } else if (accumulated >= thresholdPx && !isVisible) {
+            isVisible = true
+            accumulated = 0f
+        }
+        return Offset.Zero
+    }
+
+    fun show() {
+        isVisible = true
+        accumulated = 0f
+    }
 }
 
 /**

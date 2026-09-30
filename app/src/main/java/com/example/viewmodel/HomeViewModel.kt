@@ -445,7 +445,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         durationMs: Long
     ) {
         viewModelScope.launch {
-            if (positionMs > 1000L && (durationMs <= 0L || positionMs < durationMs - 5000L)) {
+            if (positionMs > 1000L && (durationMs <= 0L || positionMs < durationMs - 1000L)) {
                 repository.saveContinueWatching(
                     ContinueWatchingItem(
                         videoUrl = videoUrl,
@@ -457,7 +457,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         durationMs = durationMs
                     )
                 )
-            } else if (durationMs > 0 && positionMs >= durationMs - 5000L) {
+            } else if (durationMs > 0 && positionMs >= durationMs - 1000L) {
                 repository.clearContinueWatching()
             }
         }
@@ -476,13 +476,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setThemeMode(mode: ThemeMode, targetIsDark: Boolean? = null) {
-        val appCompatMode = when (mode) {
-            ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
-            ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-            ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
-        }
-        AppCompatDelegate.setDefaultNightMode(appCompatMode)
-
         val current = _uiState.value
         val isDark = targetIsDark ?: when (mode) {
             ThemeMode.SYSTEM -> current.isDarkTheme
@@ -490,6 +483,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ThemeMode.LIGHT -> false
         }
         val correspondingColor = AppThemeColor.getCorrespondingColor(current.themeColor, isDark)
+
+        // 1. Persist synchronously in SharedPreferences BEFORE any activity recreation
+        repository.saveSyncTheme(mode, correspondingColor.id)
+
+        val appCompatMode = when (mode) {
+            ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+        AppCompatDelegate.setDefaultNightMode(appCompatMode)
+
         _uiState.update {
             it.copy(
                 themeMode = mode,
@@ -575,6 +579,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setThemeColor(color: AppThemeColor) {
+        repository.saveSyncThemeColor(color.id)
+        _uiState.update { it.copy(themeColor = color) }
         viewModelScope.launch {
             repository.setThemeColor(color.id)
         }

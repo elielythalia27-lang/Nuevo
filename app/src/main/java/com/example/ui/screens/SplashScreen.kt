@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 fun AppLauncherIconVector(
     modifier: Modifier = Modifier,
     primaryColor: Color = Color(0xFF009688),
+    primaryVariant: Color = Color(0xFF004D40),
     isDark: Boolean = true
 ) {
     Canvas(modifier = modifier) {
@@ -53,7 +54,7 @@ fun AppLauncherIconVector(
         // 0. Soft Ambient Ground Shadow (Tonal, zero black)
         val groundShadow = Brush.radialGradient(
             colors = listOf(
-                if (isDark) Color(0x35004D40) else Color(0x20004D40),
+                if (isDark) primaryVariant.copy(alpha = 0.35f) else primaryVariant.copy(alpha = 0.20f),
                 Color.Transparent
             ),
             center = Offset(w * 0.50f, h * 0.77f),
@@ -65,20 +66,20 @@ fun AppLauncherIconVector(
             size = Size(w * 0.44f, h * 0.08f)
         )
 
-        // 1a. 3D Isometric Teal Anchor Spine - Back Depth Layer
+        // 1a. 3D Isometric Anchor Spine - Back Depth Layer
         drawRoundRect(
-            color = Color(0xFF004D40),
+            color = primaryVariant,
             topLeft = Offset(w * 0.287f, h * 0.273f),
             size = Size(w * 0.106f, h * 0.444f),
             cornerRadius = CornerRadius(w * 0.035f, h * 0.035f)
         )
 
-        // 1b. 3D Isometric Teal Anchor Spine - Front Face
+        // 1b. 3D Isometric Anchor Spine - Front Face
         val spineGradient = Brush.linearGradient(
             colors = listOf(
-                Color(0xFF00E676),
+                primaryColor.copy(alpha = 0.85f),
                 primaryColor,
-                Color(0xFF00796B)
+                primaryVariant
             ),
             start = Offset(w * 0.277f, h * 0.259f),
             end = Offset(w * 0.380f, h * 0.704f)
@@ -92,13 +93,13 @@ fun AppLauncherIconVector(
 
         // 1c. Spine Top Highlight Chamfer
         drawRoundRect(
-            color = Color(0x80E0F2F1),
+            color = Color(0x80FFFFFF),
             topLeft = Offset(w * 0.287f, h * 0.268f),
             size = Size(w * 0.088f, h * 0.023f),
             cornerRadius = CornerRadius(w * 0.02f, h * 0.02f)
         )
 
-        // 2a. 3D Teal Download/Media Loop - Depth Shadow Layer
+        // 2a. 3D Download/Media Loop - Depth Shadow Layer
         val loopDepthPath = Path().apply {
             moveTo(w * 0.380f, h * 0.282f)
             cubicTo(w * 0.528f, h * 0.282f, w * 0.690f, h * 0.329f, w * 0.727f, h * 0.458f)
@@ -110,15 +111,14 @@ fun AppLauncherIconVector(
             cubicTo(w * 0.616f, h * 0.375f, w * 0.495f, h * 0.338f, w * 0.389f, h * 0.347f)
             close()
         }
-        drawPath(path = loopDepthPath, color = Color(0xFF004D40))
+        drawPath(path = loopDepthPath, color = primaryVariant)
 
-        // 2b. 3D Teal Download/Media Loop - Main Body
+        // 2b. 3D Download/Media Loop - Main Body
         val loopGradient = Brush.linearGradient(
             colors = listOf(
-                Color(0xFF1DE9B6),
+                primaryColor.copy(alpha = 0.85f),
                 primaryColor,
-                Color(0xFF00897B),
-                Color(0xFF00695C)
+                primaryVariant
             ),
             start = Offset(w * 0.370f, h * 0.259f),
             end = Offset(w * 0.722f, h * 0.713f)
@@ -153,11 +153,11 @@ fun AppLauncherIconVector(
             lineTo(w * 0.509f, h * 0.657f)
             close()
         }
-        drawPath(path = arrowDepthPath, color = Color(0xFF004D40))
+        drawPath(path = arrowDepthPath, color = primaryVariant)
 
         // 3b. 3D Download Arrow Pointer - Front
         val arrowFrontGradient = Brush.linearGradient(
-            colors = listOf(Color(0xFF69F0AE), Color(0xFF00E676), primaryColor),
+            colors = listOf(primaryColor.copy(alpha = 0.85f), primaryColor, primaryVariant),
             start = Offset(w * 0.481f, h * 0.634f),
             end = Offset(w * 0.593f, h * 0.727f)
         )
@@ -251,10 +251,12 @@ fun AppLauncherIconVector(
 @Composable
 fun SplashScreen(
     isDarkTheme: Boolean = true,
+    themeColor: com.example.ui.theme.AppThemeColor = com.example.ui.theme.AppThemeColor.TEAL,
     onTimeout: () -> Unit
 ) {
-    val themePrimary = MaterialTheme.colorScheme.primary
-    val themeBackground = MaterialTheme.colorScheme.background
+    val themePrimary = themeColor.primaryForTheme(isDarkTheme)
+    val themeVariant = themeColor.primaryVariantForTheme(isDarkTheme)
+    val themeBackground = if (isDarkTheme) Color(0xFF0B1120) else Color(0xFFF8FAFC)
 
     val logoScale = remember { Animatable(0.70f) }
     val logoAlpha = remember { Animatable(0f) }
@@ -303,14 +305,14 @@ fun SplashScreen(
             .testTag("splash_screen"),
         contentAlignment = Alignment.Center
     ) {
-        val emblemBg = if (isDarkTheme) Color(0xFF1E293B) else Color.White
+        val emblemBg = if (isDarkTheme) Color(0xFF131D31) else Color.White
         val emblemBorder = if (isDarkTheme) {
-            BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+            BorderStroke(1.5.dp, themePrimary.copy(alpha = 0.35f))
         } else {
-            BorderStroke(1.dp, Color(0xFFE2E8F0))
+            BorderStroke(1.5.dp, themePrimary.copy(alpha = 0.25f))
         }
 
-        // App Icon Emblem: Matches the exact app launcher icon styling
+        // App Icon Emblem: Matches the exact app launcher icon styling with theme-compatible background
         Surface(
             shape = RoundedCornerShape(32.dp),
             color = emblemBg,
@@ -324,7 +326,7 @@ fun SplashScreen(
                     elevation = if (isDarkTheme) 20.dp else 12.dp,
                     shape = RoundedCornerShape(32.dp),
                     spotColor = themePrimary.copy(alpha = 0.40f),
-                    ambientColor = if (isDarkTheme) themePrimary.copy(alpha = 0.20f) else Color(0xFFE53935).copy(alpha = 0.15f)
+                    ambientColor = if (isDarkTheme) themePrimary.copy(alpha = 0.20f) else Color(0x15000000)
                 )
         ) {
             Box(
@@ -335,6 +337,7 @@ fun SplashScreen(
             ) {
                 AppLauncherIconVector(
                     primaryColor = themePrimary,
+                    primaryVariant = themeVariant,
                     isDark = isDarkTheme,
                     modifier = Modifier.fillMaxSize()
                 )

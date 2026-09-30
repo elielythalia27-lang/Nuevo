@@ -475,9 +475,6 @@ class DownloadHelper(
         }
 
         // 2. Immediately mutate notification in place without cancellation
-        try {
-            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
-        } catch (_: Exception) {}
         showPausedNotification(pausedItem)
 
         // 3. Stop background worker and persist state to DataStore

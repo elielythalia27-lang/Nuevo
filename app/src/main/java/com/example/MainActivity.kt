@@ -33,7 +33,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +55,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.ui.components.BottomBarScrollBehavior
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -120,11 +131,17 @@ class MainActivity : ComponentActivity() {
 
         val syncPrefs = getSharedPreferences("theme_sync_prefs", Context.MODE_PRIVATE)
         val savedThemeMode = syncPrefs.getString("theme_mode", null)
+        val savedColor = syncPrefs.getString("theme_color", null)
         val systemIsDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         val initialIsDark = when (savedThemeMode) {
             ThemeMode.DARK.name -> true
             ThemeMode.LIGHT.name -> false
-            else -> systemIsDark
+            ThemeMode.SYSTEM.name -> systemIsDark
+            else -> {
+                if (savedColor != null && savedColor.startsWith("light_")) false
+                else if (savedColor != null && savedColor.startsWith("dark_")) true
+                else systemIsDark
+            }
         }
         val windowBgColor = if (initialIsDark) android.graphics.Color.parseColor("#0B1120") else android.graphics.Color.parseColor("#F8FAFC")
         window.setBackgroundDrawable(ColorDrawable(windowBgColor))
@@ -298,36 +315,32 @@ fun MainAppNavigation(
             startDestination = "main",
             modifier = modifier
         ) {
-            composable("splash") {
-                SplashScreen(
-                    isDarkTheme = isDark,
-                    onTimeout = {
-                        navController.navigate("main") {
-                            popUpTo("splash") { inclusive = true }
-                        }
-                    }
-                )
-            }
-
             composable("main") {
                 val pagerState = rememberPagerState(
-                    initialPage = if (skipSplash) initialTab else 0,
+                    initialPage = initialTab,
                     pageCount = { 3 }
                 )
+                var showExitAppDialog by remember { mutableStateOf(false) }
 
-                var isBottomNavVisible by remember { mutableStateOf(true) }
+                val density = LocalDensity.current
+                val barBehavior = remember { BottomBarScrollBehavior(with(density) { 10.dp.toPx() }) }
 
-                // Rule 5(b): La barra solo se muestra de forma forzada cuando la pagina realmente cambio (no mientras se arrastra)
-                LaunchedEffect(pagerState.currentPage) {
-                    isBottomNavVisible = true
+                LaunchedEffect(pagerState.settledPage) {
+                    if (!pagerState.isScrollInProgress) {
+                        barBehavior.show()
+                    }
                 }
 
-                BackHandler(enabled = pagerState.currentPage != 0) {
-                    coroutineScope.launch {
-                        pagerState.animateScrollToPage(
-                            page = 0,
-                            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                        )
+                BackHandler {
+                    if (pagerState.currentPage != 0) {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(
+                                page = 0,
+                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                            )
+                        }
+                    } else {
+                        showExitAppDialog = true
                     }
                 }
 
@@ -335,6 +348,7 @@ fun MainAppNavigation(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
+                        .nestedScroll(barBehavior)
                 ) {
                     HorizontalPager(
                         state = pagerState,
@@ -376,7 +390,9 @@ fun MainAppNavigation(
                                     },
                                     onDismissContinueWatching = { viewModel.clearContinueWatching() },
                                     onLayoutModeChange = { viewModel.setCatalogLayoutMode(it) },
-                                    onBottomNavVisibilityChange = { isBottomNavVisible = it }
+                                    barBehavior = barBehavior,
+                                    isCurrentPage = pagerState.currentPage == 0,
+                                    onBottomNavVisibilityChange = { if (it) barBehavior.show() }
                                 )
                             }
 
@@ -418,7 +434,9 @@ fun MainAppNavigation(
                                     onRequestPermissions = {
                                         showPermissionDialog = true
                                     },
-                                    onBottomNavVisibilityChange = { isBottomNavVisible = it }
+                                    barBehavior = barBehavior,
+                                    isCurrentPage = pagerState.currentPage == 1,
+                                    onBottomNavVisibilityChange = { if (it) barBehavior.show() }
                                 )
                             }
 
@@ -446,7 +464,9 @@ fun MainAppNavigation(
                                     },
                                     wifiOnly = uiState.wifiOnly,
                                     onWifiOnlyChange = { viewModel.setWifiOnly(it) },
-                                    onBottomNavVisibilityChange = { isBottomNavVisible = it }
+                                    barBehavior = barBehavior,
+                                    isCurrentPage = pagerState.currentPage == 2,
+                                    onBottomNavVisibilityChange = { if (it) barBehavior.show() }
                                 )
                             }
                         }
@@ -456,7 +476,7 @@ fun MainAppNavigation(
                     AppBottomNav(
                         currentPage = pagerState.currentPage,
                         onNavigate = { targetPage ->
-                            isBottomNavVisible = true
+                            barBehavior.show()
                             coroutineScope.launch {
                                 pagerState.animateScrollToPage(
                                     page = targetPage,
@@ -466,7 +486,7 @@ fun MainAppNavigation(
                         },
                         downloadsCount = uiState.activeDownloadsCount,
                         isDarkTheme = isDark,
-                        isVisible = isBottomNavVisible,
+                        isVisible = barBehavior.isVisible,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
 
@@ -481,6 +501,52 @@ fun MainAppNavigation(
                                 showPermissionDialog = false
                                 pendingDownloadPelicula = null
                             }
+                        )
+                    }
+
+                    if (showExitAppDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showExitAppDialog = false },
+                            title = {
+                                Text(
+                                    text = "¿Salir de la aplicación?",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = "¿Estás seguro de que deseas salir de PelisFree?",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        showExitAppDialog = false
+                                        (context as? Activity)?.finish()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Salir", fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            dismissButton = {
+                                OutlinedButton(
+                                    onClick = { showExitAppDialog = false },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Cancelar", fontWeight = FontWeight.Medium)
+                                }
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 6.dp
                         )
                     }
                 }

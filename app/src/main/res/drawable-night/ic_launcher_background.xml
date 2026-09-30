@@ -4,8 +4,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Adaptive background matching app window -->
+    <!-- Solid Dark Background matching dark theme surface -->
     <path
-        android:fillColor="@color/app_window_bg"
+        android:fillColor="#131D31"
         android:pathData="M0,0h108v108h-108z" />
 </vector>

@@ -92,6 +92,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -146,6 +148,8 @@ fun DescargasScreen(
     onExploreClick: () -> Unit,
     isDarkTheme: Boolean = true,
     onRequestPermissions: () -> Unit = {},
+    barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
+    isCurrentPage: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -179,6 +183,7 @@ fun DescargasScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(selectedTab) {
+        barBehavior?.show()
         onBottomNavVisibilityChange(true)
     }
 
@@ -478,6 +483,8 @@ fun DescargasScreen(
                             cardBorder = cardBorder,
                             textPrimary = textPrimary,
                             textSecondary = textSecondary,
+                            barBehavior = barBehavior,
+                            isCurrentTabActive = isCurrentPage && selectedTab == 0,
                             onBottomNavVisibilityChange = onBottomNavVisibilityChange
                         )
                     }
@@ -494,6 +501,8 @@ fun DescargasScreen(
                             cardBorder = cardBorder,
                             textPrimary = textPrimary,
                             textSecondary = textSecondary,
+                            barBehavior = barBehavior,
+                            isCurrentTabActive = isCurrentPage && selectedTab == 1,
                             onBottomNavVisibilityChange = onBottomNavVisibilityChange
                         )
                     }
@@ -772,6 +781,8 @@ private fun ActiveDownloadsTab(
     cardBorder: Color,
     textPrimary: Color,
     textSecondary: Color,
+    barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
+    isCurrentTabActive: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val downloadingOrPaused = activeList.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PAUSED }
@@ -782,16 +793,27 @@ private fun ActiveDownloadsTab(
     val hasPausedOrPending = activeList.any { it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING || it.status == DownloadStatus.FAILED }
 
     val listState = rememberLazyListState()
-    val hideOnScrollConnection = com.example.ui.components.rememberHideOnScrollConnection(
-        onVisibilityChange = onBottomNavVisibilityChange,
-        canScrollBackward = { listState.canScrollBackward },
-        canScrollForward = { listState.canScrollForward },
-        thresholdPx = 10f
-    )
 
-    LaunchedEffect(listState.canScrollBackward) {
-        if (!listState.canScrollBackward) {
-            onBottomNavVisibilityChange(true)
+    // Point 4: Llegar al final de la lista -> barBehavior.atEnd = alFinal; if (alFinal) barBehavior.show()
+    LaunchedEffect(listState, isCurrentTabActive) {
+        if (isCurrentTabActive && barBehavior != null) {
+            snapshotFlow { !listState.canScrollForward }
+                .distinctUntilChanged()
+                .collect { alFinal ->
+                    barBehavior.atEnd = alFinal
+                    if (alFinal) barBehavior.show()
+                }
+        }
+    }
+
+    // Point 5(d): En la parte superior (posición 0) o sin contenido suficiente para desplazarse
+    LaunchedEffect(listState, isCurrentTabActive) {
+        if (isCurrentTabActive && barBehavior != null) {
+            snapshotFlow { !listState.canScrollBackward }
+                .distinctUntilChanged()
+                .collect { atTop ->
+                    if (atTop) barBehavior.show()
+                }
         }
     }
 
@@ -819,7 +841,6 @@ private fun ActiveDownloadsTab(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .nestedScroll(hideOnScrollConnection)
                 .testTag("active_downloads_list"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -1143,6 +1164,8 @@ private fun DownloadedTab(
     cardBorder: Color,
     textPrimary: Color,
     textSecondary: Color,
+    barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
+    isCurrentTabActive: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {}
 ) {
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -1150,16 +1173,27 @@ private fun DownloadedTab(
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
-    val hideOnScrollConnection = com.example.ui.components.rememberHideOnScrollConnection(
-        onVisibilityChange = onBottomNavVisibilityChange,
-        canScrollBackward = { listState.canScrollBackward },
-        canScrollForward = { listState.canScrollForward },
-        thresholdPx = 10f
-    )
 
-    LaunchedEffect(listState.canScrollBackward) {
-        if (!listState.canScrollBackward) {
-            onBottomNavVisibilityChange(true)
+    // Point 4: Llegar al final de la lista -> barBehavior.atEnd = alFinal; if (alFinal) barBehavior.show()
+    LaunchedEffect(listState, isCurrentTabActive) {
+        if (isCurrentTabActive && barBehavior != null) {
+            snapshotFlow { !listState.canScrollForward }
+                .distinctUntilChanged()
+                .collect { alFinal ->
+                    barBehavior.atEnd = alFinal
+                    if (alFinal) barBehavior.show()
+                }
+        }
+    }
+
+    // Point 5(d): En la parte superior (posición 0) o sin contenido suficiente para desplazarse
+    LaunchedEffect(listState, isCurrentTabActive) {
+        if (isCurrentTabActive && barBehavior != null) {
+            snapshotFlow { !listState.canScrollBackward }
+                .distinctUntilChanged()
+                .collect { atTop ->
+                    if (atTop) barBehavior.show()
+                }
         }
     }
 
@@ -1280,7 +1314,6 @@ private fun DownloadedTab(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .nestedScroll(hideOnScrollConnection)
                     .testTag("downloaded_movies_list"),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)

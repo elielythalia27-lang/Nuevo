@@ -119,6 +119,8 @@ class PeliculaRepository(
 
     fun getSyncThemeMode(): ThemeMode = preferences.getSyncThemeMode()
     fun getSyncThemeColor(): String = preferences.getSyncThemeColor()
+    fun saveSyncTheme(mode: ThemeMode, colorId: String) = preferences.saveSyncTheme(mode, colorId)
+    fun saveSyncThemeColor(colorId: String) = preferences.saveSyncThemeColor(colorId)
 
     suspend fun setThemeMode(mode: ThemeMode) {
         preferences.setThemeMode(mode)
