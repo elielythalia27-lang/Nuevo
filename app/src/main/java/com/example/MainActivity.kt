@@ -254,6 +254,7 @@ fun MainAppNavigation(
     val requiredPermissions = remember { PermissionHelper.getRequiredAppPermissions() }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var pendingDownloadPelicula by remember { mutableStateOf<Pelicula?>(null) }
+    var showSplash by remember { mutableStateOf(!skipSplash) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -296,7 +297,13 @@ fun MainAppNavigation(
 
     val activePlayback = uiState.activePlayback
 
-    if (vpnStatus.isBlocked) {
+    if (showSplash) {
+        SplashScreen(
+            isDarkTheme = isDark,
+            themeColor = uiState.themeColor,
+            onTimeout = { showSplash = false }
+        )
+    } else if (vpnStatus.isBlocked) {
         VpnBlockedScreen(
             status = vpnStatus,
             onRetryCheck = {
