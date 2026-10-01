@@ -159,8 +159,8 @@ fun PlayerScreen(
     val subtitleTracks = remember { mutableStateListOf<NextPlayerSubtitleTrack>() }
     var areSubtitlesDisabled by remember { mutableStateOf(true) }
 
-    // Controls visibility
-    var areControlsVisible by remember { mutableStateOf(true) }
+    // Controls visibility: do not show controls during initial loading
+    var areControlsVisible by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     // Gestures state: Brightness, Volume, Horizontal Seek Scrub
@@ -202,19 +202,18 @@ fun PlayerScreen(
     var doubleTapFeedback by remember { mutableStateOf<Pair<Boolean, Int>?>(null) } // isForward to seconds
     var isSpeedBoosting by remember { mutableStateOf(false) }
 
-    // Clean and validate video URL / file
-    val cleanUrl = remember(videoUrl) { videoUrl.trim() }
-    val mediaUri = remember(cleanUrl) {
+    // Parse video URI directly without artificial manipulation
+    val mediaUri = remember(videoUrl) {
         when {
-            cleanUrl.startsWith("http://", ignoreCase = true) || cleanUrl.startsWith("https://", ignoreCase = true) -> {
-                Uri.parse(cleanUrl.replace(" ", "%20"))
+            videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true) -> {
+                Uri.parse(videoUrl)
             }
-            cleanUrl.startsWith("content://", ignoreCase = true) || cleanUrl.startsWith("file://", ignoreCase = true) -> {
-                Uri.parse(cleanUrl)
+            videoUrl.startsWith("content://", ignoreCase = true) || videoUrl.startsWith("file://", ignoreCase = true) -> {
+                Uri.parse(videoUrl)
             }
             else -> {
-                val f = File(cleanUrl)
-                if (f.exists()) Uri.fromFile(f) else Uri.parse(cleanUrl)
+                val f = File(videoUrl)
+                if (f.exists()) Uri.fromFile(f) else Uri.parse(videoUrl)
             }
         }
     }
@@ -366,6 +365,7 @@ fun PlayerScreen(
             override fun onRenderedFirstFrame() {
                 hasFirstFrameRendered = true
                 isBuffering = false
+                areControlsVisible = true
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
@@ -443,7 +443,7 @@ fun PlayerScreen(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isBuffering = false
-                val isOnline = cleanUrl.startsWith("http://", ignoreCase = true) || cleanUrl.startsWith("https://", ignoreCase = true)
+                val isOnline = videoUrl.startsWith("http://", ignoreCase = true) || videoUrl.startsWith("https://", ignoreCase = true)
                 val msg = when {
                     isOnline && !com.example.utils.NetworkUtils.isConnected(context) ->
                         "Sin conexión a internet. Conéctate a una red Wi-Fi o datos para reproducir este video."
@@ -512,7 +512,10 @@ fun PlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(isScreenLocked, isPlaying, playbackSpeed) {
+                .pointerInput(isScreenLocked, isPlaying, playbackSpeed, hasFirstFrameRendered, isBuffering) {
+                    if (!hasFirstFrameRendered || isBuffering) {
+                        return@pointerInput
+                    }
                     if (isScreenLocked) {
                         detectTapGestures(
                             onTap = {
@@ -587,7 +590,10 @@ fun PlayerScreen(
                         )
                     }
                 }
-                .pointerInput(isScreenLocked) {
+                .pointerInput(isScreenLocked, hasFirstFrameRendered, isBuffering) {
+                    if (!hasFirstFrameRendered || isBuffering) {
+                        return@pointerInput
+                    }
                     if (!isScreenLocked) {
                         detectDragGestures(
                             onDragStart = { offset ->
@@ -827,7 +833,7 @@ fun PlayerScreen(
 
             // NextPlayer Main Controls (Top Bar, Center Play/Pause, Bottom Bar)
             AnimatedVisibility(
-                visible = areControlsVisible && !isScreenLocked && !isBuffering,
+                visible = hasFirstFrameRendered && areControlsVisible && !isScreenLocked && !isBuffering,
                 enter = fadeIn(tween(180)),
                 exit = fadeOut(tween(220))
             ) {

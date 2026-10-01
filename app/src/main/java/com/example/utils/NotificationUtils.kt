@@ -263,8 +263,8 @@ object NotificationUtils {
                 "Cancelar",
                 createCancelPendingIntent(context, item.id)
             )
-            .setAutoCancel(true)
-            .setOngoing(false)
+            .setAutoCancel(false)
+            .setOngoing(true)
             .setShowWhen(false)
             .setWhen(0L)
             .setSortKey("download_${item.id}")

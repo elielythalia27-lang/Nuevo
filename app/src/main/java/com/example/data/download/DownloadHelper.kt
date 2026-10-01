@@ -486,6 +486,9 @@ class DownloadHelper(
                     checkAndStartNextPending()
                 } catch (_: Exception) {}
             }
+            // Delay to allow WorkManager to tear down its foreground notification, then ensure paused notification is posted persistently
+            delay(350L)
+            showPausedNotification(pausedItem)
         }
     }
 
@@ -759,6 +762,7 @@ class DownloadHelper(
 
     fun notifyTaskFinished(downloadId: String) {
         scope.launch(Dispatchers.IO) {
+            delay(350L)
             val item = preferences.downloads.first().find { it.id == downloadId }
             if (item != null && item.status == DownloadStatus.PAUSED) {
                 showPausedNotification(item)

@@ -316,7 +316,7 @@ class PeliculaPreferences(private val context: Context) {
             if (exception is IOException) emit(emptyPreferences()) else throw exception
         }
         .map { preferences ->
-            val raw = preferences[THEME_MODE_KEY]
+            val raw = preferences[THEME_MODE_KEY] ?: syncPrefs.getString("theme_mode", null)
             if (raw != null) {
                 try {
                     ThemeMode.valueOf(raw)
@@ -324,7 +324,7 @@ class PeliculaPreferences(private val context: Context) {
                     ThemeMode.SYSTEM
                 }
             } else {
-                ThemeMode.SYSTEM
+                getSyncThemeMode()
             }
         }
 

@@ -181,6 +181,11 @@ class MainActivity : ComponentActivity() {
 
             val context = LocalContext.current
 
+            LaunchedEffect(isDark) {
+                val windowBgColor = if (isDark) android.graphics.Color.parseColor("#0B1120") else android.graphics.Color.parseColor("#F8FAFC")
+                (context as? Activity)?.window?.setBackgroundDrawable(ColorDrawable(windowBgColor))
+            }
+
             val handleThemeModeChange: (ThemeMode) -> Unit = { newMode ->
                 if (newMode != uiState.themeMode) {
                     val systemIsDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
@@ -321,18 +326,20 @@ fun MainAppNavigation(
                     pageCount = { 3 }
                 )
                 var showExitAppDialog by remember { mutableStateOf(false) }
+                var lastSettledPage by remember { mutableIntStateOf(pagerState.settledPage) }
 
                 val density = LocalDensity.current
                 val barBehavior = remember { BottomBarScrollBehavior(with(density) { 10.dp.toPx() }) }
 
-                LaunchedEffect(pagerState.settledPage) {
-                    if (!pagerState.isScrollInProgress) {
+                LaunchedEffect(pagerState.settledPage, pagerState.isScrollInProgress) {
+                    if (!pagerState.isScrollInProgress && pagerState.settledPage != lastSettledPage) {
+                        lastSettledPage = pagerState.settledPage
                         barBehavior.show()
                     }
                 }
 
                 BackHandler {
-                    if (pagerState.currentPage != 0) {
+                    if (pagerState.settledPage != 0) {
                         coroutineScope.launch {
                             pagerState.animateScrollToPage(
                                 page = 0,
@@ -391,8 +398,11 @@ fun MainAppNavigation(
                                     onDismissContinueWatching = { viewModel.clearContinueWatching() },
                                     onLayoutModeChange = { viewModel.setCatalogLayoutMode(it) },
                                     barBehavior = barBehavior,
-                                    isCurrentPage = pagerState.currentPage == 0,
-                                    onBottomNavVisibilityChange = { if (it) barBehavior.show() }
+                                    isCurrentPage = !pagerState.isScrollInProgress && pagerState.settledPage == 0,
+                                    onBottomNavVisibilityChange = { if (it) barBehavior.show() },
+                                    onPauseDownload = { viewModel.pauseDownload(it) },
+                                    onResumeDownload = { viewModel.resumeDownload(it) },
+                                    onCancelDownload = { viewModel.cancelDownload(it) }
                                 )
                             }
 
@@ -435,7 +445,7 @@ fun MainAppNavigation(
                                         showPermissionDialog = true
                                     },
                                     barBehavior = barBehavior,
-                                    isCurrentPage = pagerState.currentPage == 1,
+                                    isCurrentPage = !pagerState.isScrollInProgress && pagerState.settledPage == 1,
                                     onBottomNavVisibilityChange = { if (it) barBehavior.show() }
                                 )
                             }
@@ -465,7 +475,7 @@ fun MainAppNavigation(
                                     wifiOnly = uiState.wifiOnly,
                                     onWifiOnlyChange = { viewModel.setWifiOnly(it) },
                                     barBehavior = barBehavior,
-                                    isCurrentPage = pagerState.currentPage == 2,
+                                    isCurrentPage = !pagerState.isScrollInProgress && pagerState.settledPage == 2,
                                     onBottomNavVisibilityChange = { if (it) barBehavior.show() }
                                 )
                             }
@@ -474,7 +484,7 @@ fun MainAppNavigation(
 
                     // Floating Modern Navigation Pill Bar over the content
                     AppBottomNav(
-                        currentPage = pagerState.currentPage,
+                        currentPage = pagerState.settledPage,
                         onNavigate = { targetPage ->
                             barBehavior.show()
                             coroutineScope.launch {
