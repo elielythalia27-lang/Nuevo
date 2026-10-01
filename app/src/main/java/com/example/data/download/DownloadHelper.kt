@@ -447,13 +447,18 @@ class DownloadHelper(
                 val activeDownloads = currentList.filter { it.status == DownloadStatus.DOWNLOADING }
 
                 if (activeDownloads.size > limit) {
-                    // Lowered limit: gracefully pause excess downloads in real-time and return to PENDING
-                    val toPause = activeDownloads.takeLast(activeDownloads.size - limit)
-                    for (item in toPause) {
-                        pauseDownload(item)
-                        val pendingItem = item.copy(status = DownloadStatus.PENDING)
-                        updateItemState(pendingItem)
-                        preferences.addOrUpdateDownload(pendingItem)
+                    // Lowered limit: gracefully requeue excess downloads in real-time to PENDING
+                    val excessCount = activeDownloads.size - limit
+                    val toQueue = activeDownloads.takeLast(excessCount)
+                    for (item in toQueue) {
+                        val queuedItem = item.copy(
+                            status = DownloadStatus.PENDING,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        updateItemState(queuedItem)
+                        preferences.addOrUpdateDownload(queuedItem)
+                        DownloadForegroundService.queueDownload(context, item.id)
                     }
                 } else if (activeDownloads.size < limit) {
                     // Raised limit: start as many pending downloads as slots are open

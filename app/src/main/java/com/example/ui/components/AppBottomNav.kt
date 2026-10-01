@@ -1,23 +1,18 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,8 +42,6 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -265,18 +258,6 @@ fun AppBottomNav(
         label = "nav_border_color"
     )
 
-    // Infinite gentle breathing pulse for active download beacon
-    val infiniteTransition = rememberInfiniteTransition(label = "bottom_nav_beacon")
-    val beaconPulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "beacon_scale"
-    )
-
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -386,96 +367,17 @@ fun AppBottomNav(
                                     )
                                 }
 
-                                // Icon with Badge or pulsating Beacon
+                                // Icon
                                 Box(
                                     modifier = Modifier.scale(iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (screen == ScreenRoute.DOWNLOADS) {
-                                        val showDownloadBadge = downloadsCount > 0 && !isSelected
-                                        val badgeScale by animateFloatAsState(
-                                            targetValue = if (showDownloadBadge) 1f else 0f,
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMedium
-                                            ),
-                                            label = "downloads_badge_scale"
-                                        )
-
-                                        // Badge gentle floating bobbing & breathing pulse matching empty state lists exactly
-                                        val badgeInfiniteTransition = rememberInfiniteTransition(label = "badge_empty_style_pulse")
-                                        val badgePulseScale by badgeInfiniteTransition.animateFloat(
-                                            initialValue = 0.94f,
-                                            targetValue = 1.08f,
-                                            animationSpec = infiniteRepeatable(
-                                                animation = tween(1800, easing = FastOutSlowInEasing),
-                                                repeatMode = RepeatMode.Reverse
-                                            ),
-                                            label = "badge_pulse_scale"
-                                        )
-                                        val badgeFloatY by badgeInfiniteTransition.animateFloat(
-                                            initialValue = -5f,
-                                            targetValue = 5f,
-                                            animationSpec = infiniteRepeatable(
-                                                animation = tween(2400, easing = FastOutSlowInEasing),
-                                                repeatMode = RepeatMode.Reverse
-                                            ),
-                                            label = "badge_float_y"
-                                        )
-
-                                        BadgedBox(
-                                            badge = {
-                                                if (badgeScale > 0.01f) {
-                                                    Badge(
-                                                        containerColor = activeColor,
-                                                        contentColor = activeColor.contrastingTextColor(),
-                                                        modifier = Modifier
-                                                            .offset(x = 4.dp, y = (-4).dp)
-                                                            .graphicsLayer {
-                                                                scaleX = badgeScale * badgePulseScale
-                                                                scaleY = badgeScale * badgePulseScale
-                                                                translationY = badgeFloatY
-                                                                alpha = badgeScale.coerceIn(0f, 1f)
-                                                                clip = false
-                                                            }
-                                                    ) {
-                                                        AnimatedContent(
-                                                            targetState = downloadsCount,
-                                                            transitionSpec = {
-                                                                (scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn())
-                                                                    .togetherWith(scaleOut() + fadeOut())
-                                                            },
-                                                            label = "badge_number_anim"
-                                                        ) { count ->
-                                                            val displayCount = if (count > 99) "99+" else "$count"
-                                                            Text(
-                                                                text = displayCount,
-                                                                fontSize = 10.sp,
-                                                                fontWeight = FontWeight.Bold,
-                                                                lineHeight = 12.sp,
-                                                                textAlign = TextAlign.Center,
-                                                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                                contentDescription = screen.title,
-                                                tint = contentColor,
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Icon(
-                                            imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                            contentDescription = screen.title,
-                                            tint = contentColor,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                                        contentDescription = screen.title,
+                                        tint = contentColor,
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
                             }
 

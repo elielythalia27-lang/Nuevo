@@ -70,6 +70,7 @@ class DownloadForegroundService : Service() {
         const val ACTION_PAUSE_DOWNLOAD = "com.downloadfree.ACTION_PAUSE_DOWNLOAD"
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
+        const val ACTION_QUEUE_DOWNLOAD = "com.downloadfree.ACTION_QUEUE_DOWNLOAD"
         const val ACTION_PAUSE_ALL = "com.downloadfree.ACTION_PAUSE_ALL"
         const val ACTION_RESUME_ALL = "com.downloadfree.ACTION_RESUME_ALL"
         const val ACTION_CANCEL_ALL = "com.downloadfree.ACTION_CANCEL_ALL"
@@ -89,6 +90,14 @@ class DownloadForegroundService : Service() {
         fun pauseDownload(context: Context, downloadId: String) {
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_PAUSE_DOWNLOAD
+                putExtra(EXTRA_DOWNLOAD_ID, downloadId)
+            }
+            startServiceCompat(context, intent)
+        }
+
+        fun queueDownload(context: Context, downloadId: String) {
+            val intent = Intent(context, DownloadForegroundService::class.java).apply {
+                action = ACTION_QUEUE_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
             startServiceCompat(context, intent)
@@ -190,6 +199,12 @@ class DownloadForegroundService : Service() {
                     handlePauseDownload(id)
                 }
             }
+            ACTION_QUEUE_DOWNLOAD -> {
+                val id = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
+                if (!id.isNullOrBlank()) {
+                    handleQueueDownload(id)
+                }
+            }
             ACTION_RESUME_DOWNLOAD -> {
                 val id = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
                 if (!id.isNullOrBlank()) {
@@ -226,6 +241,60 @@ class DownloadForegroundService : Service() {
         }
         activeJobs[item.id] = job
         updateForegroundSummary()
+    }
+
+    private fun handleQueueDownload(downloadId: String) {
+        val helper = DownloadHelper.getActiveInstance(applicationContext)
+        val job = activeJobs.remove(downloadId)
+        val live = helper.getLiveProgress(downloadId)
+        val item = activeItems.remove(downloadId) ?: helper.getItem(downloadId)
+
+        job?.cancel()
+
+        if (item != null) {
+            val file = File(item.localFilePath)
+            val fileLen = if (file.exists()) file.length() else 0L
+            val downloadedBytes = when {
+                fileLen > 0L -> fileLen
+                live != null && live.downloadedBytes > 0L -> live.downloadedBytes
+                item.downloadedBytes > 0L -> item.downloadedBytes
+                else -> 0L
+            }
+            val totalBytes = when {
+                live != null && live.totalBytes > 0L -> live.totalBytes
+                item.totalBytes > 0L -> item.totalBytes
+                else -> 0L
+            }
+            val progress = when {
+                totalBytes > 0L && downloadedBytes > 0L -> ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99)
+                live != null && live.progress > 0 -> live.progress
+                item.progress > 0 -> item.progress
+                else -> 0
+            }
+
+            helper.clearLiveProgress(downloadId)
+
+            val queuedItem = item.copy(
+                status = DownloadStatus.PENDING,
+                downloadedBytes = downloadedBytes,
+                totalBytes = totalBytes,
+                progress = progress,
+                speedBytesPerSec = 0L,
+                etaSeconds = 0L
+            )
+
+            helper.updateItemState(queuedItem)
+            serviceScope.launch {
+                preferences.addOrUpdateDownload(queuedItem)
+            }
+
+            try {
+                notificationManager.cancel(NotificationUtils.getNotificationId(downloadId))
+            } catch (_: Exception) {}
+        } else {
+            helper.clearLiveProgress(downloadId)
+        }
+        checkServiceLiveness()
     }
 
     private fun handlePauseDownload(downloadId: String) {
@@ -595,7 +664,13 @@ class DownloadForegroundService : Service() {
                 speed,
                 eta
             )
-            notificationManager.notify(NotificationUtils.getNotificationId(item.id), notif)
+            val notifId = NotificationUtils.getNotificationId(item.id)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(notifId, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(notifId, notif)
+            }
+            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
         } catch (_: Exception) {}
     }
 
@@ -684,8 +759,7 @@ class DownloadForegroundService : Service() {
 
     private fun updateForegroundSummary() {
         try {
-            val summaryNotif = NotificationUtils.buildSummaryNotification(applicationContext)
-            notificationManager.notify(FOREGROUND_SERVICE_NOTIFICATION_ID, summaryNotif)
+            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
         } catch (_: Exception) {}
     }
 

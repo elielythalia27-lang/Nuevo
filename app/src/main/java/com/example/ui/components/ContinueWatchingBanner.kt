@@ -128,17 +128,24 @@ fun ContinueWatchingBanner(
                         .background(if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
+                    SubcomposeAsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(item.coverUrl)
                             .memoryCacheKey(item.coverUrl)
                             .diskCacheKey(item.coverUrl)
-                            .crossfade(false)
+                            .crossfade(150)
                             .size(180, 220)
                             .build(),
                         contentDescription = item.title,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .shimmerEffect(RoundedCornerShape(8.dp), isDark = isDarkTheme)
+                            )
+                        }
                     )
                     Box(
                         modifier = Modifier

@@ -152,10 +152,20 @@ fun HomeScreen(
     val subtitleTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val badgeBg = MaterialTheme.colorScheme.surfaceVariant
 
-    val catalogGridState = rememberLazyGridState()
+    val gridStateAll = rememberLazyGridState()
+    val gridStateMovies = rememberLazyGridState()
+    val gridStateVideos = rememberLazyGridState()
     val gridStateSearch = rememberLazyGridState()
 
-    val activeGridState = if (uiState.searchQuery.isNotEmpty()) gridStateSearch else catalogGridState
+    val activeGridState = if (uiState.searchQuery.isNotEmpty()) {
+        gridStateSearch
+    } else {
+        when (uiState.selectedType) {
+            "movie" -> gridStateMovies
+            "video" -> gridStateVideos
+            else -> gridStateAll
+        }
+    }
 
     // Point 4: Llegar al final de la lista -> barBehavior.atEnd = alFinal; if (alFinal) barBehavior.show()
     LaunchedEffect(activeGridState, isCurrentPage) {
@@ -476,26 +486,35 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Elevated Poster Card
+                    // Elevated Poster Card without background border
                     Surface(
                         modifier = Modifier
                             .size(width = 105.dp, height = 148.dp),
                         shape = RoundedCornerShape(14.dp),
                         shadowElevation = if (isDark) 4.dp else 6.dp,
-                        border = BorderStroke(1.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFCBD5E1)),
-                        color = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                        color = Color.Transparent
                     ) {
-                        AsyncImage(
+                        SubcomposeAsyncImage(
                             model = ImageRequest.Builder(context)
                                 .data(pelicula.safeCoverUrl)
                                 .memoryCacheKey(pelicula.safeCoverUrl)
                                 .diskCacheKey(pelicula.safeCoverUrl)
-                                .crossfade(false)
+                                .crossfade(150)
                                 .size(320, 440)
                                 .build(),
                             contentDescription = pelicula.safeTitle,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(14.dp)),
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .shimmerEffect(RoundedCornerShape(14.dp), isDark = isDark)
+                                )
+                            }
                         )
                     }
 

@@ -130,17 +130,24 @@ fun PeliculaCard(
                         .clip(RoundedCornerShape(9.dp))
                         .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0))
                 ) {
-                    AsyncImage(
+                    SubcomposeAsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(pelicula.safeCoverUrl)
                             .memoryCacheKey(pelicula.safeCoverUrl)
                             .diskCacheKey(pelicula.safeCoverUrl)
-                            .crossfade(false)
+                            .crossfade(150)
                             .size(240, 350)
                             .build(),
                         contentDescription = pelicula.safeTitle,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .shimmerEffect(RoundedCornerShape(9.dp), isDark = isDarkTheme)
+                            )
+                        }
                     )
                 }
 
@@ -307,18 +314,28 @@ fun PeliculaCard(
                         .aspectRatio(0.78f)
                         .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0))
                 ) {
-                    // Fast AsyncImage instantly rendered from memory cache with 0 flicker
-                    AsyncImage(
+                    // SubcomposeAsyncImage with smooth shimmering loading placeholder
+                    SubcomposeAsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(pelicula.safeCoverUrl)
                             .memoryCacheKey(pelicula.safeCoverUrl)
                             .diskCacheKey(pelicula.safeCoverUrl)
-                            .crossfade(false)
+                            .crossfade(150)
                             .size(360, 500)
                             .build(),
                         contentDescription = pelicula.safeTitle,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .shimmerEffect(
+                                        shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
+                                        isDark = isDarkTheme
+                                    )
+                            )
+                        }
                     )
 
                     // Type or Creator/Year Badge on top right

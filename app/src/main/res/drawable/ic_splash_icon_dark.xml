@@ -6,14 +6,25 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Dark Theme Background Emblem Base -->
+    <!-- Dark Theme Background Rounded Square Card -->
     <path
-        android:pathData="M16,54 C16,33 33,16 54,16 C75,16 92,33 92,54 C92,75 75,92 54,92 C33,92 16,75 16,54 Z"
-        android:fillColor="#FF131D31" />
+        android:pathData="M34,16 L74,16 C84,16 92,24 92,34 L92,74 C92,84 84,92 74,92 L34,92 C24,92 16,84 16,74 L16,34 C16,24 24,16 34,16 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="16"
+                android:endX="54"
+                android:endY="92"
+                android:type="linear">
+                <item android:color="#FF1A263C" android:offset="0.0" />
+                <item android:color="#FF0F172A" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
     <path
-        android:pathData="M16,54 C16,33 33,16 54,16 C75,16 92,33 92,54 C92,75 75,92 54,92 C33,92 16,75 16,54 Z"
-        android:strokeColor="#33009688"
-        android:strokeWidth="1.5" />
+        android:pathData="M34,16 L74,16 C84,16 92,24 92,34 L92,74 C92,84 84,92 74,92 L34,92 C24,92 16,84 16,74 L16,34 C16,24 24,16 34,16 Z"
+        android:strokeColor="#3500BFA5"
+        android:strokeWidth="1.2" />
 
     <!-- 3D Soft Ambient Ground Shadow -->
     <path
