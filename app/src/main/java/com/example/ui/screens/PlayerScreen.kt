@@ -834,11 +834,11 @@ fun PlayerScreen(
             // NextPlayer Main Controls (Top Bar, Center Play/Pause, Bottom Bar)
             val isActivityInPip = activity?.isInPictureInPictureMode == true
             AnimatedVisibility(
-                visible = hasFirstFrameRendered && areControlsVisible && !isScreenLocked && !isBuffering && !isActivityInPip,
+                visible = hasFirstFrameRendered && areControlsVisible && !isScreenLocked && !isActivityInPip,
                 enter = fadeIn(tween(180)),
                 exit = fadeOut(tween(220))
             ) {
-                val controlsEnabled = hasFirstFrameRendered && !isBuffering && playbackError == null
+                val controlsEnabled = playbackError == null
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     // Top Bar
@@ -885,10 +885,12 @@ fun PlayerScreen(
                         isPlaying = isPlaying,
                         enabled = controlsEnabled,
                         onPlayPause = {
-                            if (exoPlayer.isPlaying) {
+                            if (exoPlayer.playWhenReady) {
                                 exoPlayer.pause()
+                                isPlaying = false
                             } else {
                                 exoPlayer.play()
+                                isPlaying = true
                             }
                             lastInteractionTime = System.currentTimeMillis()
                         },

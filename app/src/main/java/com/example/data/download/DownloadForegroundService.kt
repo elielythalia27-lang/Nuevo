@@ -468,7 +468,13 @@ class DownloadForegroundService : Service() {
                 }
 
                 actualFile.parentFile?.mkdirs()
-                raf = RandomAccessFile(actualFile, "rw")
+                try {
+                    raf = RandomAccessFile(actualFile, "rw")
+                } catch (_: Exception) {
+                    safeDir.mkdirs()
+                    actualFile = File(safeDir, actualFile.name)
+                    raf = RandomAccessFile(actualFile, "rw")
+                }
                 if (response.code == 206) {
                     raf.seek(downloadedBytes)
                 } else {
@@ -558,7 +564,8 @@ class DownloadForegroundService : Service() {
                 if (retryCount < maxRetries) {
                     delay(1500L)
                 } else {
-                    handleDownloadError(connectingItem, e.localizedMessage ?: "Error de red")
+                    val cleanMsg = NotificationUtils.sanitizeErrorMessage(e.localizedMessage)
+                    handleDownloadError(connectingItem, cleanMsg)
                     return
                 }
             } finally {

@@ -284,7 +284,7 @@ class DownloadHelper(
                 }
 
                 val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
-                val targetFile = resolveDestinationFile(pelicula.safeTitle, pelicula.safeYear, savedFolderPath)
+                val targetFile = resolveDestinationFile(pelicula.safeTitle, pelicula.secondaryTag, savedFolderPath)
 
                 val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
                 val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
@@ -473,24 +473,32 @@ class DownloadHelper(
         syncConcurrentDownloadsLimit()
     }
 
-    private fun resolveDestinationFile(title: String, year: String, savedFolderPath: String): File {
-        val sanitizedTitle = title.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
-        val fileName = if (year.isNotBlank()) "${sanitizedTitle}_${year}.mp4" else "${sanitizedTitle}.mp4"
+    fun buildSafeFileName(title: String, secondaryTag: String): String {
+        val cleanTitle = title.replace("[\"*/:<>?\\\\|]".toRegex(), "").trim()
+        val cleanTag = secondaryTag.replace("[\"*/:<>?\\\\|()]".toRegex(), "").trim()
+        val baseName = if (cleanTag.isNotBlank() && !cleanTitle.contains("($cleanTag)")) {
+            "$cleanTitle ($cleanTag)"
+        } else {
+            cleanTitle
+        }
+        return if (baseName.endsWith(".mp4", ignoreCase = true)) baseName else "$baseName.mp4"
+    }
+
+    private fun resolveDestinationFile(title: String, secondaryTag: String, savedFolderPath: String): File {
+        val fileName = buildSafeFileName(title, secondaryTag)
 
         if (savedFolderPath.isNotBlank()) {
-            val customDir = File(savedFolderPath)
-            if (customDir.exists() && customDir.canWrite()) {
-                return File(customDir, fileName)
-            }
+            try {
+                val customDir = File(savedFolderPath)
+                if (customDir.exists() && customDir.canWrite()) {
+                    return File(customDir, fileName)
+                }
+            } catch (_: Exception) {}
         }
 
-        val publicDownloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val appFolder = File(publicDownloadDir, "Download Free")
-        if (appFolder.exists() || appFolder.mkdirs()) {
-            return File(appFolder, fileName)
-        }
-
-        val safeAppDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        val safeAppDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: File(context.filesDir, "Download Free")
+        safeAppDir.mkdirs()
         return File(safeAppDir, fileName)
     }
 }

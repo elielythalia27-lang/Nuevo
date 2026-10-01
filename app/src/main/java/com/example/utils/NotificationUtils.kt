@@ -280,6 +280,17 @@ object NotificationUtils {
             .build()
     }
 
+    fun sanitizeErrorMessage(rawMessage: String?): String {
+        if (rawMessage.isNullOrBlank()) return "Error de conexión"
+        val lower = rawMessage.lowercase()
+        return when {
+            lower.contains("wi-fi") || lower.contains("wifi") -> "Conexión Wi-Fi requerida"
+            lower.contains("vpn") || lower.contains("proxy") -> "En pausa por VPN activa"
+            lower.contains("sin conexión") || lower.contains("internet") || lower.contains("connect") || lower.contains("timeout") || lower.contains("host") || lower.contains("socket") -> "Sin conexión a internet"
+            else -> "Error de conexión con el servidor"
+        }
+    }
+
     fun buildErrorNotification(
         context: Context,
         item: DownloadItem,
@@ -292,12 +303,13 @@ object NotificationUtils {
         } else {
             item.title
         }
-        val subtitle = "$displayTitle: Detenido ($errorMessage)"
+        val cleanError = sanitizeErrorMessage(errorMessage)
+        val subtitle = "$displayTitle • $cleanError"
 
         return createCompatBuilder(context, CHANNEL_ERROR_ID)
             .setContentTitle("Descarga detenida")
             .setContentText(subtitle)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$errorMessage. Puedes reanudar cuando recuperes conexión."))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$cleanError. Puedes reanudar cuando recuperes conexión."))
             .setSmallIcon(R.drawable.ic_notification_error)
             .setColor(0xFFEF4444.toInt())
             .setContentIntent(createOpenDownloadsPendingIntent(context))

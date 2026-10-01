@@ -183,10 +183,6 @@ fun AjustesScreen(
     var showColorPickerDialog by remember { mutableStateOf(false) }
     var showFolderDialog by remember { mutableStateOf(false) }
 
-    var hardwareAcceleration by remember { mutableStateOf(true) }
-    var screenGestures by remember { mutableStateOf(true) }
-    var autoResume by remember { mutableStateOf(true) }
-
     val screenBg = MaterialTheme.colorScheme.background
     val cardBg = MaterialTheme.colorScheme.surface
     val cardBorder = MaterialTheme.colorScheme.surfaceVariant
@@ -736,34 +732,7 @@ fun AjustesScreen(
                 }
             }
 
-            // Section 4: Reproductor de Video
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "REPRODUCTOR DE VIDEO", icon = Icons.Default.PlayCircleOutline)
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardBg),
-                        border = BorderStroke(1.dp, cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            SettingsSwitchRow(
-                                icon = Icons.Default.Memory,
-                                title = "Aceleración por hardware",
-                                subtitle = "Mejora fluidez y reduce consumo de batería en reproducción.",
-                                checked = hardwareAcceleration,
-                                isDarkTheme = isDarkTheme,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
-                                onCheckedChange = { hardwareAcceleration = it }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Section 5: Comunidad y Soporte
+            // Section 4: Comunidad y Soporte
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsCategoryHeader(title = "COMUNIDAD Y SOPORTE", icon = Icons.Default.Info)
