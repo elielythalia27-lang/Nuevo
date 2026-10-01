@@ -61,9 +61,10 @@ fun NextPlayerBrightnessHud(
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xCC121212),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-            shadowElevation = 8.dp,
+            color = Color(0xEE121212),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
             modifier = Modifier
                 .width(48.dp)
                 .height(180.dp)
@@ -89,7 +90,7 @@ fun NextPlayerBrightnessHud(
                         .width(6.dp)
                         .weight(1f)
                         .clip(RoundedCornerShape(3.dp))
-                        .background(Color.White.copy(alpha = 0.2f)),
+                        .background(Color.White.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Box(
@@ -141,9 +142,10 @@ fun NextPlayerVolumeHud(
         val fraction = if (maxVolume > 0) (volume.toFloat() / maxVolume.toFloat()).coerceIn(0f, 1f) else 0f
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xCC121212),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-            shadowElevation = 8.dp,
+            color = Color(0xEE121212),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
             modifier = Modifier
                 .width(48.dp)
                 .height(180.dp)
@@ -175,7 +177,7 @@ fun NextPlayerVolumeHud(
                         .width(6.dp)
                         .weight(1f)
                         .clip(RoundedCornerShape(3.dp))
-                        .background(Color.White.copy(alpha = 0.2f)),
+                        .background(Color.White.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Box(
@@ -227,9 +229,10 @@ fun NextPlayerSeekHud(
     ) {
         Surface(
             shape = RoundedCornerShape(18.dp),
-            color = Color(0xDD0F0F0F),
+            color = Color(0xEE0F0F0F),
             border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
-            shadowElevation = 12.dp
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
@@ -283,9 +286,10 @@ fun NextPlayerDoubleTapBadge(
     ) {
         Surface(
             shape = CircleShape,
-            color = Color.Black.copy(alpha = 0.65f),
+            color = Color.Black.copy(alpha = 0.75f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-            shadowElevation = 8.dp,
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
             modifier = Modifier.size(72.dp)
         ) {
             Column(
@@ -327,9 +331,10 @@ fun NextPlayerSpeedBoostBadge(
     ) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = Color(0xCC121212),
+            color = Color(0xEE121212),
             border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary),
-            shadowElevation = 8.dp
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
@@ -374,9 +379,10 @@ fun NextPlayerBufferingSpinner(
     ) {
         Surface(
             shape = CircleShape,
-            color = Color.Black.copy(alpha = 0.60f),
+            color = Color.Black.copy(alpha = 0.70f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-            shadowElevation = 8.dp,
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
             modifier = Modifier.size(60.dp)
         ) {
             Box(

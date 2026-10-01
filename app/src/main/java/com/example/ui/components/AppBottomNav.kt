@@ -96,42 +96,20 @@ enum class ScreenRoute(
  * Completely ignores horizontal movements (e.g. horizontal swipes in pager).
  * Keeps nav bar visible when at the end of the list (atEnd = true).
  */
-class BottomBarScrollBehavior(private val thresholdPx: Float) : NestedScrollConnection {
+class BottomBarScrollBehavior(private val thresholdPx: Float = 0f) : NestedScrollConnection {
     var isVisible by mutableStateOf(true)
         private set
-    // La lista de la página actual está en su final
     var atEnd by mutableStateOf(false)
     var isChangingPage by mutableStateOf(false)
-    private var accumulated = 0f
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-        // While changing pages or horizontal gesture, NEVER hide the bar
-        if (isChangingPage) {
-            if (!isVisible) show()
-            return Offset.Zero
-        }
-        val dx = available.x
-        val dy = available.y
-        // Ignorar por completo gestos horizontales o sin componente vertical
-        if (dy == 0f || abs(dx) > abs(dy) * 0.75f) return Offset.Zero
-        // Mientras la lista esté en el final, seguir empujando hacia abajo no debe ocultar la barra
-        if (dy < 0f && atEnd) return Offset.Zero
-        // Si cambia la dirección, reiniciar el acumulado
-        if (accumulated * dy < 0f) accumulated = 0f
-        accumulated += dy
-        if (accumulated <= -thresholdPx && isVisible) {
-            isVisible = false
-            accumulated = 0f
-        } else if (accumulated >= thresholdPx && !isVisible) {
-            isVisible = true
-            accumulated = 0f
-        }
+        // BottomNavigation never disappears as requested ("quita eso de que el bottomnavigation desaparezca")
+        if (!isVisible) isVisible = true
         return Offset.Zero
     }
 
     fun show() {
         isVisible = true
-        accumulated = 0f
     }
 }
 

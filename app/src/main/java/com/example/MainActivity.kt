@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 setTaskDescription(
                     ActivityManager.TaskDescription.Builder()
-                        .setPrimaryColor(windowBgColor)
+                        .setPrimaryColor(android.graphics.Color.WHITE)
                         .build()
                 )
             } else {
@@ -159,7 +159,7 @@ class MainActivity : ComponentActivity() {
                     ActivityManager.TaskDescription(
                         getString(R.string.app_name),
                         null,
-                        windowBgColor
+                        android.graphics.Color.WHITE
                     )
                 )
             }

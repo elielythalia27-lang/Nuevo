@@ -8,7 +8,7 @@ data class Pelicula(
     val url: String? = null,
     @SerializedName("nombre")
     val nombre: String? = null,
-    @SerializedName("año", alternate = ["anio", "a", "year"])
+    @SerializedName("año", alternate = ["anio", "a", "year", "canal", "channel", "autor", "creador", "uploader", "youtuber", "creator"])
     val anio: String? = null,
     @SerializedName("peli")
     val peli: String? = null,
@@ -35,6 +35,18 @@ data class Pelicula(
     val youtuberName: String
         get() {
             val raw = anio?.trim() ?: ""
+            if (raw.isNotEmpty() && !raw.equals("yt", ignoreCase = true) && !raw.equals("youtube", ignoreCase = true)) {
+                return raw
+            }
+            // Parse channel if embedded in title like "Title | Channel" or "Title - Channel"
+            val pipeSplit = safeTitle.split("|")
+            if (pipeSplit.size > 1 && pipeSplit.last().trim().length in 2..35) {
+                return pipeSplit.last().trim()
+            }
+            val dashSplit = safeTitle.split(" - ")
+            if (dashSplit.size > 1 && dashSplit.first().trim().length in 2..35) {
+                return dashSplit.first().trim()
+            }
             return if (raw.isNotEmpty()) raw else "YouTube"
         }
 

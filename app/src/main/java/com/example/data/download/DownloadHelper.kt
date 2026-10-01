@@ -164,8 +164,8 @@ class DownloadHelper(
 
         // Observe max concurrency settings changes
         scope.launch(Dispatchers.IO) {
-            preferences.maxConcurrentDownloads.collect {
-                checkAndStartNextPending()
+            preferences.maxConcurrentDownloads.collect { limit ->
+                syncConcurrentDownloadsLimit(limit)
             }
         }
     }
@@ -225,7 +225,23 @@ class DownloadHelper(
             speedBytesPerSec = speedBytesPerSec,
             etaSeconds = etaSeconds
         )
+        // Keep in-memory SSOT state updated immediately so UI and pause calls never drop to 0
+        _liveDownloadsState.update { list ->
+            list.map { item ->
+                if (item.id == downloadId) {
+                    item.copy(
+                        downloadedBytes = downloadedBytes,
+                        totalBytes = if (totalBytes > 0L) totalBytes else item.totalBytes,
+                        progress = progress,
+                        speedBytesPerSec = speedBytesPerSec,
+                        etaSeconds = etaSeconds
+                    )
+                } else item
+            }
+        }
     }
+
+    fun getLiveProgress(downloadId: String): LiveProgressUpdate? = liveProgressMap[downloadId]
 
     fun clearLiveProgress(downloadId: String) {
         liveProgressMap.remove(downloadId)
@@ -280,7 +296,7 @@ class DownloadHelper(
                     title = pelicula.safeTitle,
                     originalVideoUrl = videoUrl,
                     coverUrl = pelicula.safeCoverUrl,
-                    year = pelicula.safeYear,
+                    year = pelicula.secondaryTag,
                     type = pelicula.tp ?: "pl",
                     localFilePath = targetFile.absolutePath,
                     status = initialStatus,
@@ -305,15 +321,31 @@ class DownloadHelper(
     }
 
     fun pauseDownload(item: DownloadItem) {
-        clearLiveProgress(item.id)
+        val live = liveProgressMap[item.id]
         val file = File(item.localFilePath)
-        val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
-        val total = item.totalBytes.coerceAtLeast(0L)
-        val progress = if (total > 0L && currentDownloaded > 0L) {
-            ((currentDownloaded * 100L) / total).toInt().coerceIn(0, 99)
-        } else {
-            0
+        val fileLen = if (file.exists()) file.length() else 0L
+
+        val currentDownloaded = when {
+            fileLen > 0L -> fileLen
+            live != null && live.downloadedBytes > 0L -> live.downloadedBytes
+            item.downloadedBytes > 0L -> item.downloadedBytes
+            else -> 0L
         }
+
+        val total = when {
+            live != null && live.totalBytes > 0L -> live.totalBytes
+            item.totalBytes > 0L -> item.totalBytes
+            else -> 0L
+        }
+
+        val progress = when {
+            total > 0L && currentDownloaded > 0L -> ((currentDownloaded * 100L) / total).toInt().coerceIn(0, 99)
+            live != null && live.progress > 0 -> live.progress
+            item.progress > 0 -> item.progress
+            else -> 0
+        }
+
+        clearLiveProgress(item.id)
 
         val pausedItem = item.copy(
             status = DownloadStatus.PAUSED,
@@ -407,28 +439,38 @@ class DownloadHelper(
         }
     }
 
-    fun syncConcurrentDownloadsLimit(count: Int) {
-        checkAndStartNextPending()
-    }
-
-    fun checkAndStartNextPending() {
+    fun syncConcurrentDownloadsLimit(newLimit: Int? = null) {
         scope.launch(Dispatchers.IO) {
             queueMutex.withLock {
+                val limit = (newLimit ?: preferences.maxConcurrentDownloads.first()).coerceIn(1, 5)
                 val currentList = _liveDownloadsState.value
-                val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
-                val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
+                val activeDownloads = currentList.filter { it.status == DownloadStatus.DOWNLOADING }
 
-                if (activeCount < maxLimit) {
-                    val nextPending = currentList.find { it.status == DownloadStatus.PENDING }
-                    if (nextPending != null) {
-                        val starting = nextPending.copy(status = DownloadStatus.DOWNLOADING)
-                        updateItemState(starting)
-                        preferences.addOrUpdateDownload(starting)
-                        DownloadForegroundService.startDownload(context, starting)
+                if (activeDownloads.size > limit) {
+                    // Lowered limit: gracefully pause excess downloads in real-time and return to PENDING
+                    val toPause = activeDownloads.takeLast(activeDownloads.size - limit)
+                    for (item in toPause) {
+                        pauseDownload(item)
+                        val pendingItem = item.copy(status = DownloadStatus.PENDING)
+                        updateItemState(pendingItem)
+                        preferences.addOrUpdateDownload(pendingItem)
+                    }
+                } else if (activeDownloads.size < limit) {
+                    // Raised limit: start as many pending downloads as slots are open
+                    var slotsAvailable = limit - activeDownloads.size
+                    val pendingDownloads = currentList.filter { it.status == DownloadStatus.PENDING }
+                    for (pending in pendingDownloads) {
+                        if (slotsAvailable <= 0) break
+                        forceStartPendingDownload(pending)
+                        slotsAvailable--
                     }
                 }
             }
         }
+    }
+
+    fun checkAndStartNextPending() {
+        syncConcurrentDownloadsLimit()
     }
 
     private fun resolveDestinationFile(title: String, year: String, savedFolderPath: String): File {

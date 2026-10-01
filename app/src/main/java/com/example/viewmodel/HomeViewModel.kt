@@ -542,13 +542,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val cw = _uiState.value.continueWatching
             if (cw != null && cw.videoUrl == pelicula.safeVideoUrl) cw.positionMs else 0L
         }
+        val tag = if (pelicula.isVideo) pelicula.youtuberName else pelicula.safeYear
         _uiState.update {
             it.copy(
                 activePlayback = PlaybackTarget(
                     videoUrl = pelicula.safeVideoUrl,
                     title = pelicula.safeTitle,
                     coverUrl = pelicula.safeCoverUrl,
-                    year = pelicula.safeYear,
+                    year = tag,
                     type = pelicula.tp ?: "pl",
                     initialPositionMs = savedPos
                 )

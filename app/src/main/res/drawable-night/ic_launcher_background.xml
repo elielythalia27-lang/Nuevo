@@ -4,8 +4,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Solid Dark Background matching dark theme surface -->
+    <!-- Pure solid white launcher background in both day and night mode -->
     <path
-        android:fillColor="#131D31"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M0,0h108v108h-108z" />
 </vector>

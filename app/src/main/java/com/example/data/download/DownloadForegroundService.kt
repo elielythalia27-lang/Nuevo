@@ -231,20 +231,33 @@ class DownloadForegroundService : Service() {
     private fun handlePauseDownload(downloadId: String) {
         val helper = DownloadHelper.getActiveInstance(applicationContext)
         val job = activeJobs.remove(downloadId)
+        val live = helper.getLiveProgress(downloadId)
         val item = activeItems.remove(downloadId) ?: helper.getItem(downloadId)
 
         job?.cancel()
-        helper.clearLiveProgress(downloadId)
 
         if (item != null) {
             val file = File(item.localFilePath)
-            val downloadedBytes = if (file.exists()) file.length() else item.downloadedBytes
-            val totalBytes = item.totalBytes.coerceAtLeast(0L)
-            val progress = if (totalBytes > 0L && downloadedBytes > 0L) {
-                ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99)
-            } else {
-                0
+            val fileLen = if (file.exists()) file.length() else 0L
+            val downloadedBytes = when {
+                fileLen > 0L -> fileLen
+                live != null && live.downloadedBytes > 0L -> live.downloadedBytes
+                item.downloadedBytes > 0L -> item.downloadedBytes
+                else -> 0L
             }
+            val totalBytes = when {
+                live != null && live.totalBytes > 0L -> live.totalBytes
+                item.totalBytes > 0L -> item.totalBytes
+                else -> 0L
+            }
+            val progress = when {
+                totalBytes > 0L && downloadedBytes > 0L -> ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99)
+                live != null && live.progress > 0 -> live.progress
+                item.progress > 0 -> item.progress
+                else -> 0
+            }
+
+            helper.clearLiveProgress(downloadId)
 
             val pausedItem = item.copy(
                 status = DownloadStatus.PAUSED,
@@ -267,8 +280,9 @@ class DownloadForegroundService : Service() {
                     notificationManager.notify(NotificationUtils.getNotificationId(downloadId), notif)
                 } catch (_: Exception) {}
             }
+        } else {
+            helper.clearLiveProgress(downloadId)
         }
-
         checkServiceLiveness()
     }
 

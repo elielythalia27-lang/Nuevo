@@ -116,10 +116,10 @@ fun PlayerScreen(
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val coroutineScope = rememberCoroutineScope()
 
-    // Title display: clean, single title without duplicating year or channel
+    // Title display: clean, single title showing channel or year in parentheses
     val displayTitle = remember(title, year) {
         val y = year.trim()
-        if (y.isNotBlank() && !title.contains(y)) {
+        if (y.isNotBlank() && !title.contains("($y)")) {
             "$title ($y)"
         } else {
             title

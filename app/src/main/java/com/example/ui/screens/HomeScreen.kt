@@ -353,9 +353,7 @@ fun HomeScreen(
                             PeliculaListSkeleton(
                                 isDark = isDark,
                                 itemCount = 6,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                modifier = Modifier.fillMaxSize()
                             )
                         } else {
                             val cols = if (uiState.catalogLayoutMode == "GRID_3") 3 else 2
@@ -363,9 +361,7 @@ fun HomeScreen(
                                 columnsCount = cols,
                                 isDark = isDark,
                                 itemCount = if (cols == 3) 9 else 6,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                     }

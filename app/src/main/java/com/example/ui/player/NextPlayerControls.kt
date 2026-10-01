@@ -1,14 +1,21 @@
 package com.example.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,8 +48,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,8 +59,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -332,62 +342,29 @@ fun NextPlayerBottomBar(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Seekbar with custom buffered track underneath & MX Player style preview
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Background track
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color.White.copy(alpha = 0.25f))
-                ) {
-                    // Buffer track
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(bufferedProgress)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color.White.copy(alpha = 0.45f))
-                    )
+            // Clean YouTube/MX Player style Seekbar with zero dots at the end!
+            NextPlayerProgressBar(
+                progress = displayProgress,
+                bufferedProgress = bufferedProgress,
+                enabled = enabled,
+                onSeekStart = {
+                    if (scrubbingProgress == null) {
+                        onSeekStart()
+                    }
+                },
+                onSeekProgress = { frac ->
+                    scrubbingProgress = frac
+                },
+                onSeekEnd = {
+                    val finalScrub = scrubbingProgress
+                    if (finalScrub != null) {
+                        val targetMs = (finalScrub * totalDur).toLong().coerceIn(0L, totalDur)
+                        onSeek(targetMs)
+                    }
+                    scrubbingProgress = null
+                    onSeekEnd()
                 }
-
-                // Interactive Slider with MX Player smooth touch target
-                Slider(
-                    value = displayProgress,
-                    enabled = enabled,
-                    onValueChange = { frac ->
-                        if (scrubbingProgress == null) {
-                            onSeekStart()
-                        }
-                        scrubbingProgress = frac
-                    },
-                    onValueChangeFinished = {
-                        val finalScrub = scrubbingProgress
-                        if (finalScrub != null) {
-                            val targetMs = (finalScrub * totalDur).toLong().coerceIn(0L, totalDur)
-                            onSeek(targetMs)
-                        }
-                        scrubbingProgress = null
-                        onSeekEnd()
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = Color.Transparent,
-                        activeTickColor = Color.Transparent,
-                        inactiveTickColor = Color.Transparent,
-                        disabledThumbColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                        disabledActiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            )
 
             // Bottom row: Timestamps + Secondary controls
             Row(
@@ -556,6 +533,145 @@ fun NextPlayerInitialLoadingOverlay(
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 13.5.sp
             )
+        }
+    }
+}
+
+/**
+ * Custom ultra-sleek Video Progress Bar.
+ * Completely eliminates the Material 3 Slider stop-indicator dots and clunkiness.
+ */
+@Composable
+fun NextPlayerProgressBar(
+    progress: Float,
+    bufferedProgress: Float,
+    enabled: Boolean,
+    onSeekStart: () -> Unit,
+    onSeekProgress: (Float) -> Unit,
+    onSeekEnd: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isDragging by remember { mutableStateOf(false) }
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    val trackHeight by animateDpAsState(
+        targetValue = if (isDragging) 6.dp else 4.dp,
+        animationSpec = tween(150),
+        label = "track_h"
+    )
+
+    val thumbRadius by animateDpAsState(
+        targetValue = if (isDragging) 8.dp else 6.dp,
+        animationSpec = tween(150),
+        label = "thumb_r"
+    )
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(38.dp)
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures(
+                    onPress = { offset ->
+                        isDragging = true
+                        onSeekStart()
+                        val frac = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        onSeekProgress(frac)
+                        tryAwaitRelease()
+                        isDragging = false
+                        onSeekEnd()
+                    }
+                )
+            }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        isDragging = true
+                        onSeekStart()
+                        val frac = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        onSeekProgress(frac)
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        val frac = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        onSeekProgress(frac)
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        onSeekEnd()
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        onSeekEnd()
+                    }
+                )
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        val density = LocalDensity.current
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(38.dp)
+        ) {
+            val centerY = size.height / 2f
+            val hPx = with(density) { trackHeight.toPx() }
+            val radiusPx = with(density) { thumbRadius.toPx() }
+
+            // 1. Inactive background track (full width)
+            drawRoundRect(
+                color = Color.White.copy(alpha = 0.22f),
+                topLeft = Offset(0f, centerY - hPx / 2f),
+                size = Size(size.width, hPx),
+                cornerRadius = CornerRadius(hPx / 2f, hPx / 2f)
+            )
+
+            // 2. Buffered track
+            if (bufferedProgress > 0f) {
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.45f),
+                    topLeft = Offset(0f, centerY - hPx / 2f),
+                    size = Size(size.width * bufferedProgress.coerceIn(0f, 1f), hPx),
+                    cornerRadius = CornerRadius(hPx / 2f, hPx / 2f)
+                )
+            }
+
+            // 3. Active played track
+            val playedWidth = (size.width * progress.coerceIn(0f, 1f)).coerceIn(0f, size.width)
+            if (playedWidth > 0f) {
+                drawRoundRect(
+                    color = primaryColor,
+                    topLeft = Offset(0f, centerY - hPx / 2f),
+                    size = Size(playedWidth, hPx),
+                    cornerRadius = CornerRadius(hPx / 2f, hPx / 2f)
+                )
+            }
+
+            // 4. Scrubber Thumb (Zero dots at the end! Only at the exact current position!)
+            val thumbCenterX = playedWidth.coerceIn(radiusPx, size.width - radiusPx)
+            // Outer subtle shadow
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.35f),
+                radius = radiusPx + with(density) { 1.5.dp.toPx() },
+                center = Offset(thumbCenterX, centerY)
+            )
+            // Primary Thumb
+            drawCircle(
+                color = primaryColor,
+                radius = radiusPx,
+                center = Offset(thumbCenterX, centerY)
+            )
+            // Crisp White Inner Dot
+            if (isDragging) {
+                drawCircle(
+                    color = Color.White,
+                    radius = radiusPx * 0.45f,
+                    center = Offset(thumbCenterX, centerY)
+                )
+            }
         }
     }
 }
