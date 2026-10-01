@@ -195,6 +195,17 @@ class MainActivity : ComponentActivity() {
                         ThemeMode.LIGHT -> false
                     }
 
+                    val activity = context as? Activity
+                    if (activity != null) {
+                        val currentUiMode = activity.resources.configuration.uiMode
+                        val newUi = when (newMode) {
+                            ThemeMode.DARK -> (currentUiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_YES
+                            ThemeMode.LIGHT -> (currentUiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_NO
+                            ThemeMode.SYSTEM -> currentUiMode
+                        }
+                        activity.resources.configuration.uiMode = newUi
+                    }
+
                     homeViewModel.setThemeMode(newMode, willBeDark)
                 }
             }
@@ -329,13 +340,18 @@ fun MainAppNavigation(
                 var lastSettledPage by remember { mutableIntStateOf(pagerState.settledPage) }
 
                 val density = LocalDensity.current
-                val barBehavior = remember { BottomBarScrollBehavior(with(density) { 10.dp.toPx() }) }
+                val barBehavior = remember { BottomBarScrollBehavior(with(density) { 24.dp.toPx() }) }
 
-                LaunchedEffect(pagerState.settledPage, pagerState.isScrollInProgress) {
-                    if (!pagerState.isScrollInProgress && pagerState.settledPage != lastSettledPage) {
-                        lastSettledPage = pagerState.settledPage
+                // Synchronize page switching with bottom navigation visibility
+                LaunchedEffect(pagerState.isScrollInProgress) {
+                    barBehavior.isChangingPage = pagerState.isScrollInProgress
+                    if (pagerState.isScrollInProgress) {
                         barBehavior.show()
                     }
+                }
+
+                LaunchedEffect(pagerState.currentPage, pagerState.settledPage, pagerState.targetPage) {
+                    barBehavior.show()
                 }
 
                 BackHandler {
@@ -484,7 +500,7 @@ fun MainAppNavigation(
 
                     // Floating Modern Navigation Pill Bar over the content
                     AppBottomNav(
-                        currentPage = pagerState.settledPage,
+                        currentPage = pagerState.targetPage,
                         onNavigate = { targetPage ->
                             barBehavior.show()
                             coroutineScope.launch {

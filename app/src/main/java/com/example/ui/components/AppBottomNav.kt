@@ -101,13 +101,19 @@ class BottomBarScrollBehavior(private val thresholdPx: Float) : NestedScrollConn
         private set
     // La lista de la página actual está en su final
     var atEnd by mutableStateOf(false)
+    var isChangingPage by mutableStateOf(false)
     private var accumulated = 0f
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        // While changing pages or horizontal gesture, NEVER hide the bar
+        if (isChangingPage) {
+            if (!isVisible) show()
+            return Offset.Zero
+        }
         val dx = available.x
         val dy = available.y
         // Ignorar por completo gestos horizontales o sin componente vertical
-        if (dy == 0f || abs(dx) > abs(dy)) return Offset.Zero
+        if (dy == 0f || abs(dx) > abs(dy) * 0.75f) return Offset.Zero
         // Mientras la lista esté en el final, seguir empujando hacia abajo no debe ocultar la barra
         if (dy < 0f && atEnd) return Offset.Zero
         // Si cambia la dirección, reiniciar el acumulado
@@ -323,8 +329,8 @@ fun AppBottomNav(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(66.dp)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .height(68.dp)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -367,7 +373,6 @@ fun AppBottomNav(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(20.dp))
                             .clickable(
                                 interactionSource = interactionSource,
                                 indication = null
@@ -385,7 +390,7 @@ fun AppBottomNav(
                             Box(
                                 modifier = Modifier
                                     .width(58.dp)
-                                    .height(30.dp),
+                                    .height(32.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 // Background pill container (visible when selected)
@@ -419,22 +424,22 @@ fun AppBottomNav(
                                             label = "downloads_badge_scale"
                                         )
 
-                                        // Badge gentle floating bobbing & breathing pulse matching empty state lists
+                                        // Badge gentle floating bobbing & breathing pulse matching empty state lists exactly
                                         val badgeInfiniteTransition = rememberInfiniteTransition(label = "badge_empty_style_pulse")
                                         val badgePulseScale by badgeInfiniteTransition.animateFloat(
-                                            initialValue = 0.92f,
-                                            targetValue = 1.10f,
+                                            initialValue = 0.94f,
+                                            targetValue = 1.08f,
                                             animationSpec = infiniteRepeatable(
-                                                animation = tween(1600, easing = FastOutSlowInEasing),
+                                                animation = tween(1800, easing = FastOutSlowInEasing),
                                                 repeatMode = RepeatMode.Reverse
                                             ),
                                             label = "badge_pulse_scale"
                                         )
                                         val badgeFloatY by badgeInfiniteTransition.animateFloat(
-                                            initialValue = -1.5f,
-                                            targetValue = 1.5f,
+                                            initialValue = -5f,
+                                            targetValue = 5f,
                                             animationSpec = infiniteRepeatable(
-                                                animation = tween(2000, easing = FastOutSlowInEasing),
+                                                animation = tween(2400, easing = FastOutSlowInEasing),
                                                 repeatMode = RepeatMode.Reverse
                                             ),
                                             label = "badge_float_y"
@@ -447,12 +452,13 @@ fun AppBottomNav(
                                                         containerColor = activeColor,
                                                         contentColor = activeColor.contrastingTextColor(),
                                                         modifier = Modifier
-                                                            .offset(x = 2.dp, y = (-2).dp)
+                                                            .offset(x = 4.dp, y = (-4).dp)
                                                             .graphicsLayer {
                                                                 scaleX = badgeScale * badgePulseScale
                                                                 scaleY = badgeScale * badgePulseScale
                                                                 translationY = badgeFloatY
                                                                 alpha = badgeScale.coerceIn(0f, 1f)
+                                                                clip = false
                                                             }
                                                     ) {
                                                         AnimatedContent(
@@ -466,10 +472,11 @@ fun AppBottomNav(
                                                             val displayCount = if (count > 99) "99+" else "$count"
                                                             Text(
                                                                 text = displayCount,
-                                                                fontSize = 9.5.sp,
+                                                                fontSize = 10.sp,
                                                                 fontWeight = FontWeight.Bold,
-                                                                lineHeight = 11.sp,
-                                                                textAlign = TextAlign.Center
+                                                                lineHeight = 12.sp,
+                                                                textAlign = TextAlign.Center,
+                                                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
                                                             )
                                                         }
                                                     }

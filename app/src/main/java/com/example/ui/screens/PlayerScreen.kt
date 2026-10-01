@@ -343,9 +343,9 @@ fun PlayerScreen(
         } catch (_: Exception) {}
     }
 
-    // Auto-hide controls timer (3.5 seconds)
-    LaunchedEffect(areControlsVisible, lastInteractionTime, isPlaying, isScreenLocked) {
-        if (areControlsVisible && isPlaying && !isScreenLocked) {
+    // Auto-hide controls timer (3.5 seconds) - paused during seekbar dragging
+    LaunchedEffect(areControlsVisible, lastInteractionTime, isPlaying, isScreenLocked, isDraggingSlider) {
+        if (areControlsVisible && isPlaying && !isScreenLocked && !isDraggingSlider) {
             delay(3500L)
             areControlsVisible = false
         }
@@ -832,11 +832,14 @@ fun PlayerScreen(
             }
 
             // NextPlayer Main Controls (Top Bar, Center Play/Pause, Bottom Bar)
+            val isActivityInPip = activity?.isInPictureInPictureMode == true
             AnimatedVisibility(
-                visible = hasFirstFrameRendered && areControlsVisible && !isScreenLocked && !isBuffering,
+                visible = hasFirstFrameRendered && areControlsVisible && !isScreenLocked && !isBuffering && !isActivityInPip,
                 enter = fadeIn(tween(180)),
                 exit = fadeOut(tween(220))
             ) {
+                val controlsEnabled = hasFirstFrameRendered && !isBuffering && playbackError == null
+
                 Box(modifier = Modifier.fillMaxSize()) {
                     // Top Bar
                     NextPlayerTopBar(
@@ -880,6 +883,7 @@ fun PlayerScreen(
                     // Center Controls
                     NextPlayerCenterControls(
                         isPlaying = isPlaying,
+                        enabled = controlsEnabled,
                         onPlayPause = {
                             if (exoPlayer.isPlaying) {
                                 exoPlayer.pause()
@@ -910,9 +914,18 @@ fun PlayerScreen(
                         durationMs = durationMs,
                         isLandscape = isLandscape,
                         isPiPSupported = true,
+                        enabled = controlsEnabled,
+                        onSeekStart = {
+                            isDraggingSlider = true
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
                         onSeek = { targetMs ->
                             exoPlayer.seekTo(targetMs)
                             currentPositionMs = targetMs
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
+                        onSeekEnd = {
+                            isDraggingSlider = false
                             lastInteractionTime = System.currentTimeMillis()
                         },
                         onToggleOrientation = {
@@ -926,6 +939,12 @@ fun PlayerScreen(
                             lastInteractionTime = System.currentTimeMillis()
                         },
                         onEnterPiP = {
+                            // Immediately hide controls before PiP transitions so minimized window is 100% clean
+                            areControlsVisible = false
+                            showVolumeHud = false
+                            showBrightnessHud = false
+                            doubleTapFeedback = null
+                            isSeekingHorizontal = false
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                                 try {
                                     val params = android.app.PictureInPictureParams.Builder().build()

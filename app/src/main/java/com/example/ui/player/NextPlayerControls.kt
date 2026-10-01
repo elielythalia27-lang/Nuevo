@@ -46,9 +46,13 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -214,19 +218,21 @@ fun NextPlayerTopBar(
 @Composable
 fun NextPlayerCenterControls(
     isPlaying: Boolean,
+    enabled: Boolean = true,
     onPlayPause: () -> Unit,
     onRewind10: () -> Unit,
     onForward10: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.alpha(if (enabled) 1f else 0.45f),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(40.dp)
     ) {
         // Rewind 10s
         Surface(
-            onClick = onRewind10,
+            onClick = { if (enabled) onRewind10() },
+            enabled = enabled,
             shape = CircleShape,
             color = Color.Black.copy(alpha = 0.50f),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
@@ -244,7 +250,8 @@ fun NextPlayerCenterControls(
 
         // Center Large Play/Pause (64dp)
         Surface(
-            onClick = onPlayPause,
+            onClick = { if (enabled) onPlayPause() },
+            enabled = enabled,
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primary,
             shadowElevation = 8.dp,
@@ -262,7 +269,8 @@ fun NextPlayerCenterControls(
 
         // Forward 10s
         Surface(
-            onClick = onForward10,
+            onClick = { if (enabled) onForward10() },
+            enabled = enabled,
             shape = CircleShape,
             color = Color.Black.copy(alpha = 0.50f),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
@@ -291,13 +299,19 @@ fun NextPlayerBottomBar(
     durationMs: Long,
     isLandscape: Boolean,
     isPiPSupported: Boolean,
+    enabled: Boolean = true,
+    onSeekStart: () -> Unit = {},
     onSeek: (Long) -> Unit,
+    onSeekEnd: () -> Unit = {},
     onToggleOrientation: () -> Unit,
     onEnterPiP: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val totalDur = durationMs.coerceAtLeast(1L)
-    val currentProgress = (currentPositionMs.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
+    var scrubbingProgress by remember { mutableStateOf<Float?>(null) }
+    val currentScrub = scrubbingProgress
+    val displayProgress = currentScrub ?: (currentPositionMs.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
+    val displayTimeMs = if (currentScrub != null) (currentScrub * totalDur).toLong() else currentPositionMs
     val bufferedProgress = (bufferedPositionMs.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
 
     Box(
@@ -318,11 +332,11 @@ fun NextPlayerBottomBar(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Seekbar with custom buffered track underneath
+            // Seekbar with custom buffered track underneath & MX Player style preview
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(28.dp),
+                    .height(44.dp),
                 contentAlignment = Alignment.Center
             ) {
                 // Background track
@@ -343,19 +357,33 @@ fun NextPlayerBottomBar(
                     )
                 }
 
-                // Interactive Slider
+                // Interactive Slider with MX Player smooth touch target
                 Slider(
-                    value = currentProgress,
+                    value = displayProgress,
+                    enabled = enabled,
                     onValueChange = { frac ->
-                        val targetMs = (frac * totalDur).toLong().coerceIn(0L, totalDur)
-                        onSeek(targetMs)
+                        if (scrubbingProgress == null) {
+                            onSeekStart()
+                        }
+                        scrubbingProgress = frac
+                    },
+                    onValueChangeFinished = {
+                        val finalScrub = scrubbingProgress
+                        if (finalScrub != null) {
+                            val targetMs = (finalScrub * totalDur).toLong().coerceIn(0L, totalDur)
+                            onSeek(targetMs)
+                        }
+                        scrubbingProgress = null
+                        onSeekEnd()
                     },
                     colors = SliderDefaults.colors(
                         thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = Color.Transparent,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
                         inactiveTrackColor = Color.Transparent,
                         activeTickColor = Color.Transparent,
-                        inactiveTickColor = Color.Transparent
+                        inactiveTickColor = Color.Transparent,
+                        disabledThumbColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                        disabledActiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -367,14 +395,14 @@ fun NextPlayerBottomBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Timestamps: 00:12:45 / 01:30:00
+                // Timestamps: 00:12:45 / 01:30:00 (shows live scrubbing time while dragging)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = formatPlayerTime(currentPositionMs),
-                        color = Color.White,
+                        text = formatPlayerTime(displayTimeMs),
+                        color = if (scrubbingProgress != null) MaterialTheme.colorScheme.primary else Color.White,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace

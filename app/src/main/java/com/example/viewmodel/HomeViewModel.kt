@@ -132,16 +132,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Collect dark theme & theme mode
-        viewModelScope.launch {
-            repository.isDarkTheme.collectLatest { dark ->
-                _uiState.update { it.copy(isDarkTheme = dark) }
-            }
-        }
-
+        // Collect theme mode as single source of truth
         viewModelScope.launch {
             repository.themeMode.collectLatest { mode ->
-                _uiState.update { it.copy(themeMode = mode) }
+                val systemIsDark = (application.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+                val isDark = when (mode) {
+                    ThemeMode.DARK -> true
+                    ThemeMode.LIGHT -> false
+                    ThemeMode.SYSTEM -> systemIsDark
+                }
+                _uiState.update { it.copy(themeMode = mode, isDarkTheme = isDark) }
             }
         }
 

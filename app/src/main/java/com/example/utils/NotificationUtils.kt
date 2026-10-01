@@ -8,108 +8,92 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.os.Build
-import androidx.annotation.DrawableRes
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.data.download.DownloadActionReceiver
+import com.example.data.download.DownloadForegroundService
 import com.example.data.download.DownloadHelper
 import com.example.data.model.DownloadItem
 
 /**
- * Robust Notification Channel Utility Class for Android 8.0+ (API 26+)
- * with full backward compatibility down to Android 5.0 (API 21+).
- *
- * Categorizes notifications into dedicated channels:
- * - Download Progress (Low importance, ongoing, silent, grouped, zero vibration)
- * - Download Completed / Success (Default importance, vibration, badge, clickable action)
- * - Download Errors / Warnings (High importance, alert, vibration, badge)
- * - App Updates / General Notices (Default importance)
+ * Robust Notification Utility for Android 5.0 through Android 15.
+ * Features:
+ * - Dedicated low-importance channel for download progress (silent, no annoying vibrations or popups).
+ * - High-clarity IDM-style progress cards with Pause and Cancel quick actions.
+ * - Full Android 12+ PendingIntent immutability support.
+ * - Zero flickering on status bar icons and notifications.
  */
 object NotificationUtils {
 
-    // Notification Channel IDs
-    const val CHANNEL_PROGRESS_ID = "channel_download_progress_v5"
-    const val CHANNEL_SUCCESS_ID = "channel_download_success_v5"
-    const val CHANNEL_ERROR_ID = "channel_download_error_v5"
-    const val CHANNEL_NOTICES_ID = "channel_app_notices_v5"
+    const val CHANNEL_PROGRESS_ID = "channel_download_progress_v6"
+    const val CHANNEL_SUCCESS_ID = "channel_download_success_v6"
+    const val CHANNEL_ERROR_ID = "channel_download_error_v6"
+    const val CHANNEL_NOTICES_ID = "channel_app_notices_v6"
 
-    // Grouping constants
     const val GROUP_DOWNLOADS = "com.downloadfree.GROUP_DOWNLOADS"
-    const val GROUP_ERRORS = "com.downloadfree.GROUP_ERRORS"
     const val SUMMARY_NOTIFICATION_ID = 69696
 
-    // Channel Groups (Android 8.0+)
     private const val GROUP_DOWNLOADS_ID = "group_download_management"
     private const val GROUP_SYSTEM_ID = "group_system_management"
 
-    /**
-     * Initializes all categorized notification channels and channel groups on Android 8.0+ (API 26+).
-     * On older Android versions, this method safely does nothing while ensuring compatibility properties.
-     */
     fun initNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
 
-            // 1. Create Channel Groups (organizes channels in Android Settings)
             val downloadsGroup = NotificationChannelGroup(GROUP_DOWNLOADS_ID, "Gestión de Descargas")
             val systemGroup = NotificationChannelGroup(GROUP_SYSTEM_ID, "Sistema y Avisos")
             notificationManager.createNotificationChannelGroups(listOf(downloadsGroup, systemGroup))
 
-            // 2. Channel: Download Progress (Low Importance, Silent, Lockscreen Public)
+            // Channel: Progress (Silent, Ongoing, Public lockscreen)
             val progressChannel = NotificationChannel(
                 CHANNEL_PROGRESS_ID,
                 "Progreso en tiempo real",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 group = GROUP_DOWNLOADS_ID
-                description = "Muestra la velocidad, tiempo restante y barra de descarga en curso"
+                description = "Velocidad, tiempo restante y barra de descarga interactiva"
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
-            // 3. Channel: Download Completed / Success (Default Importance with sound and badge)
+            // Channel: Completed (Default importance with notification sound/badge)
             val successChannel = NotificationChannel(
                 CHANNEL_SUCCESS_ID,
                 "Descargas completadas",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 group = GROUP_DOWNLOADS_ID
-                description = "Avisos cuando una película o video ha finalizado su descarga con éxito"
+                description = "Avisos al finalizar las descargas de películas y series"
                 setShowBadge(true)
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 150, 100, 150)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
-            // 4. Channel: Download Errors (High Importance for network drop or disk space issues)
+            // Channel: Errors & Alerts
             val errorChannel = NotificationChannel(
                 CHANNEL_ERROR_ID,
-                "Errores y alertas de descarga",
+                "Errores y alertas",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 group = GROUP_DOWNLOADS_ID
-                description = "Avisos importantes de errores de conexión, VPN o almacenamiento insuficiente"
+                description = "Alertas de conexión, VPN o almacenamiento"
                 setShowBadge(true)
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 250, 150, 250)
                 lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             }
 
-            // 5. Channel: General App Notices
+            // Channel: Notices
             val noticesChannel = NotificationChannel(
                 CHANNEL_NOTICES_ID,
-                "Avisos generales",
+                "Avisos de la app",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 group = GROUP_SYSTEM_ID
-                description = "Actualizaciones de catálogo y recordatorios generales"
                 setShowBadge(true)
             }
 
@@ -119,18 +103,12 @@ object NotificationUtils {
         }
     }
 
-    /**
-     * Creates a standard Builder with full Android API 21+ backwards compatibility
-     * (correctly sets priority, lockscreen visibility, sound & vibration on pre-Oreo).
-     */
     fun createCompatBuilder(
         context: Context,
-        channelId: String,
-        importance: Int = NotificationManagerCompat.IMPORTANCE_DEFAULT
+        channelId: String
     ): NotificationCompat.Builder {
         val builder = NotificationCompat.Builder(context, channelId)
 
-        // Backward compatibility for Android 7.1 and lower (API < 26)
         when (channelId) {
             CHANNEL_PROGRESS_ID -> {
                 builder.setPriority(NotificationCompat.PRIORITY_LOW)
@@ -156,9 +134,6 @@ object NotificationUtils {
         return builder
     }
 
-    /**
-     * Builds the interactive progress notification for an active download.
-     */
     fun buildProgressNotification(
         context: Context,
         item: DownloadItem,
@@ -174,14 +149,14 @@ object NotificationUtils {
             item.title
         }
 
-        val sizeStr = if (item.totalBytes > 0) {
+        val sizeStr = if (item.totalBytes > 0L) {
             "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
         } else {
             formatByteSize(item.downloadedBytes)
         }
 
-        val speedStr = if (speed > 0) formatByteSize(speed) + "/s" else "0 KB/s"
-        val etaStr = if (eta > 0) {
+        val speedStr = if (speed > 0L) formatByteSize(speed) + "/s" else "Conectando..."
+        val etaStr = if (eta > 0L) {
             val hours = eta / 3600
             val minutes = (eta % 3600) / 60
             val seconds = eta % 60
@@ -190,9 +165,18 @@ object NotificationUtils {
                 minutes > 0 -> "${minutes}m ${seconds}s restantes"
                 else -> "${seconds}s restantes"
             }
-        } else "Calculando tiempo..."
+        } else if (item.totalBytes > 0L) {
+            "Calculando tiempo..."
+        } else {
+            "Iniciando..."
+        }
 
-        val subtitle = "$progress% • $sizeStr • $speedStr • $etaStr"
+        val isIndeterminate = item.totalBytes <= 0L
+        val subtitle = if (isIndeterminate) {
+            "$sizeStr • $speedStr"
+        } else {
+            "$progress% • $sizeStr • $speedStr • $etaStr"
+        }
 
         return createCompatBuilder(context, CHANNEL_PROGRESS_ID)
             .setContentTitle("Descargando: $displayTitle")
@@ -200,7 +184,7 @@ object NotificationUtils {
             .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
             .setSmallIcon(R.drawable.ic_notification_download)
             .setColor(0xFF00897B.toInt())
-            .setProgress(100, progress, item.totalBytes <= 0)
+            .setProgress(100, if (isIndeterminate) 0 else progress, isIndeterminate)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .addAction(
                 R.drawable.ic_notification_pause,
@@ -208,7 +192,7 @@ object NotificationUtils {
                 createPausePendingIntent(context, item.id)
             )
             .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
+                R.drawable.ic_notification_cancel,
                 "Cancelar",
                 createCancelPendingIntent(context, item.id)
             )
@@ -223,9 +207,6 @@ object NotificationUtils {
             .build()
     }
 
-    /**
-     * Builds the paused download notification (interactive, with Resume & Cancel buttons).
-     */
     fun buildPausedNotification(
         context: Context,
         item: DownloadItem
@@ -238,7 +219,7 @@ object NotificationUtils {
             item.title
         }
 
-        val sizeInfo = if (item.totalBytes > 0) {
+        val sizeInfo = if (item.totalBytes > 0L) {
             "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
         } else {
             formatByteSize(item.downloadedBytes)
@@ -254,17 +235,17 @@ object NotificationUtils {
             .setProgress(100, item.progress, false)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .addAction(
-                R.drawable.ic_notification_download,
+                R.drawable.ic_notification_play,
                 "Reanudar",
                 createResumePendingIntent(context, item.id)
             )
             .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
+                R.drawable.ic_notification_cancel,
                 "Cancelar",
                 createCancelPendingIntent(context, item.id)
             )
             .setAutoCancel(false)
-            .setOngoing(true)
+            .setOngoing(false)
             .setShowWhen(false)
             .setWhen(0L)
             .setSortKey("download_${item.id}")
@@ -272,9 +253,6 @@ object NotificationUtils {
             .build()
     }
 
-    /**
-     * Builds the completed / success notification.
-     */
     fun buildCompletedNotification(
         context: Context,
         item: DownloadItem
@@ -302,9 +280,6 @@ object NotificationUtils {
             .build()
     }
 
-    /**
-     * Builds the error notification.
-     */
     fun buildErrorNotification(
         context: Context,
         item: DownloadItem,
@@ -317,35 +292,39 @@ object NotificationUtils {
         } else {
             item.title
         }
-        val subtitle = "$displayTitle: Conexión interrumpida (Progreso guardado)"
+        val subtitle = "$displayTitle: Detenido ($errorMessage)"
 
         return createCompatBuilder(context, CHANNEL_ERROR_ID)
             .setContentTitle("Descarga detenida")
             .setContentText(subtitle)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$errorMessage. El progreso ha sido guardado para reanudar."))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$displayTitle\n$errorMessage. Puedes reanudar cuando recuperes conexión."))
             .setSmallIcon(R.drawable.ic_notification_error)
             .setColor(0xFFEF4444.toInt())
             .setContentIntent(createOpenDownloadsPendingIntent(context))
+            .addAction(
+                R.drawable.ic_notification_play,
+                "Reintentar",
+                createResumePendingIntent(context, item.id)
+            )
+            .addAction(
+                R.drawable.ic_notification_cancel,
+                "Cancelar",
+                createCancelPendingIntent(context, item.id)
+            )
             .setAutoCancel(true)
             .setOngoing(false)
             .setCategory(NotificationCompat.CATEGORY_ERROR)
             .build()
     }
 
-    /**
-     * Builds the summary notification for foreground service grouping.
-     */
     fun buildSummaryNotification(context: Context): Notification {
         initNotificationChannels(context)
 
         return createCompatBuilder(context, CHANNEL_PROGRESS_ID)
             .setContentTitle("Download Free")
-            .setContentText("Servicio de descargas activo")
+            .setContentText("Servicio de descargas activo en segundo plano")
             .setSmallIcon(R.drawable.ic_notification_download)
             .setColor(0xFF00897B.toInt())
-            .setGroup(GROUP_DOWNLOADS)
-            .setGroupSummary(true)
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
@@ -354,7 +333,6 @@ object NotificationUtils {
             .build()
     }
 
-    // PendingIntent Builders with API 23+ FLAG_IMMUTABLE compatibility
     fun createOpenDownloadsPendingIntent(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -409,7 +387,7 @@ object NotificationUtils {
     }
 
     fun formatByteSize(bytes: Long): String {
-        if (bytes <= 0) return "0 B"
+        if (bytes <= 0L) return "0 B"
         val kb = bytes / 1024.0
         val mb = kb / 1024.0
         val gb = mb / 1024.0
@@ -421,5 +399,5 @@ object NotificationUtils {
         }
     }
 
-    fun getNotificationId(id: String): Int = id.hashCode()
+    fun getNotificationId(id: String): Int = (id.hashCode() and 0x7FFFFFFF).coerceAtLeast(1000)
 }

@@ -269,7 +269,7 @@ fun AjustesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Section 1: Apariencia y Personalización
@@ -820,6 +820,10 @@ fun AjustesScreen(
                     }
                 }
             }
+
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+            }
         }
 
         if (showColorPickerDialog) {
@@ -1193,8 +1197,8 @@ private fun ThemeColorPickerDialog(
         initialFirstVisibleItemIndex = initialScrollIndex
     )
 
-    // Ensure the dialog immediately displays the selected color upon opening
-    LaunchedEffect(selectedRowIndex) {
+    // Ensure the dialog smoothly displays the selected color upon initial opening without jumping on taps
+    LaunchedEffect(Unit) {
         listState.scrollToItem((selectedRowIndex - 1).coerceAtLeast(0))
     }
 
@@ -1361,7 +1365,6 @@ private fun ThemeColorPickerDialog(
                                         )
                                         .clickable {
                                             onColorSelected(preset)
-                                            onDismiss()
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {

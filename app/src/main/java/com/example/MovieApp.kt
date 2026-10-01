@@ -26,6 +26,12 @@ class MovieApp : Application(), ImageLoaderFactory {
             else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
         }
         AppCompatDelegate.setDefaultNightMode(nightMode)
+        val newUiMode = when (nightMode) {
+            AppCompatDelegate.MODE_NIGHT_YES -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or android.content.res.Configuration.UI_MODE_NIGHT_YES
+            AppCompatDelegate.MODE_NIGHT_NO -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or android.content.res.Configuration.UI_MODE_NIGHT_NO
+            else -> resources.configuration.uiMode
+        }
+        resources.configuration.uiMode = newUiMode
     }
 
     override fun newImageLoader(): ImageLoader {

@@ -1,22 +1,8 @@
 package com.example.data.download
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.os.Environment
-import androidx.core.app.NotificationCompat
-import androidx.work.Constraints
-import androidx.work.Data
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
-import androidx.work.WorkManager
-import com.example.MainActivity
-import com.example.R
 import com.example.data.local.PeliculaPreferences
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
@@ -52,6 +38,12 @@ data class LiveProgressUpdate(
     val etaSeconds: Long
 )
 
+/**
+ * DownloadHelper:
+ * Reactive mediator and Single Source of Truth for the UI and Foreground Service.
+ * Maintains zero-latency in-memory state flow for Jetpack Compose, persists to DataStore,
+ * and delegates actual network execution to DownloadForegroundService.
+ */
 class DownloadHelper(
     private val context: Context,
     private val preferences: PeliculaPreferences,
@@ -59,35 +51,18 @@ class DownloadHelper(
 ) {
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val workManager = WorkManager.getInstance(context)
-    private val itemMutexes = ConcurrentHashMap<String, Mutex>()
     private val queueMutex = Mutex()
     private val liveProgressMap = ConcurrentHashMap<String, LiveProgressUpdate>()
 
-    // In-memory Single Source of Truth for 0ms latency, zero flicker UI and notifications
+    // In-memory Single Source of Truth for 0ms latency UI updates
     private val _liveDownloadsState = MutableStateFlow<List<DownloadItem>>(emptyList())
     val liveDownloadsState: StateFlow<List<DownloadItem>> = _liveDownloadsState.asStateFlow()
 
-    private fun getMutexFor(id: String): Mutex {
-        return itemMutexes.computeIfAbsent(id) { Mutex() }
-    }
-
     companion object {
-        const val CHANNEL_PROGRESS_ID = NotificationUtils.CHANNEL_PROGRESS_ID
-        const val CHANNEL_SUCCESS_ID = NotificationUtils.CHANNEL_SUCCESS_ID
-        const val CHANNEL_ERROR_ID = NotificationUtils.CHANNEL_ERROR_ID
-        const val CHANNEL_NOTICES_ID = NotificationUtils.CHANNEL_NOTICES_ID
-
-        // Backward-compatible alias
-        const val CHANNEL_ALERTS_ID = NotificationUtils.CHANNEL_SUCCESS_ID
-
         const val ACTION_PAUSE_DOWNLOAD = "com.downloadfree.ACTION_PAUSE_DOWNLOAD"
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
-        const val GROUP_KEY_DOWNLOADS = NotificationUtils.GROUP_DOWNLOADS
-        const val SUMMARY_NOTIFICATION_ID = NotificationUtils.SUMMARY_NOTIFICATION_ID
-        const val FOREGROUND_SERVICE_NOTIFICATION_ID = 88888
 
         @Volatile
         private var instance: DownloadHelper? = null
@@ -105,9 +80,9 @@ class DownloadHelper(
 
     init {
         instance = this
-        createNotificationChannels()
+        NotificationUtils.initNotificationChannels(context)
 
-        // Sync initial persisted list from DataStore and maintain single source of truth
+        // Load persisted downloads from DataStore on startup
         scope.launch(Dispatchers.IO) {
             val initial = preferences.downloads.first()
             _liveDownloadsState.value = initial
@@ -117,7 +92,6 @@ class DownloadHelper(
                     if (currentMemList.isEmpty()) {
                         storedList
                     } else {
-                        // Merge stored list while preserving in-memory immediate user state mutations
                         storedList.map { storedItem ->
                             val memItem = currentMemList.find { it.id == storedItem.id }
                             if (memItem != null) {
@@ -128,7 +102,7 @@ class DownloadHelper(
                                         if (live != null) {
                                             memItem.copy(
                                                 downloadedBytes = live.downloadedBytes,
-                                                totalBytes = if (live.totalBytes > 0) live.totalBytes else memItem.totalBytes,
+                                                totalBytes = if (live.totalBytes > 0L) live.totalBytes else memItem.totalBytes,
                                                 progress = live.progress,
                                                 speedBytesPerSec = live.speedBytesPerSec,
                                                 etaSeconds = live.etaSeconds
@@ -148,11 +122,11 @@ class DownloadHelper(
             }
         }
 
-        // Strict 700ms Coroutine delay strategy for UI progress rendering
+        // Throttle UI flow collection and periodic persistence
         scope.launch(Dispatchers.Default) {
             var lastDbPersistTime = 0L
             while (isActive) {
-                delay(700L) // Enforce strict 700ms UI update cycle
+                delay(800L)
                 if (liveProgressMap.isNotEmpty()) {
                     val currentList = _liveDownloadsState.value
                     if (currentList.isNotEmpty()) {
@@ -163,7 +137,7 @@ class DownloadHelper(
                                 hasChanges = true
                                 item.copy(
                                     downloadedBytes = live.downloadedBytes,
-                                    totalBytes = if (live.totalBytes > 0) live.totalBytes else item.totalBytes,
+                                    totalBytes = if (live.totalBytes > 0L) live.totalBytes else item.totalBytes,
                                     progress = live.progress,
                                     speedBytesPerSec = live.speedBytesPerSec,
                                     etaSeconds = live.etaSeconds
@@ -176,8 +150,7 @@ class DownloadHelper(
                         if (hasChanges) {
                             _liveDownloadsState.value = updatedList
                             val now = System.currentTimeMillis()
-                            // Throttle disk I/O to avoid redundant writes while UI renders smoothly every 700ms
-                            if (now - lastDbPersistTime >= 1400L) {
+                            if (now - lastDbPersistTime >= 1600L) {
                                 lastDbPersistTime = now
                                 preferences.updateMultipleDownloads(
                                     updatedList.filter { it.status == DownloadStatus.DOWNLOADING }
@@ -189,6 +162,7 @@ class DownloadHelper(
             }
         }
 
+        // Observe max concurrency settings changes
         scope.launch(Dispatchers.IO) {
             preferences.maxConcurrentDownloads.collect {
                 checkAndStartNextPending()
@@ -196,24 +170,39 @@ class DownloadHelper(
         }
     }
 
+    fun getItem(id: String): DownloadItem? {
+        return _liveDownloadsState.value.find { it.id == id }
+    }
+
     fun isPaused(id: String): Boolean {
         return _liveDownloadsState.value.find { it.id == id }?.status == DownloadStatus.PAUSED
     }
 
     fun isCancelled(id: String): Boolean {
-        val item = _liveDownloadsState.value.find { it.id == id }
-        return item == null || item.status == DownloadStatus.CANCELLED
+        return _liveDownloadsState.value.none { it.id == id }
     }
 
-    fun getItem(id: String): DownloadItem? {
-        return _liveDownloadsState.value.find { it.id == id }
+    fun updateItemState(item: DownloadItem) {
+        _liveDownloadsState.update { list ->
+            val exists = list.any { it.id == item.id }
+            if (exists) {
+                list.map { if (it.id == item.id) item else it }
+            } else {
+                list + item
+            }
+        }
+    }
+
+    fun removeItemFromState(id: String) {
+        clearLiveProgress(id)
+        _liveDownloadsState.update { list ->
+            list.filterNot { it.id == id }
+        }
     }
 
     fun markCompleted(completedItem: DownloadItem) {
         clearLiveProgress(completedItem.id)
-        _liveDownloadsState.update { list ->
-            list.map { if (it.id == completedItem.id) completedItem else it }
-        }
+        updateItemState(completedItem)
         scope.launch(Dispatchers.IO) {
             preferences.addOrUpdateDownload(completedItem)
             checkAndStartNextPending()
@@ -243,221 +232,88 @@ class DownloadHelper(
         DownloadBandwidthCoordinator.unregisterStream(downloadId)
     }
 
-    private fun createNotificationChannels() {
-        NotificationUtils.initNotificationChannels(context)
-    }
-
-    fun getWorkName(downloadId: String): String = "download_work_$downloadId"
-
-    private fun getNotificationId(id: String): Int = id.hashCode()
-
-    private fun resolveDestinationFile(item: DownloadItem, savedFolderPath: String): File {
-        if (item.localFilePath.isNotBlank()) {
-            val f = File(item.localFilePath)
-            if (f.exists() || f.parentFile?.exists() == true) {
-                return f
-            }
-        }
-        val cleanTitle = item.title
-            .replace(Regex("""[\\/:*?"<>|\x00-\x1F]"""), "")
-            .replace(Regex("""\s+"""), " ")
-            .trim(' ', '.')
-            .ifBlank { "Video" }
-        val fileName = "$cleanTitle.mp4"
-        val safeAppDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-
-        val targetDir = if (savedFolderPath.isNotBlank()) {
-            val customDir = File(savedFolderPath)
-            if ((customDir.exists() || customDir.mkdirs()) && customDir.canWrite()) {
-                customDir
-            } else {
-                safeAppDir
-            }
-        } else {
-            safeAppDir
-        }
-        if (!targetDir.exists()) {
-            targetDir.mkdirs()
-        }
-        return File(targetDir, fileName)
-    }
-
-    fun startDownload(pelicula: Pelicula) {
-        val videoUrl = pelicula.safeVideoUrl
-        if (videoUrl.isEmpty()) {
-            AppToastManager.show("Enlace multimedia no válido", ToastType.ERROR)
+    fun startDownload(pelicula: Pelicula, chosenQualityUrl: String? = null) {
+        val videoUrl = chosenQualityUrl ?: pelicula.safeVideoUrl
+        if (videoUrl.isBlank()) {
+            AppToastManager.show("URL de video no disponible", ToastType.ERROR)
             return
         }
 
         if (VpnProxyDetector.isVpnOrProxyActive(context)) {
-            AppToastManager.show("Las transferencias no están permitidas con VPN o Proxy activo", ToastType.WARNING)
+            AppToastManager.show("Desactiva la VPN o Proxy para iniciar descargas", ToastType.WARNING)
             return
         }
 
         if (!NetworkUtils.isConnected(context)) {
-            AppToastManager.show("Sin conexión a internet. Conéctate a una red para descargar.", ToastType.WARNING)
-            return
-        }
-
-        val isWifiOnlySync = try { kotlinx.coroutines.runBlocking { preferences.wifiOnly.first() } } catch (_: Exception) { false }
-        if (isWifiOnlySync && !NetworkUtils.isWifiOrEthernet(context)) {
-            AppToastManager.show("Descarga en espera: 'Solo Wi-Fi' está activo y estás conectado a datos móviles", ToastType.ERROR)
+            AppToastManager.show("Sin conexión a internet", ToastType.WARNING)
             return
         }
 
         scope.launch(Dispatchers.IO) {
-            try {
-                val extraTag = if (pelicula.isVideo) pelicula.youtuberName else pelicula.safeYear
-                val displayTitleWithTag = if (extraTag.isNotBlank() && !pelicula.safeTitle.contains("($extraTag)")) {
-                    "${pelicula.safeTitle} ($extraTag)"
-                } else {
-                    pelicula.safeTitle
+            val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+            if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+                AppToastManager.show("Solo Wi-Fi activado. Conéctate a Wi-Fi para descargar.", ToastType.ERROR)
+                return@launch
+            }
+
+            queueMutex.withLock {
+                val currentList = _liveDownloadsState.value
+                val existing = currentList.find { it.id == pelicula.id }
+                if (existing != null && existing.status == DownloadStatus.COMPLETED) {
+                    val f = File(existing.localFilePath)
+                    if (f.exists() && f.length() > 0L) {
+                        AppToastManager.show("Esta película ya fue descargada", ToastType.INFO)
+                        return@launch
+                    }
                 }
 
                 val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
-                val dummyItem = DownloadItem(
-                    id = pelicula.id,
-                    title = displayTitleWithTag,
-                    originalVideoUrl = videoUrl,
-                    coverUrl = pelicula.safeCoverUrl,
-                    year = extraTag,
-                    type = pelicula.tp ?: "pl",
-                    localFilePath = "",
-                    status = DownloadStatus.PENDING,
-                    progress = 0
-                )
-                val destFile = resolveDestinationFile(dummyItem, savedFolderPath)
-
-                val currentList = preferences.downloads.first()
-                val existing = currentList.find { it.id == pelicula.id }
-                if (existing != null) {
-                    when (existing.status) {
-                        DownloadStatus.COMPLETED -> {
-                            AppToastManager.show("Este título ya se encuentra en tu biblioteca de Descargas", ToastType.INFO)
-                            return@launch
-                        }
-                        DownloadStatus.DOWNLOADING -> {
-                            AppToastManager.show("Este título ya se encuentra en descarga activa", ToastType.INFO)
-                            return@launch
-                        }
-                        DownloadStatus.PENDING -> {
-                            AppToastManager.show("Este título ya está programado en la cola de descarga", ToastType.INFO)
-                            return@launch
-                        }
-                        DownloadStatus.PAUSED -> {
-                            AppToastManager.show("Reanudando descarga...", ToastType.DOWNLOAD)
-                            resumeDownload(existing)
-                            return@launch
-                        }
-                        DownloadStatus.FAILED,
-                        DownloadStatus.CANCELLED -> {
-                            // Retry
-                        }
-                    }
-                }
+                val targetFile = resolveDestinationFile(pelicula.safeTitle, pelicula.safeYear, savedFolderPath)
 
                 val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
                 val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
 
-                if (activeCount >= maxLimit) {
-                    val pendingItem = DownloadItem(
-                        id = pelicula.id,
-                        title = displayTitleWithTag,
-                        originalVideoUrl = videoUrl,
-                        coverUrl = pelicula.safeCoverUrl,
-                        year = extraTag,
-                        type = pelicula.tp ?: "pl",
-                        localFilePath = destFile.absolutePath,
-                        status = DownloadStatus.PENDING,
-                        progress = 0
-                    )
-                    preferences.addOrUpdateDownload(pendingItem)
-                    notificationManager.cancel(getNotificationId(pelicula.id))
-                    AppToastManager.show(
-                        "En cola: límite de $maxLimit descargas simultáneas alcanzado",
-                        ToastType.INFO
-                    )
+                val initialStatus = if (activeCount >= maxLimit) DownloadStatus.PENDING else DownloadStatus.DOWNLOADING
+
+                val downloadItem = DownloadItem(
+                    id = pelicula.id,
+                    title = pelicula.safeTitle,
+                    originalVideoUrl = videoUrl,
+                    coverUrl = pelicula.safeCoverUrl,
+                    year = pelicula.safeYear,
+                    type = pelicula.tp ?: "pl",
+                    localFilePath = targetFile.absolutePath,
+                    status = initialStatus,
+                    progress = 0,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                    speedBytesPerSec = 0L,
+                    etaSeconds = 0L
+                )
+
+                updateItemState(downloadItem)
+                preferences.addOrUpdateDownload(downloadItem)
+
+                if (initialStatus == DownloadStatus.DOWNLOADING) {
+                    DownloadForegroundService.startDownload(context, downloadItem)
+                    AppToastManager.show("Descarga iniciada", ToastType.SUCCESS)
                 } else {
-                    val downloadItem = DownloadItem(
-                        id = pelicula.id,
-                        title = displayTitleWithTag,
-                        originalVideoUrl = videoUrl,
-                        coverUrl = pelicula.safeCoverUrl,
-                        year = extraTag,
-                        type = pelicula.tp ?: "pl",
-                        localFilePath = destFile.absolutePath,
-                        status = DownloadStatus.DOWNLOADING,
-                        progress = 0
-                    )
-                    preferences.addOrUpdateDownload(downloadItem)
-                    AppToastManager.show("Iniciando descarga...", ToastType.DOWNLOAD)
-                    enqueueWorker(downloadItem, destFile)
+                    AppToastManager.show("En cola (máximo $maxLimit descargas activas)", ToastType.INFO)
                 }
-            } catch (_: Exception) {}
-        }
-    }
-
-    private suspend fun enqueueWorker(item: DownloadItem, destFile: File) {
-        val isWifiOnly = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
-        val networkType = if (isWifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
-
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(networkType)
-            .build()
-
-        val inputData = Data.Builder()
-            .putString(DownloadWorker.KEY_DOWNLOAD_ID, item.id)
-            .putString(DownloadWorker.KEY_VIDEO_URL, item.originalVideoUrl)
-            .putString(DownloadWorker.KEY_TITLE, item.title)
-            .putString(DownloadWorker.KEY_COVER_URL, item.coverUrl)
-            .putString(DownloadWorker.KEY_YEAR, item.year)
-            .putString(DownloadWorker.KEY_TYPE, item.type)
-            .putString(DownloadWorker.KEY_LOCAL_FILE_PATH, destFile.absolutePath)
-            .build()
-
-        val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-            .setConstraints(constraints)
-            .setInputData(inputData)
-            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            .build()
-
-        workManager.enqueueUniqueWork(
-            getWorkName(item.id),
-            ExistingWorkPolicy.REPLACE,
-            workRequest
-        )
-    }
-
-    fun pauseDownloadById(id: String) {
-        scope.launch(Dispatchers.IO) {
-            val list = preferences.downloads.first()
-            val item = list.find { it.id == id } ?: return@launch
-            pauseDownload(item)
-        }
-    }
-
-    fun resumeDownloadById(id: String) {
-        scope.launch(Dispatchers.IO) {
-            val list = preferences.downloads.first()
-            val item = list.find { it.id == id } ?: return@launch
-            resumeDownload(item)
-        }
-    }
-
-    fun cancelDownloadById(id: String) {
-        scope.launch(Dispatchers.IO) {
-            notificationManager.cancel(getNotificationId(id))
-            val list = preferences.downloads.first()
-            val item = list.find { it.id == id } ?: return@launch
-            cancelDownload(item)
+            }
         }
     }
 
     fun pauseDownload(item: DownloadItem) {
+        clearLiveProgress(item.id)
         val file = File(item.localFilePath)
         val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
-        val total = if (item.totalBytes > 0) item.totalBytes else currentDownloaded
-        val progress = if (total > 0) ((currentDownloaded * 100) / total).toInt().coerceIn(0, 99) else item.progress
+        val total = item.totalBytes.coerceAtLeast(0L)
+        val progress = if (total > 0L && currentDownloaded > 0L) {
+            ((currentDownloaded * 100L) / total).toInt().coerceIn(0, 99)
+        } else {
+            0
+        }
 
         val pausedItem = item.copy(
             status = DownloadStatus.PAUSED,
@@ -468,27 +324,11 @@ class DownloadHelper(
             etaSeconds = 0L
         )
 
-        // 1. Immediately update in-memory SSOT (0ms latency, zero flicker in UI)
-        clearLiveProgress(item.id)
-        _liveDownloadsState.update { list ->
-            list.map { if (it.id == item.id) pausedItem else it }
-        }
-
-        // 2. Immediately mutate notification in place without cancellation
-        showPausedNotification(pausedItem)
-
-        // 3. Stop background worker and persist state to DataStore
+        updateItemState(pausedItem)
         scope.launch(Dispatchers.IO) {
-            getMutexFor(item.id).withLock {
-                try {
-                    workManager.cancelUniqueWork(getWorkName(item.id))
-                    preferences.addOrUpdateDownload(pausedItem)
-                    checkAndStartNextPending()
-                } catch (_: Exception) {}
-            }
-            // Delay to allow WorkManager to tear down its foreground notification, then ensure paused notification is posted persistently
-            delay(350L)
-            showPausedNotification(pausedItem)
+            preferences.addOrUpdateDownload(pausedItem)
+            DownloadForegroundService.pauseDownload(context, item.id)
+            checkAndStartNextPending()
         }
     }
 
@@ -499,404 +339,116 @@ class DownloadHelper(
         }
 
         if (!NetworkUtils.isConnected(context)) {
-            AppToastManager.show("Sin conexión a internet. Conéctate a una red para reanudar.", ToastType.WARNING)
-            return
-        }
-
-        val isWifiOnlySync = try { kotlinx.coroutines.runBlocking { preferences.wifiOnly.first() } } catch (_: Exception) { false }
-        if (isWifiOnlySync && !NetworkUtils.isWifiOrEthernet(context)) {
-            AppToastManager.show("Descarga en espera: 'Solo Wi-Fi' está activo y estás en datos móviles", ToastType.ERROR)
+            AppToastManager.show("Sin conexión a internet", ToastType.WARNING)
             return
         }
 
         scope.launch(Dispatchers.IO) {
-            getMutexFor(item.id).withLock {
-                try {
-                    val currentList = _liveDownloadsState.value
-                    val currentItem = currentList.find { it.id == item.id } ?: item
-                    val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
-                    val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING && it.id != item.id }
+            val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+            if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+                AppToastManager.show("Solo Wi-Fi activado. Conéctate a Wi-Fi para reanudar.", ToastType.ERROR)
+                return@launch
+            }
 
-                    val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
-                    val targetFile = resolveDestinationFile(currentItem, savedFolderPath)
+            queueMutex.withLock {
+                val currentList = _liveDownloadsState.value
+                val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
+                val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING && it.id != item.id }
 
-                    if (activeCount >= maxLimit) {
-                        val pendingItem = currentItem.copy(
-                            localFilePath = targetFile.absolutePath,
-                            status = DownloadStatus.PENDING,
-                            speedBytesPerSec = 0L,
-                            etaSeconds = 0L
-                        )
-                        _liveDownloadsState.update { list ->
-                            list.map { if (it.id == item.id) pendingItem else it }
-                        }
-                        notificationManager.cancel(getNotificationId(currentItem.id))
-                        preferences.addOrUpdateDownload(pendingItem)
-                        AppToastManager.show("En cola: máximo $maxLimit descargas activas", ToastType.INFO)
-                    } else {
-                        val resumingItem = currentItem.copy(
-                            localFilePath = targetFile.absolutePath,
-                            status = DownloadStatus.DOWNLOADING,
-                            speedBytesPerSec = 0L,
-                            etaSeconds = 0L
-                        )
-                        _liveDownloadsState.update { list ->
-                            list.map { if (it.id == item.id) resumingItem else it }
-                        }
-                        preferences.addOrUpdateDownload(resumingItem)
-                        enqueueWorker(resumingItem, targetFile)
-                    }
-                } catch (_: Exception) {}
+                if (activeCount >= maxLimit) {
+                    val pendingItem = item.copy(status = DownloadStatus.PENDING)
+                    updateItemState(pendingItem)
+                    preferences.addOrUpdateDownload(pendingItem)
+                    AppToastManager.show("En cola: máximo $maxLimit descargas activas", ToastType.INFO)
+                } else {
+                    val resumingItem = item.copy(status = DownloadStatus.DOWNLOADING)
+                    updateItemState(resumingItem)
+                    preferences.addOrUpdateDownload(resumingItem)
+                    DownloadForegroundService.resumeDownload(context, item.id)
+                }
             }
         }
     }
 
     fun cancelDownload(item: DownloadItem) {
-        // 1. Instantly remove from in-memory state
         clearLiveProgress(item.id)
-        _liveDownloadsState.update { list ->
-            list.filterNot { it.id == item.id }
-        }
-        try {
-            notificationManager.cancel(getNotificationId(item.id))
-            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
-        } catch (_: Exception) {}
-
-        // 2. Cancel worker, delete local file and persist removal
-        scope.launch(Dispatchers.IO) {
-            getMutexFor(item.id).withLock {
-                try {
-                    workManager.cancelUniqueWork(getWorkName(item.id))
-                    val file = File(item.localFilePath)
-                    if (file.exists()) {
-                        file.delete()
-                    }
-                    preferences.removeDownload(item.id)
-                    checkAndStartNextPending()
-                } catch (_: Exception) {}
-            }
-        }
-    }
-
-    fun deleteMultipleDownloads(items: List<DownloadItem>) {
-        val ids = items.map { it.id }.toSet()
-        items.forEach { item ->
-            clearLiveProgress(item.id)
-            notificationManager.cancel(getNotificationId(item.id))
-        }
-        _liveDownloadsState.update { list ->
-            list.filterNot { ids.contains(it.id) }
-        }
-
-        scope.launch(Dispatchers.IO) {
-            try {
-                items.forEach { item ->
-                    try {
-                        workManager.cancelUniqueWork(getWorkName(item.id))
-                        val file = File(item.localFilePath)
-                        if (file.exists()) {
-                            file.delete()
-                        }
-                    } catch (_: Exception) {}
-                }
-                preferences.removeDownloads(ids)
-                checkAndStartNextPending()
-            } catch (_: Exception) {}
-        }
+        removeItemFromState(item.id)
+        DownloadForegroundService.cancelDownload(context, item.id)
     }
 
     fun forceStartPending(item: DownloadItem) {
-        if (VpnProxyDetector.isVpnOrProxyActive(context)) {
-            AppToastManager.show("Desactiva la VPN o Proxy para iniciar la descarga", ToastType.WARNING)
-            return
-        }
+        forceStartPendingDownload(item)
+    }
+
+    fun forceStartPendingDownload(download: DownloadItem) {
         scope.launch(Dispatchers.IO) {
-            getMutexFor(item.id).withLock {
-                try {
-                    val currentList = _liveDownloadsState.value
-                    val currentItem = currentList.find { it.id == item.id } ?: item
-                    val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
-                    val activeList = currentList.filter { it.status == DownloadStatus.DOWNLOADING && it.id != item.id }
-
-                    if (activeList.size >= maxLimit) {
-                        val itemToDemote = activeList.last()
-                        clearLiveProgress(itemToDemote.id)
-                        workManager.cancelUniqueWork(getWorkName(itemToDemote.id))
-                        notificationManager.cancel(getNotificationId(itemToDemote.id))
-                        val demotedPending = itemToDemote.copy(
-                            status = DownloadStatus.PENDING,
-                            speedBytesPerSec = 0L,
-                            etaSeconds = 0L
-                        )
-                        _liveDownloadsState.update { list ->
-                            list.map { if (it.id == itemToDemote.id) demotedPending else it }
-                        }
-                        preferences.addOrUpdateDownload(demotedPending)
-                    }
-
-                    val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
-                    val targetFile = resolveDestinationFile(currentItem, savedFolderPath)
-                    val toStart = currentItem.copy(
-                        localFilePath = targetFile.absolutePath,
-                        status = DownloadStatus.DOWNLOADING,
-                        speedBytesPerSec = 0L,
-                        etaSeconds = 0L
-                    )
-                    _liveDownloadsState.update { list ->
-                        list.map { if (it.id == currentItem.id) toStart else it }
-                    }
-                    preferences.addOrUpdateDownload(toStart)
-                    enqueueWorker(toStart, targetFile)
-                } catch (_: Exception) {}
-            }
+            val resuming = download.copy(status = DownloadStatus.DOWNLOADING)
+            updateItemState(resuming)
+            preferences.addOrUpdateDownload(resuming)
+            DownloadForegroundService.startDownload(context, resuming)
         }
     }
 
     fun pauseAllDownloads() {
-        val currentList = _liveDownloadsState.value
-        val downloadingOrPending = currentList.filter {
-            it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING
-        }
-        val pausedList = currentList.map { item ->
-            if (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.PENDING) {
-                clearLiveProgress(item.id)
-                val file = File(item.localFilePath)
-                val currentDownloaded = if (file.exists()) file.length() else item.downloadedBytes
-                val total = if (item.totalBytes > 0) item.totalBytes else currentDownloaded
-                val progress = if (total > 0) ((currentDownloaded * 100) / total).toInt().coerceIn(0, 99) else item.progress
-                val pausedItem = item.copy(
-                    status = DownloadStatus.PAUSED,
-                    downloadedBytes = currentDownloaded,
-                    totalBytes = total,
-                    progress = progress,
-                    speedBytesPerSec = 0L,
-                    etaSeconds = 0L
-                )
-                showPausedNotification(pausedItem)
-                pausedItem
-            } else {
-                item
-            }
-        }
-        _liveDownloadsState.value = pausedList
-
-        scope.launch(Dispatchers.IO) {
-            try {
-                downloadingOrPending.forEach { item ->
-                    if (item.status == DownloadStatus.DOWNLOADING) {
-                        workManager.cancelUniqueWork(getWorkName(item.id))
-                    }
-                }
-                notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
-                preferences.saveDownloads(pausedList)
-            } catch (_: Exception) {}
-        }
+        DownloadForegroundService.pauseAll(context)
     }
 
     fun resumeAllDownloads() {
-        if (VpnProxyDetector.isVpnOrProxyActive(context)) {
-            AppToastManager.show("Desactiva la conexión VPN o Proxy para reanudar descargas", ToastType.WARNING)
-            return
-        }
-        scope.launch(Dispatchers.IO) {
-            try {
-                val currentList = preferences.downloads.first()
-                val pausedOrPending = currentList.filter {
-                    it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING || it.status == DownloadStatus.FAILED
-                }
-                val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
-                var activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
-                val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
-
-                pausedOrPending.forEach { item ->
-                    val targetFile = resolveDestinationFile(item, savedFolderPath)
-                    if (activeCount < maxLimit) {
-                        activeCount++
-                        val resumingItem = item.copy(
-                            localFilePath = targetFile.absolutePath,
-                            status = DownloadStatus.DOWNLOADING,
-                            speedBytesPerSec = 0L,
-                            etaSeconds = 0L
-                        )
-                        preferences.addOrUpdateDownload(resumingItem)
-                        enqueueWorker(resumingItem, targetFile)
-                    } else {
-                        val pendingItem = item.copy(
-                            localFilePath = targetFile.absolutePath,
-                            status = DownloadStatus.PENDING,
-                            speedBytesPerSec = 0L,
-                            etaSeconds = 0L
-                        )
-                        preferences.addOrUpdateDownload(pendingItem)
-                        notificationManager.cancel(getNotificationId(item.id))
-                    }
-                }
-            } catch (_: Exception) {}
-        }
+        DownloadForegroundService.resumeAll(context)
     }
 
     fun cancelAllDownloads() {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val currentList = preferences.downloads.first()
-                val activeItems = currentList.filter {
-                    it.status == DownloadStatus.DOWNLOADING ||
-                    it.status == DownloadStatus.PAUSED ||
-                    it.status == DownloadStatus.PENDING ||
-                    it.status == DownloadStatus.FAILED
-                }
-                activeItems.forEach { item ->
-                    clearLiveProgress(item.id)
-                    workManager.cancelUniqueWork(getWorkName(item.id))
-                    val file = File(item.localFilePath)
-                    if (file.exists()) {
-                        file.delete()
-                    }
-                    notificationManager.cancel(getNotificationId(item.id))
-                }
-                notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
-                preferences.saveDownloads(emptyList())
-            } catch (_: Exception) {}
+        DownloadForegroundService.cancelAll(context)
+    }
+
+    fun deleteMultipleDownloads(items: List<DownloadItem>) {
+        items.forEach { item ->
+            cancelDownload(item)
         }
     }
 
-    fun notifyTaskFinished(downloadId: String) {
-        scope.launch(Dispatchers.IO) {
-            delay(350L)
-            val item = preferences.downloads.first().find { it.id == downloadId }
-            if (item != null && item.status == DownloadStatus.PAUSED) {
-                showPausedNotification(item)
-            }
-            checkAndStartNextPending()
-        }
+    fun syncConcurrentDownloadsLimit(count: Int) {
+        checkAndStartNextPending()
     }
 
-    fun syncConcurrentDownloadsLimit(newLimit: Int) {
+    fun checkAndStartNextPending() {
         scope.launch(Dispatchers.IO) {
-            checkAndStartNextPending()
-        }
-    }
-
-    private suspend fun checkAndStartNextPending() {
-        if (VpnProxyDetector.isVpnOrProxyActive(context)) return
-        queueMutex.withLock {
-            try {
-                val list = preferences.downloads.first()
+            queueMutex.withLock {
+                val currentList = _liveDownloadsState.value
                 val maxLimit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
-                val downloadingList = list.filter { it.status == DownloadStatus.DOWNLOADING }
-                val activeCount = downloadingList.size
+                val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
 
-                if (activeCount == 0) {
-                    notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
-                }
-
-                if (activeCount > maxLimit) {
-                    // Excess downloads must be cleanly paused/moved back to PENDING
-                    val excessCount = activeCount - maxLimit
-                    val excessList = downloadingList.takeLast(excessCount)
-                    for (excessItem in excessList) {
-                        clearLiveProgress(excessItem.id)
-                        try {
-                            workManager.cancelUniqueWork(getWorkName(excessItem.id))
-                        } catch (_: Exception) {}
-                        try {
-                            notificationManager.cancel(getNotificationId(excessItem.id))
-                        } catch (_: Exception) {}
-                        val file = File(excessItem.localFilePath)
-                        val curBytes = if (file.exists()) file.length() else excessItem.downloadedBytes
-                        val pendingItem = excessItem.copy(
-                            status = DownloadStatus.PENDING,
-                            downloadedBytes = curBytes,
-                            speedBytesPerSec = 0L,
-                            etaSeconds = 0L
-                        )
-                        _liveDownloadsState.update { liveList ->
-                            liveList.map { if (it.id == excessItem.id) pendingItem else it }
-                        }
-                        preferences.addOrUpdateDownload(pendingItem)
-                    }
-                } else if (activeCount < maxLimit) {
-                    val availableSlots = maxLimit - activeCount
-                    val pendingList = list.filter { it.status == DownloadStatus.PENDING }.take(availableSlots)
-                    val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
-
-                    for (nextPending in pendingList) {
-                        val targetFile = resolveDestinationFile(nextPending, savedFolderPath)
-                        val toStart = nextPending.copy(
-                            localFilePath = targetFile.absolutePath,
-                            status = DownloadStatus.DOWNLOADING,
-                            speedBytesPerSec = 0L,
-                            etaSeconds = 0L
-                        )
-                        _liveDownloadsState.update { liveList ->
-                            liveList.map { if (it.id == toStart.id) toStart else it }
-                        }
-                        preferences.addOrUpdateDownload(toStart)
-                        enqueueWorker(toStart, targetFile)
+                if (activeCount < maxLimit) {
+                    val nextPending = currentList.find { it.status == DownloadStatus.PENDING }
+                    if (nextPending != null) {
+                        val starting = nextPending.copy(status = DownloadStatus.DOWNLOADING)
+                        updateItemState(starting)
+                        preferences.addOrUpdateDownload(starting)
+                        DownloadForegroundService.startDownload(context, starting)
                     }
                 }
-            } catch (_: Exception) {}
+            }
         }
     }
 
-    fun showPausedNotification(item: DownloadItem) {
-        if (!PermissionHelper.hasNotificationPermission(context)) return
-        try {
-            val notification = NotificationUtils.buildPausedNotification(context, item)
-            notificationManager.notify(getNotificationId(item.id), notification)
-        } catch (_: Exception) {}
-    }
+    private fun resolveDestinationFile(title: String, year: String, savedFolderPath: String): File {
+        val sanitizedTitle = title.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
+        val fileName = if (year.isNotBlank()) "${sanitizedTitle}_${year}.mp4" else "${sanitizedTitle}.mp4"
 
-    private fun formatByteSize(bytes: Long): String {
-        if (bytes <= 0) return "0 B"
-        val kb = bytes / 1024.0
-        val mb = kb / 1024.0
-        val gb = mb / 1024.0
-        return when {
-            gb >= 1.0 -> String.format(java.util.Locale.US, "%.2f GB", gb)
-            mb >= 1.0 -> String.format(java.util.Locale.US, "%.1f MB", mb)
-            kb >= 1.0 -> String.format(java.util.Locale.US, "%.0f KB", kb)
-            else -> "$bytes B"
+        if (savedFolderPath.isNotBlank()) {
+            val customDir = File(savedFolderPath)
+            if (customDir.exists() && customDir.canWrite()) {
+                return File(customDir, fileName)
+            }
         }
-    }
 
-    private fun getContentPendingIntent(): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("initial_tab", 1)
-            putExtra("skip_splash", true)
+        val publicDownloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val appFolder = File(publicDownloadDir, "Download Free")
+        if (appFolder.exists() || appFolder.mkdirs()) {
+            return File(appFolder, fileName)
         }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        return PendingIntent.getActivity(context, 1002, intent, flags)
-    }
 
-    private fun getResumePendingIntent(itemId: String): PendingIntent {
-        val intent = Intent(context, DownloadActionReceiver::class.java).apply {
-            action = ACTION_RESUME_DOWNLOAD
-            putExtra(EXTRA_DOWNLOAD_ID, itemId)
-        }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        return PendingIntent.getBroadcast(context, (itemId + "_resume").hashCode(), intent, flags)
-    }
-
-    private fun getCancelPendingIntent(itemId: String): PendingIntent {
-        val intent = Intent(context, DownloadActionReceiver::class.java).apply {
-            action = ACTION_CANCEL_DOWNLOAD
-            putExtra(EXTRA_DOWNLOAD_ID, itemId)
-        }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        return PendingIntent.getBroadcast(context, (itemId + "_cancel").hashCode(), intent, flags)
+        val safeAppDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        return File(safeAppDir, fileName)
     }
 }
