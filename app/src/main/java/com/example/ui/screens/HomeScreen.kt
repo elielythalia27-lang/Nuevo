@@ -152,16 +152,8 @@ fun HomeScreen(
     val subtitleTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val badgeBg = MaterialTheme.colorScheme.surfaceVariant
 
-    val gridStateAll = rememberLazyGridState()
-    val gridStateMovies = rememberLazyGridState()
-    val gridStateVideos = rememberLazyGridState()
+    val catalogGridState = rememberLazyGridState()
     val gridStateSearch = rememberLazyGridState()
-
-    val catalogGridState = when (uiState.selectedType) {
-        "MOVIE" -> gridStateMovies
-        "VIDEO" -> gridStateVideos
-        else -> gridStateAll
-    }
 
     val activeGridState = if (uiState.searchQuery.isNotEmpty()) gridStateSearch else catalogGridState
 
@@ -436,7 +428,6 @@ fun HomeScreen(
                             ) { pelicula ->
                                 val downloadItem = downloadsMap[pelicula.id]
                                 PeliculaCard(
-                                    modifier = Modifier.animateItem(),
                                     pelicula = pelicula,
                                     downloadItem = downloadItem,
                                     isDarkTheme = isDark,
@@ -494,21 +485,16 @@ fun HomeScreen(
                         border = BorderStroke(1.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFCBD5E1)),
                         color = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
                     ) {
-                        SubcomposeAsyncImage(
+                        AsyncImage(
                             model = ImageRequest.Builder(context)
                                 .data(pelicula.safeCoverUrl)
-                                .crossfade(150)
+                                .memoryCacheKey(pelicula.safeCoverUrl)
+                                .diskCacheKey(pelicula.safeCoverUrl)
+                                .crossfade(false)
                                 .size(320, 440)
                                 .build(),
                             contentDescription = pelicula.safeTitle,
                             contentScale = ContentScale.Crop,
-                            loading = {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .shimmerEffect(RoundedCornerShape(14.dp), isDark = isDark)
-                                )
-                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     }

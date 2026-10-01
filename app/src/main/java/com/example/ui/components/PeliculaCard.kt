@@ -130,28 +130,16 @@ fun PeliculaCard(
                         .clip(RoundedCornerShape(9.dp))
                         .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0))
                 ) {
-                    SubcomposeAsyncImage(
+                    AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(pelicula.safeCoverUrl)
-                            .crossfade(150)
+                            .memoryCacheKey(pelicula.safeCoverUrl)
+                            .diskCacheKey(pelicula.safeCoverUrl)
+                            .crossfade(false)
                             .size(240, 350)
                             .build(),
                         contentDescription = pelicula.safeTitle,
                         contentScale = ContentScale.Crop,
-                        loading = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .shimmerEffect(RoundedCornerShape(9.dp), isDark = isDarkTheme)
-                            )
-                        },
-                        error = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .shimmerEffect(RoundedCornerShape(9.dp), isDark = isDarkTheme)
-                            )
-                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -319,35 +307,17 @@ fun PeliculaCard(
                         .aspectRatio(0.78f)
                         .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0))
                 ) {
-                    // Fast SubcomposeAsyncImage with smooth shimmer placeholder
-                    SubcomposeAsyncImage(
+                    // Fast AsyncImage instantly rendered from memory cache with 0 flicker
+                    AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(pelicula.safeCoverUrl)
-                            .crossfade(150)
+                            .memoryCacheKey(pelicula.safeCoverUrl)
+                            .diskCacheKey(pelicula.safeCoverUrl)
+                            .crossfade(false)
                             .size(360, 500)
                             .build(),
                         contentDescription = pelicula.safeTitle,
                         contentScale = ContentScale.Crop,
-                        loading = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .shimmerEffect(
-                                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
-                                        isDark = isDarkTheme
-                                    )
-                            )
-                        },
-                        error = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .shimmerEffect(
-                                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
-                                        isDark = isDarkTheme
-                                    )
-                            )
-                        },
                         modifier = Modifier.fillMaxSize()
                     )
 

@@ -232,7 +232,7 @@ fun PlayerScreen(
 
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
-            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
         }
 
         val loadControl = DefaultLoadControl.Builder()
@@ -307,6 +307,8 @@ fun PlayerScreen(
             isLandscape = true
 
             insetsController?.let { controller ->
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
                 controller.isAppearanceLightStatusBars = false
                 controller.isAppearanceLightNavigationBars = false
             }
@@ -325,6 +327,7 @@ fun PlayerScreen(
                     lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                     activity.window.attributes = lp
                 }
+                insetsController?.show(WindowInsetsCompat.Type.systemBars())
                 activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             } catch (_: Exception) {}
         }

@@ -1752,21 +1752,16 @@ fun PendingQueueCard(
                     .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0)),
                 contentAlignment = Alignment.Center
             ) {
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(item.coverUrl)
-                        .crossfade(150)
+                        .memoryCacheKey(item.coverUrl)
+                        .diskCacheKey(item.coverUrl)
+                        .crossfade(false)
                         .size(200, 260)
                         .build(),
                     contentDescription = item.title,
                     contentScale = ContentScale.Crop,
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .shimmerEffect(RoundedCornerShape(8.dp), isDark = isDarkTheme)
-                        )
-                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -1909,28 +1904,16 @@ fun DownloadedMovieCard(
                     .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0)),
                 contentAlignment = Alignment.Center
             ) {
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(item.coverUrl)
-                        .crossfade(150)
+                        .memoryCacheKey(item.coverUrl)
+                        .diskCacheKey(item.coverUrl)
+                        .crossfade(false)
                         .size(240, 320)
                         .build(),
                     contentDescription = displayTitle,
                     contentScale = ContentScale.Crop,
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .shimmerEffect(RoundedCornerShape(10.dp), isDark = isDarkTheme)
-                        )
-                    },
-                    error = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .shimmerEffect(RoundedCornerShape(10.dp), isDark = isDarkTheme)
-                        )
-                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
