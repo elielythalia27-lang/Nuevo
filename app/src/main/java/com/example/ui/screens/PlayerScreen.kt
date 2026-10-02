@@ -512,8 +512,8 @@ fun PlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(isScreenLocked, isPlaying, playbackSpeed, hasFirstFrameRendered, isBuffering) {
-                    if (!hasFirstFrameRendered || isBuffering) {
+                .pointerInput(isScreenLocked, isPlaying, playbackSpeed, hasFirstFrameRendered) {
+                    if (!hasFirstFrameRendered) {
                         return@pointerInput
                     }
                     if (isScreenLocked) {
@@ -557,8 +557,13 @@ fun PlayerScreen(
                                         // Center: Toggle Play / Pause
                                         if (exoPlayer.isPlaying) {
                                             exoPlayer.pause()
+                                            isPlaying = false
                                         } else {
+                                            if (exoPlayer.playbackState == Player.STATE_ENDED) {
+                                                exoPlayer.seekTo(0L)
+                                            }
                                             exoPlayer.play()
+                                            isPlaying = true
                                         }
                                         areControlsVisible = true
                                         lastInteractionTime = System.currentTimeMillis()
@@ -590,8 +595,8 @@ fun PlayerScreen(
                         )
                     }
                 }
-                .pointerInput(isScreenLocked, hasFirstFrameRendered, isBuffering) {
-                    if (!hasFirstFrameRendered || isBuffering) {
+                .pointerInput(isScreenLocked, hasFirstFrameRendered) {
+                    if (!hasFirstFrameRendered) {
                         return@pointerInput
                     }
                     if (!isScreenLocked) {
@@ -885,10 +890,13 @@ fun PlayerScreen(
                         isPlaying = isPlaying,
                         enabled = controlsEnabled,
                         onPlayPause = {
-                            if (exoPlayer.playWhenReady) {
+                            if (exoPlayer.isPlaying) {
                                 exoPlayer.pause()
                                 isPlaying = false
                             } else {
+                                if (exoPlayer.playbackState == Player.STATE_ENDED) {
+                                    exoPlayer.seekTo(0L)
+                                }
                                 exoPlayer.play()
                                 isPlaying = true
                             }

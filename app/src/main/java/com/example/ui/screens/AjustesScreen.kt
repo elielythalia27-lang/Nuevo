@@ -727,6 +727,20 @@ fun AjustesScreen(
                                     }
                                 }
                             }
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // Descargar solo con Wi-Fi
+                            SettingsSwitchRow(
+                                icon = Icons.Default.Wifi,
+                                title = "Descargar solo con Wi-Fi",
+                                subtitle = if (wifiOnly) "Activado: pausa descargas en datos móviles" else "Permitir descargas con datos móviles",
+                                checked = wifiOnly,
+                                isDarkTheme = isDarkTheme,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                onCheckedChange = onWifiOnlyChange
+                            )
                         }
                     }
                 }

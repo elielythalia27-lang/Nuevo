@@ -629,6 +629,22 @@ class DownloadForegroundService : Service() {
                 break
             } catch (e: Exception) {
                 if (!activeJobs.containsKey(downloadId)) break
+                if (e.message?.contains("Wi-Fi", ignoreCase = true) == true) {
+                    val waitingItem = connectingItem.copy(
+                        status = DownloadStatus.PENDING,
+                        downloadedBytes = downloadedBytes,
+                        totalBytes = totalBytes,
+                        progress = if (totalBytes > 0L) ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99) else 0,
+                        speedBytesPerSec = 0L,
+                        etaSeconds = 0L
+                    )
+                    helper.updateItemState(waitingItem)
+                    serviceScope.launch(Dispatchers.IO) {
+                        preferences.addOrUpdateDownload(waitingItem)
+                    }
+                    handleQueueDownload(waitingItem.id)
+                    return
+                }
                 retryCount++
                 if (retryCount < maxRetries) {
                     delay(1500L)

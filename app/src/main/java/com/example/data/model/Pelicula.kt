@@ -114,7 +114,7 @@ data class DownloadItem(
             if (status != DownloadStatus.DOWNLOADING) return "-- KB/s"
             if (speedBytesPerSec <= 0L) return "Iniciando..."
             return when {
-                speedBytesPerSec >= 1024 * 1024 -> "${Math.round(speedBytesPerSec / (1024.0 * 1024.0))} MB/s"
+                speedBytesPerSec >= 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB/s", speedBytesPerSec / (1024.0 * 1024.0))
                 else -> "${(speedBytesPerSec / 1024).coerceAtLeast(1L)} KB/s"
             }
         }

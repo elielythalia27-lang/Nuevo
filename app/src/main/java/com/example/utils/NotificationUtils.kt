@@ -155,7 +155,10 @@ object NotificationUtils {
             formatByteSize(item.downloadedBytes)
         }
 
-        val speedStr = if (speed > 0L) formatByteSize(speed) + "/s" else "Conectando..."
+        val speedStr = if (speed > 0L) {
+            if (speed >= 1024 * 1024) String.format(java.util.Locale.US, "%.1f MB/s", speed / (1024.0 * 1024.0))
+            else "${speed / 1024} KB/s"
+        } else "Conectando..."
         val etaStr = if (eta > 0L) {
             val hours = eta / 3600
             val minutes = (eta % 3600) / 60
@@ -186,16 +189,6 @@ object NotificationUtils {
             .setColor(0xFF00897B.toInt())
             .setProgress(100, if (isIndeterminate) 0 else progress, isIndeterminate)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
-            .addAction(
-                R.drawable.ic_notification_pause,
-                "Pausar",
-                createPausePendingIntent(context, item.id)
-            )
-            .addAction(
-                R.drawable.ic_notification_cancel,
-                "Cancelar",
-                createCancelPendingIntent(context, item.id)
-            )
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
@@ -234,16 +227,6 @@ object NotificationUtils {
             .setColor(0xFFF59E0B.toInt())
             .setProgress(100, item.progress, false)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
-            .addAction(
-                R.drawable.ic_notification_play,
-                "Reanudar",
-                createResumePendingIntent(context, item.id)
-            )
-            .addAction(
-                R.drawable.ic_notification_cancel,
-                "Cancelar",
-                createCancelPendingIntent(context, item.id)
-            )
             .setAutoCancel(false)
             .setOngoing(false)
             .setShowWhen(false)
@@ -313,16 +296,6 @@ object NotificationUtils {
             .setSmallIcon(R.drawable.ic_notification_error)
             .setColor(0xFFEF4444.toInt())
             .setContentIntent(createOpenDownloadsPendingIntent(context))
-            .addAction(
-                R.drawable.ic_notification_play,
-                "Reintentar",
-                createResumePendingIntent(context, item.id)
-            )
-            .addAction(
-                R.drawable.ic_notification_cancel,
-                "Cancelar",
-                createCancelPendingIntent(context, item.id)
-            )
             .setAutoCancel(true)
             .setOngoing(false)
             .setCategory(NotificationCompat.CATEGORY_ERROR)

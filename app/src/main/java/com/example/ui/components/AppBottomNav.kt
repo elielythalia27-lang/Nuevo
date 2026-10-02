@@ -3,10 +3,13 @@ package com.example.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -258,6 +261,39 @@ fun AppBottomNav(
         label = "nav_border_color"
     )
 
+    // Infinite transitions for active downloads pulse & circular ripple wave (identical to empty list icons)
+    val infiniteTransition = rememberInfiniteTransition(label = "bottom_nav_downloads_anim")
+
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "downloads_icon_pulse"
+    )
+
+    val rippleScale by infiniteTransition.animateFloat(
+        initialValue = 0.82f,
+        targetValue = 1.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "downloads_ripple_scale"
+    )
+
+    val rippleAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.42f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "downloads_ripple_alpha"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -341,6 +377,9 @@ fun AppBottomNav(
                             .testTag("nav_item_${screen.route}"),
                         contentAlignment = Alignment.Center
                     ) {
+                        val isDownloadsTab = screen == ScreenRoute.DOWNLOADS
+                        val hasActiveDownloads = isDownloadsTab && downloadsCount > 0
+
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
@@ -367,17 +406,51 @@ fun AppBottomNav(
                                     )
                                 }
 
-                                // Icon
+                                // Radiant animated expanding ripple wave (matches empty list icons)
+                                if (hasActiveDownloads) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .scale(rippleScale)
+                                            .clip(CircleShape)
+                                            .background(activeColor.copy(alpha = rippleAlpha))
+                                    )
+                                }
+
+                                // Icon with breathing pulse on active downloads
                                 Box(
-                                    modifier = Modifier.scale(iconScale),
+                                    modifier = Modifier.scale(if (hasActiveDownloads) iconScale * pulseScale else iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                                         contentDescription = screen.title,
-                                        tint = contentColor,
+                                        tint = if (hasActiveDownloads && !isSelected) activeColor else contentColor,
                                         modifier = Modifier.size(22.dp)
                                     )
+                                }
+
+                                // Number badge of active downloads count placed at top-end
+                                if (hasActiveDownloads) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 6.dp, y = (-3).dp)
+                                            .clip(CircleShape)
+                                            .background(activeColor)
+                                            .border(1.5.dp, containerBg, CircleShape)
+                                            .padding(horizontal = 4.5.dp, vertical = 1.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (downloadsCount > 99) "99+" else downloadsCount.toString(),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            lineHeight = 10.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                             }
 

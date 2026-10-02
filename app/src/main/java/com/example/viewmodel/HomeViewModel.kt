@@ -511,6 +511,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(wifiOnly = enabled) }
         viewModelScope.launch {
             repository.setWifiOnly(enabled)
+            downloadHelper.handleWifiOnlyChange(enabled)
         }
     }
 

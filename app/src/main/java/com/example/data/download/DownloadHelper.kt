@@ -9,6 +9,7 @@ import com.example.data.model.DownloadStatus
 import com.example.data.model.Pelicula
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
+import com.example.utils.NetworkMonitor
 import com.example.utils.NetworkUtils
 import com.example.utils.NotificationUtils
 import com.example.utils.PermissionHelper
@@ -166,6 +167,32 @@ class DownloadHelper(
         scope.launch(Dispatchers.IO) {
             preferences.maxConcurrentDownloads.collect { limit ->
                 syncConcurrentDownloadsLimit(limit)
+            }
+        }
+
+        // Observe wifiOnly settings changes
+        scope.launch(Dispatchers.IO) {
+            preferences.wifiOnly.collect { enabled ->
+                handleWifiOnlyChange(enabled)
+            }
+        }
+
+        // Observe network changes to automatically resume pending downloads upon connecting to Wi-Fi
+        val networkMonitor = NetworkMonitor(context)
+        scope.launch(Dispatchers.IO) {
+            networkMonitor.isOnline.collect { isOnline ->
+                if (isOnline) {
+                    val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+                    if (isWifiOnlyPref) {
+                        if (NetworkUtils.isWifiOrEthernet(context)) {
+                            syncConcurrentDownloadsLimit()
+                        } else {
+                            handleWifiOnlyChange(true)
+                        }
+                    } else {
+                        syncConcurrentDownloadsLimit()
+                    }
+                }
             }
         }
     }
@@ -412,8 +439,49 @@ class DownloadHelper(
         forceStartPendingDownload(item)
     }
 
+    fun handleWifiOnlyChange(enabled: Boolean) {
+        scope.launch(Dispatchers.IO) {
+            queueMutex.withLock {
+                if (enabled && !NetworkUtils.isWifiOrEthernet(context)) {
+                    val currentList = _liveDownloadsState.value
+                    val activeDownloads = currentList.filter { it.status == DownloadStatus.DOWNLOADING }
+                    if (activeDownloads.isNotEmpty()) {
+                        for (item in activeDownloads) {
+                            val queuedItem = item.copy(
+                                status = DownloadStatus.PENDING,
+                                speedBytesPerSec = 0L,
+                                etaSeconds = 0L
+                            )
+                            updateItemState(queuedItem)
+                            preferences.addOrUpdateDownload(queuedItem)
+                            DownloadForegroundService.queueDownload(context, item.id)
+                        }
+                        AppToastManager.show("Solo Wi-Fi activado: descargas en datos móviles en espera", ToastType.INFO)
+                    }
+                } else if (!enabled || NetworkUtils.isWifiOrEthernet(context)) {
+                    val limit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
+                    val currentList = _liveDownloadsState.value
+                    val activeDownloads = currentList.filter { it.status == DownloadStatus.DOWNLOADING }
+                    var slotsAvailable = limit - activeDownloads.size
+                    if (slotsAvailable > 0) {
+                        val pendingDownloads = currentList.filter { it.status == DownloadStatus.PENDING }
+                        for (pending in pendingDownloads) {
+                            if (slotsAvailable <= 0) break
+                            forceStartPendingDownload(pending)
+                            slotsAvailable--
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fun forceStartPendingDownload(download: DownloadItem) {
         scope.launch(Dispatchers.IO) {
+            val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+            if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+                return@launch
+            }
             val resuming = download.copy(status = DownloadStatus.DOWNLOADING)
             updateItemState(resuming)
             preferences.addOrUpdateDownload(resuming)
@@ -442,6 +510,23 @@ class DownloadHelper(
     fun syncConcurrentDownloadsLimit(newLimit: Int? = null) {
         scope.launch(Dispatchers.IO) {
             queueMutex.withLock {
+                val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+                if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+                    val currentList = _liveDownloadsState.value
+                    val activeDownloads = currentList.filter { it.status == DownloadStatus.DOWNLOADING }
+                    for (item in activeDownloads) {
+                        val queuedItem = item.copy(
+                            status = DownloadStatus.PENDING,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        updateItemState(queuedItem)
+                        preferences.addOrUpdateDownload(queuedItem)
+                        DownloadForegroundService.queueDownload(context, item.id)
+                    }
+                    return@launch
+                }
+
                 val limit = (newLimit ?: preferences.maxConcurrentDownloads.first()).coerceIn(1, 5)
                 val currentList = _liveDownloadsState.value
                 val activeDownloads = currentList.filter { it.status == DownloadStatus.DOWNLOADING }
