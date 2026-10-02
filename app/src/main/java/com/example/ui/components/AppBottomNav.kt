@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -17,6 +18,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Tune
@@ -64,6 +67,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -407,17 +411,24 @@ fun AppBottomNav(
                                     )
                                 }
 
-                                // Icon
+                                // Icon (Animated downward arrow like Android system status bar when active downloads exist)
                                 Box(
                                     modifier = Modifier.scale(iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                        contentDescription = screen.title,
-                                        tint = contentColor,
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                                    if (isDownloadsTab && downloadsCount > 0) {
+                                        SystemDownloadAnimatedIcon(
+                                            tint = contentColor,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                                            contentDescription = screen.title,
+                                            tint = contentColor,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
                                 }
 
                                 // Number badge of active downloads count placed at top-end with expanding ripple wave and breathing pulse
@@ -437,24 +448,28 @@ fun AppBottomNav(
                                                 .background(activeColor.copy(alpha = rippleAlpha))
                                         )
 
-                                        // Number badge with breathing pulse
+                                        // Number badge with breathing pulse, perfectly centered
                                         Box(
                                             modifier = Modifier
                                                 .scale(pulseScale)
-                                                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                                                .size(19.dp)
                                                 .clip(CircleShape)
                                                 .background(activeColor)
-                                                .border(1.5.dp, containerBg, CircleShape)
-                                                .padding(horizontal = 4.5.dp, vertical = 1.dp),
+                                                .border(1.5.dp, containerBg, CircleShape),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
                                                 text = if (downloadsCount > 99) "99+" else downloadsCount.toString(),
                                                 color = Color.White,
-                                                fontSize = 9.5.sp,
+                                                fontSize = 10.sp,
                                                 fontWeight = FontWeight.ExtraBold,
-                                                lineHeight = 10.sp,
-                                                textAlign = TextAlign.Center
+                                                textAlign = TextAlign.Center,
+                                                style = androidx.compose.ui.text.TextStyle(
+                                                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(
+                                                        includeFontPadding = false
+                                                    ),
+                                                    lineHeight = 10.sp
+                                                )
                                             )
                                         }
                                     }
@@ -477,5 +492,84 @@ fun AppBottomNav(
                 }
             }
         }
+    }
+}
+
+/**
+ * Animated downward download arrow icon modeled after the Android system download indicator.
+ * Displays a stationary bottom tray and a downward moving arrow with continuous looping animation.
+ */
+@Composable
+private fun SystemDownloadAnimatedIcon(
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "system_download_arrow")
+    val arrowOffset by infiniteTransition.animateFloat(
+        initialValue = -3.5f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(850, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "arrow_y_offset"
+    )
+    val arrowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(850, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "arrow_alpha"
+    )
+
+    Box(
+        modifier = modifier.size(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Bottom tray line representing device storage / destination
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = 2.dp.toPx()
+            val startX = size.width * 0.20f
+            val endX = size.width * 0.80f
+            val bottomY = size.height * 0.82f
+            val lipHeight = 3.5.dp.toPx()
+
+            // Horizontal tray base
+            drawLine(
+                color = tint,
+                start = Offset(startX, bottomY),
+                end = Offset(endX, bottomY),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+            // Left lip
+            drawLine(
+                color = tint,
+                start = Offset(startX, bottomY),
+                end = Offset(startX, bottomY - lipHeight),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+            // Right lip
+            drawLine(
+                color = tint,
+                start = Offset(endX, bottomY),
+                end = Offset(endX, bottomY - lipHeight),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
+
+        // Downward animated arrow moving down into the tray
+        Icon(
+            imageVector = Icons.Default.ArrowDownward,
+            contentDescription = null,
+            tint = tint.copy(alpha = arrowAlpha),
+            modifier = Modifier
+                .size(16.dp)
+                .offset(y = arrowOffset.dp)
+        )
     }
 }

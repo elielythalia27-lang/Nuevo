@@ -54,6 +54,8 @@ class DownloadHelper(
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private val queueMutex = Mutex()
     private val liveProgressMap = ConcurrentHashMap<String, LiveProgressUpdate>()
+    @Volatile
+    private var cachedMaxLimit: Int = 3
 
     // In-memory Single Source of Truth for 0ms latency UI updates
     private val _liveDownloadsState = MutableStateFlow<List<DownloadItem>>(emptyList())
@@ -167,6 +169,7 @@ class DownloadHelper(
         // Observe max concurrency settings changes
         scope.launch(Dispatchers.IO) {
             preferences.maxConcurrentDownloads.collect { limit ->
+                cachedMaxLimit = limit.coerceIn(1, 5)
                 syncConcurrentDownloadsLimit(limit)
             }
         }
@@ -226,7 +229,13 @@ class DownloadHelper(
         _liveDownloadsState.update { list ->
             list.filterNot { it.id == id }
         }
+        scope.launch(Dispatchers.IO) {
+            preferences.removeDownload(id)
+            checkAndStartNextPending()
+        }
     }
+
+    fun getMaxConcurrentLimit(): Int = cachedMaxLimit
 
     fun markCompleted(completedItem: DownloadItem) {
         clearLiveProgress(completedItem.id)

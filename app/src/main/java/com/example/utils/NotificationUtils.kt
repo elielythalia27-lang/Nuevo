@@ -143,8 +143,8 @@ object NotificationUtils {
     fun formatSpeed(speed: Long): String {
         return when {
             speed <= 0L -> "Conectando..."
-            speed >= 1024 * 1024 -> String.format(Locale.US, "%.2f MB/s", speed / (1024.0 * 1024.0))
-            else -> String.format(Locale.US, "%.2f KB/s", speed / 1024.0)
+            speed >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB/s", speed / (1024.0 * 1024.0))
+            else -> "${(speed / 1024).coerceAtLeast(1L)} KB/s"
         }
     }
 

@@ -171,15 +171,14 @@ fun formatByteSize(bytes: Long): String {
 }
 
 /**
- * Standardized download speed formatting matching notifications, cards, and general speed.
- * Examples: 1.45 MB/s, 350.20 KB/s
+ * Standardized download speed formatting: integer KB/s and 1 decimal place MB/s (e.g. 2.5 MB/s, 350 KB/s).
  */
 fun formatDownloadSpeed(bytesPerSec: Long): String {
-    if (bytesPerSec <= 0L) return "0.00 KB/s"
+    if (bytesPerSec <= 0L) return "0 KB/s"
     return if (bytesPerSec >= 1024 * 1024) {
-        String.format(java.util.Locale.US, "%.2f MB/s", bytesPerSec / (1024.0 * 1024.0))
+        String.format(java.util.Locale.US, "%.1f MB/s", bytesPerSec / (1024.0 * 1024.0))
     } else {
-        String.format(java.util.Locale.US, "%.2f KB/s", bytesPerSec / 1024.0)
+        "${(bytesPerSec / 1024).coerceAtLeast(1L)} KB/s"
     }
 }
 

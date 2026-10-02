@@ -10,7 +10,10 @@ import android.os.Build
 import android.os.IBinder
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
+import com.example.ui.components.AppToastManager
+import com.example.ui.components.ToastType
 import com.example.utils.NotificationUtils
+import com.example.utils.VpnProxyDetector
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.InputStream
@@ -183,13 +186,44 @@ class DownloadForegroundService : Service() {
             val now = System.currentTimeMillis()
             if (!force && now - lastSummaryTime < 1500L) return
             lastSummaryTime = now
-            val notif = NotificationUtils.buildSummaryNotification(applicationContext, activeItems())
-            notificationManager.notify(SUMMARY_NID, notif)
+            val active = activeItems()
+            if (active.isEmpty()) {
+                if (downloadJobs.isEmpty() && userStopping.isEmpty()) {
+                    foregroundStarted = false
+                    stopForegroundCompat()
+                    try { notificationManager.cancel(SUMMARY_NID) } catch (_: Exception) {}
+                }
+            } else {
+                val notif = NotificationUtils.buildSummaryNotification(applicationContext, active)
+                notificationManager.notify(SUMMARY_NID, notif)
+            }
         }
     }
 
     private fun startDownloadJob(item: DownloadItem) {
-        if (userStopping.contains(item.id)) return // se está pausando/cancelando
+        if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
+            val paused = item.copy(status = DownloadStatus.PAUSED, speedBytesPerSec = 0L, etaSeconds = 0L)
+            helper.updateItemState(paused)
+            notificationManager.notify(
+                pausedNid(item.id),
+                NotificationUtils.buildPausedNotification(applicationContext, paused)
+            )
+            AppToastManager.show("Desactiva la VPN o Proxy para descargar", ToastType.WARNING)
+            stopIfIdle()
+            return
+        }
+
+        val activeRunningJobs = downloadJobs.values.count { it.isActive }
+        val maxLimit = helper.getMaxConcurrentLimit()
+        if (activeRunningJobs >= maxLimit) {
+            val pending = item.copy(status = DownloadStatus.PENDING, speedBytesPerSec = 0L, etaSeconds = 0L)
+            helper.updateItemState(pending)
+            AppToastManager.show("En cola (máximo $maxLimit descargas activas)", ToastType.INFO)
+            stopIfIdle()
+            return
+        }
+
+        userStopping.remove(item.id)
         if (downloadJobs[item.id]?.isActive == true) return // ya está corriendo
 
         // Solo se quita la notificación "Fallida". La de pausa comparte ID con la de progreso.
@@ -311,6 +345,9 @@ class DownloadForegroundService : Service() {
                 val now = System.currentTimeMillis()
                 val timeDiff = now - lastTime
                 if (timeDiff >= 1000L) {
+                    if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
+                        throw Exception("Descarga pausada: VPN o Proxy detectado")
+                    }
                     // Velocidad medida en esta ventana de ~1 segundo
                     val instantSpeed = (bytesSinceLastUpdate * 1000L) / timeDiff.coerceAtLeast(1L)
                     // Suavizado EMA: 70% valor anterior + 30% medición nueva
@@ -415,6 +452,7 @@ class DownloadForegroundService : Service() {
                     foregroundStarted = false
                     stopForegroundCompat()
                 }
+                try { notificationManager.cancel(SUMMARY_NID) } catch (_: Exception) {}
                 stopSelf()
             }
         }
