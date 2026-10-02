@@ -6,26 +6,6 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Light Theme Background Rounded Square Card -->
-    <path
-        android:pathData="M34,16 L74,16 C84,16 92,24 92,34 L92,74 C92,84 84,92 74,92 L34,92 C24,92 16,84 16,74 L16,34 C16,24 24,16 34,16 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="54"
-                android:startY="16"
-                android:endX="54"
-                android:endY="92"
-                android:type="linear">
-                <item android:color="#FFFFFFFF" android:offset="0.0" />
-                <item android:color="#FFF8FAFC" android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path
-        android:pathData="M34,16 L74,16 C84,16 92,24 92,34 L92,74 C92,84 84,92 74,92 L34,92 C24,92 16,84 16,74 L16,34 C16,24 24,16 34,16 Z"
-        android:strokeColor="#2200897B"
-        android:strokeWidth="1.2" />
-
     <!-- 3D Soft Ambient Ground Shadow -->
     <path
         android:pathData="M32,77 C32,74 76,74 76,77 C76,80 32,80 32,77 Z">

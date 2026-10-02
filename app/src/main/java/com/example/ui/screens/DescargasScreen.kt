@@ -91,10 +91,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -222,15 +224,40 @@ fun DescargasScreen(
         }
     }
 
-    // Reactive download speed ticker calculated directly from active list updates
-    val stabilizedTotalSpeed = remember(activeList) {
+    // Stabilized download speed ticker with steady cadence and EMA smoothing so numbers do not jump erratically
+    val currentActiveList by rememberUpdatedState(activeList)
+    var stabilizedTotalSpeed by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(activeList) {
         val hasDownloading = activeList.any { it.status == DownloadStatus.DOWNLOADING }
-        if (hasDownloading) {
-            activeList
-                .filter { it.status == DownloadStatus.DOWNLOADING }
-                .sumOf { it.speedBytesPerSec }
-        } else {
-            0L
+        if (!hasDownloading) {
+            stabilizedTotalSpeed = 0L
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        var smoothedSpeed = 0L
+        while (isActive) {
+            delay(1400L)
+            val list = currentActiveList
+            val hasDownloading = list.any { it.status == DownloadStatus.DOWNLOADING }
+            if (hasDownloading) {
+                val targetSum = list
+                    .filter { it.status == DownloadStatus.DOWNLOADING }
+                    .sumOf { it.speedBytesPerSec }
+                smoothedSpeed = if (smoothedSpeed <= 0L) {
+                    targetSum
+                } else if (targetSum <= 0L) {
+                    (smoothedSpeed * 0.40).toLong()
+                } else {
+                    // Smooth EMA: 40% previous + 60% new target
+                    ((smoothedSpeed * 0.40) + (targetSum * 0.60)).toLong()
+                }
+                stabilizedTotalSpeed = smoothedSpeed
+            } else {
+                smoothedSpeed = 0L
+                stabilizedTotalSpeed = 0L
+            }
         }
     }
 
@@ -886,8 +913,8 @@ private fun ActiveDownloadsTab(
                                     color = textSecondary
                                 )
                                 val speedStr = if (totalSpeed > 0L) {
-                                    if (totalSpeed >= 1024 * 1024) String.format(java.util.Locale.US, "%.1f MB/s", totalSpeed / (1024.0 * 1024.0))
-                                    else "${totalSpeed / 1024} KB/s"
+                                    if (totalSpeed >= 1024 * 1024) String.format(java.util.Locale.US, "%.2f MB/s", totalSpeed / (1024.0 * 1024.0))
+                                    else String.format(java.util.Locale.US, "%.2f KB/s", totalSpeed / 1024.0)
                                 } else {
                                     if (activeList.any { it.status == DownloadStatus.DOWNLOADING }) "Iniciando..." else "En pausa"
                                 }

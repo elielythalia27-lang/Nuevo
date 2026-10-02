@@ -105,6 +105,7 @@ fun PlayerScreen(
     year: String,
     type: String,
     initialPositionMs: Long = 0L,
+    initialDurationMs: Long = 0L,
     volumeKeyTrigger: Int = 0,
     onBack: () -> Unit,
     onSavePosition: (Long, Long) -> Unit,
@@ -139,7 +140,7 @@ fun PlayerScreen(
         }
     }
     var currentPositionMs by remember { mutableLongStateOf(initialPositionMs) }
-    var durationMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(initialDurationMs.coerceAtLeast(0L)) }
     var bufferedPositionMs by remember { mutableLongStateOf(0L) }
     var isDraggingSlider by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
@@ -462,9 +463,44 @@ fun PlayerScreen(
 
         onDispose {
             exoPlayer.removeListener(listener)
-            onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
+            val finalPos = if (hasFirstFrameRendered) {
+                exoPlayer.currentPosition.coerceAtLeast(0L)
+            } else {
+                initialPositionMs
+            }
+            val currentExoDur = exoPlayer.duration.coerceAtLeast(0L)
+            val finalDur = if (durationMs > 0L) {
+                durationMs
+            } else if (currentExoDur > 0L) {
+                currentExoDur
+            } else {
+                initialDurationMs
+            }
+            if (hasFirstFrameRendered || initialPositionMs > 0L) {
+                onSavePosition(finalPos, finalDur)
+            }
             exoPlayer.release()
         }
+    }
+
+    val saveAndExit: () -> Unit = {
+        val finalPos = if (hasFirstFrameRendered) {
+            exoPlayer.currentPosition.coerceAtLeast(0L)
+        } else {
+            initialPositionMs
+        }
+        val currentExoDur = exoPlayer.duration.coerceAtLeast(0L)
+        val finalDur = if (durationMs > 0L) {
+            durationMs
+        } else if (currentExoDur > 0L) {
+            currentExoDur
+        } else {
+            initialDurationMs
+        }
+        if (hasFirstFrameRendered || initialPositionMs > 0L) {
+            onSavePosition(finalPos, finalDur)
+        }
+        onBack()
     }
 
     // Time ticker loop
@@ -487,8 +523,7 @@ fun PlayerScreen(
         if (isScreenLocked) {
             showUnlockButton = true
         } else {
-            onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-            onBack()
+            saveAndExit()
         }
     }
 
@@ -702,10 +737,7 @@ fun PlayerScreen(
             ) {
                 NextPlayerInitialLoadingOverlay(
                     title = displayTitle,
-                    onBack = {
-                        onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-                        onBack()
-                    }
+                    onBack = saveAndExit
                 )
             }
 
@@ -754,10 +786,7 @@ fun PlayerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 OutlinedButton(
-                                    onClick = {
-                                        onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-                                        onBack()
-                                    },
+                                    onClick = saveAndExit,
                                     modifier = Modifier.weight(1f).height(46.dp),
                                     shape = RoundedCornerShape(12.dp),
                                     border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.35f)),
@@ -849,10 +878,7 @@ fun PlayerScreen(
                         currentSpeed = playbackSpeed,
                         hasAudioTracks = audioTracks.size > 1,
                         hasSubtitleTracks = subtitleTracks.isNotEmpty(),
-                        onBack = {
-                            onSavePosition(exoPlayer.currentPosition, exoPlayer.duration)
-                            onBack()
-                        },
+                        onBack = saveAndExit,
                         onCycleResizeMode = {
                             currentResizeMode = when (currentResizeMode) {
                                 NextPlayerResizeMode.FIT -> NextPlayerResizeMode.ZOOM

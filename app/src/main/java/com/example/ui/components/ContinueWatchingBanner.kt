@@ -179,18 +179,25 @@ fun ContinueWatchingBanner(
                         color = titleColor
                     )
                     Spacer(modifier = Modifier.height(4.dp))
+                    val timeText = if (item.durationMs > 0L) {
+                        "${formatTime(item.positionMs)} / ${formatTime(item.durationMs)}"
+                    } else {
+                        "En el min ${formatTime(item.positionMs)}"
+                    }
                     Text(
-                        text = "${formatTime(item.positionMs)} / ${formatTime(item.durationMs)}",
+                        text = timeText,
                         fontSize = 11.sp,
                         color = subtitleColor
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    SleekLinearProgressBar(
-                        progress = item.progress,
-                        isDarkTheme = isDarkTheme,
-                        modifier = Modifier.fillMaxWidth(),
-                        height = 6.dp
-                    )
+                    if (item.durationMs > 0L) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SleekLinearProgressBar(
+                            progress = item.progress,
+                            isDarkTheme = isDarkTheme,
+                            modifier = Modifier.fillMaxWidth(),
+                            height = 6.dp
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(10.dp))

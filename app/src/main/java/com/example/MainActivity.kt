@@ -78,7 +78,6 @@ import com.example.ui.screens.AjustesScreen
 import com.example.ui.screens.DescargasScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.PlayerScreen
-import com.example.ui.screens.SplashScreen
 import com.example.ui.theme.AppThemeColor
 import com.example.ui.theme.MyApplicationTheme
 import com.example.utils.NotificationUtils
@@ -312,6 +311,7 @@ fun MainAppNavigation(
             year = activePlayback.year,
             type = activePlayback.type,
             initialPositionMs = activePlayback.initialPositionMs,
+            initialDurationMs = activePlayback.initialDurationMs,
             onBack = { viewModel.closePlayer() },
             onSavePosition = { pos, dur ->
                 viewModel.savePlaybackPosition(

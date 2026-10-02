@@ -34,7 +34,8 @@ data class PlaybackTarget(
     val coverUrl: String,
     val year: String,
     val type: String,
-    val initialPositionMs: Long = 0L
+    val initialPositionMs: Long = 0L,
+    val initialDurationMs: Long = 0L
 )
 
 data class HomeUiState(
@@ -445,7 +446,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         durationMs: Long
     ) {
         viewModelScope.launch {
-            if (positionMs > 1000L && (durationMs <= 0L || positionMs < durationMs - 1000L)) {
+            val previousItem = _uiState.value.continueWatching?.takeIf { it.videoUrl == videoUrl }
+            val effectiveDuration = if (durationMs > 0L) {
+                durationMs
+            } else {
+                previousItem?.durationMs ?: 0L
+            }
+            if (positionMs > 1000L && (effectiveDuration <= 0L || positionMs < effectiveDuration - 1000L)) {
                 repository.saveContinueWatching(
                     ContinueWatchingItem(
                         videoUrl = videoUrl,
@@ -454,10 +461,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         year = year,
                         type = type,
                         positionMs = positionMs,
-                        durationMs = durationMs
+                        durationMs = effectiveDuration
                     )
                 )
-            } else if (durationMs > 0 && positionMs >= durationMs - 1000L) {
+            } else if (effectiveDuration > 0 && positionMs >= effectiveDuration - 1000L) {
                 repository.clearContinueWatching()
             }
         }
@@ -539,10 +546,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
         }
-        val savedPos = if (initialPositionMs > 0L) initialPositionMs else {
-            val cw = _uiState.value.continueWatching
-            if (cw != null && cw.videoUrl == pelicula.safeVideoUrl) cw.positionMs else 0L
-        }
+        val cw = _uiState.value.continueWatching?.takeIf { it.videoUrl == pelicula.safeVideoUrl }
+        val savedPos = if (initialPositionMs > 0L) initialPositionMs else (cw?.positionMs ?: 0L)
+        val savedDur = cw?.durationMs ?: 0L
         val tag = if (pelicula.isVideo) pelicula.youtuberName else pelicula.safeYear
         _uiState.update {
             it.copy(
@@ -552,16 +558,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     coverUrl = pelicula.safeCoverUrl,
                     year = tag,
                     type = pelicula.tp ?: "pl",
-                    initialPositionMs = savedPos
+                    initialPositionMs = savedPos,
+                    initialDurationMs = savedDur
                 )
             )
         }
     }
 
     fun playDownload(download: DownloadItem) {
-        val savedPos = _uiState.value.continueWatching?.let {
-            if (it.videoUrl == download.originalVideoUrl || it.videoUrl == download.localFilePath) it.positionMs else 0L
-        } ?: 0L
+        val cw = _uiState.value.continueWatching?.takeIf {
+            it.videoUrl == download.originalVideoUrl || it.videoUrl == download.localFilePath
+        }
+        val savedPos = cw?.positionMs ?: 0L
+        val savedDur = cw?.durationMs ?: 0L
         _uiState.update {
             it.copy(
                 activePlayback = PlaybackTarget(
@@ -570,7 +579,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     coverUrl = download.coverUrl,
                     year = download.year,
                     type = download.type,
-                    initialPositionMs = savedPos
+                    initialPositionMs = savedPos,
+                    initialDurationMs = savedDur
                 )
             )
         }
