@@ -113,10 +113,7 @@ data class DownloadItem(
             if (status == DownloadStatus.PAUSED) return "En pausa"
             if (status != DownloadStatus.DOWNLOADING) return "-- KB/s"
             if (speedBytesPerSec <= 0L) return "Iniciando..."
-            return when {
-                speedBytesPerSec >= 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB/s", speedBytesPerSec / (1024.0 * 1024.0))
-                else -> "${(speedBytesPerSec / 1024).coerceAtLeast(1L)} KB/s"
-            }
+            return formatDownloadSpeed(speedBytesPerSec)
         }
 
     val formattedDownloadedSize: String
@@ -170,6 +167,19 @@ fun formatByteSize(bytes: Long): String {
         gb >= 1.0 -> "${Math.round(gb)} GB"
         mb >= 1.0 -> "${Math.round(mb)} MB"
         else -> "${Math.round(kb)} KB"
+    }
+}
+
+/**
+ * Standardized download speed formatting matching notifications, cards, and general speed.
+ * Examples: 1.45 MB/s, 350.20 KB/s
+ */
+fun formatDownloadSpeed(bytesPerSec: Long): String {
+    if (bytesPerSec <= 0L) return "0.00 KB/s"
+    return if (bytesPerSec >= 1024 * 1024) {
+        String.format(java.util.Locale.US, "%.2f MB/s", bytesPerSec / (1024.0 * 1024.0))
+    } else {
+        String.format(java.util.Locale.US, "%.2f KB/s", bytesPerSec / 1024.0)
     }
 }
 

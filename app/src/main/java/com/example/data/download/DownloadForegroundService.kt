@@ -1,73 +1,32 @@
 package com.example.data.download
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Environment
 import android.os.IBinder
-import androidx.core.content.ContextCompat
-import com.example.data.local.PeliculaPreferences
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
-import com.example.ui.components.AppToastManager
-import com.example.ui.components.ToastType
-import com.example.utils.NetworkUtils
 import com.example.utils.NotificationUtils
-import com.example.utils.PermissionHelper
-import com.example.utils.VpnProxyDetector
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import kotlinx.coroutines.*
 import java.io.File
 import java.io.InputStream
 import java.io.RandomAccessFile
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
-/**
- * High-performance, 100% Android-compliant Foreground Service for downloads.
- * Modeled after professional download engines (IDM / 1DM, Seal, NewPipe):
- * - Direct HTTP streaming with resume support (Range headers).
- * - Stable, flicker-free notification channel and updates.
- * - Accurate speed and ETA calculation without false 99% jumps.
- * - Instant cancellation with file cleanup and immediate notification dismissal.
- * - Proper lifecycle management with startForeground and stopSelf.
- */
+// Adaptadores para nombres y tipos del modelo en el proyecto
+private val DownloadItem.downloadUrl: String get() = this.originalVideoUrl
+private val DownloadHelper.downloadsFlow get() = this.liveDownloadsState
+private fun DownloadHelper.removeItem(id: String) = this.removeItemFromState(id)
+private fun DownloadHelper.removeItem(id: Long) = this.removeItemFromState(id.toString())
+private fun DownloadHelper.getItem(id: Long): DownloadItem? = this.getItem(id.toString())
+
 class DownloadForegroundService : Service() {
-
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private lateinit var notificationManager: NotificationManager
-    private lateinit var preferences: PeliculaPreferences
-
-    private val activeJobs = ConcurrentHashMap<String, Job>()
-    private val activeItems = ConcurrentHashMap<String, DownloadItem>()
-
-    @Volatile
-    private var currentForegroundId: Int = FOREGROUND_SERVICE_NOTIFICATION_ID
-    private val notifLock = Any()
-
-    private val okHttpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
-    }
 
     companion object {
         const val ACTION_START_DOWNLOAD = "com.downloadfree.ACTION_START_DOWNLOAD"
@@ -75,13 +34,11 @@ class DownloadForegroundService : Service() {
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
         const val ACTION_QUEUE_DOWNLOAD = "com.downloadfree.ACTION_QUEUE_DOWNLOAD"
-        const val ACTION_PAUSE_ALL = "com.downloadfree.ACTION_PAUSE_ALL"
+        const val ACTION_PAUSE_ALL = "com.downloadfree.PAUSE_ALL"
         const val ACTION_RESUME_ALL = "com.downloadfree.ACTION_RESUME_ALL"
         const val ACTION_CANCEL_ALL = "com.downloadfree.ACTION_CANCEL_ALL"
-
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
-
-        const val FOREGROUND_SERVICE_NOTIFICATION_ID = 88888
+        private const val SUMMARY_NID = 0x7FFF0000
 
         fun startDownload(context: Context, item: DownloadItem) {
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
@@ -100,11 +57,7 @@ class DownloadForegroundService : Service() {
         }
 
         fun queueDownload(context: Context, downloadId: String) {
-            val intent = Intent(context, DownloadForegroundService::class.java).apply {
-                action = ACTION_QUEUE_DOWNLOAD
-                putExtra(EXTRA_DOWNLOAD_ID, downloadId)
-            }
-            sendServiceCommand(context, intent)
+            pauseDownload(context, downloadId)
         }
 
         fun resumeDownload(context: Context, downloadId: String) {
@@ -147,7 +100,7 @@ class DownloadForegroundService : Service() {
         private fun startForegroundServiceCompat(context: Context, intent: Intent) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    ContextCompat.startForegroundService(context, intent)
+                    context.startForegroundService(intent)
                 } else {
                     context.startService(intent)
                 }
@@ -161,604 +114,331 @@ class DownloadForegroundService : Service() {
         }
     }
 
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val downloadJobs = ConcurrentHashMap<String, Job>()
+    private val connections = ConcurrentHashMap<String, HttpURLConnection>()
+    private val userStopping: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    private val notifLock = Any()
+    private var foregroundStarted = false
+    private var lastSummaryTime = 0L
+
+    private lateinit var notificationManager: NotificationManager
+    private lateinit var helper: DownloadHelper
+
+    // IDs de notificación por descarga. Progreso y pausa comparten ID: al pausar,
+    // Android actualiza la notificación en su mismo lugar (no desaparece ni se reordena).
+    private fun progressNid(id: String): Int = (id.hashCode() and 0x0FFFFFFF) + 1
+    private fun progressNid(id: Long): Int = ((id xor (id ushr 32)).toInt() and 0x0FFFFFFF) + 1
+    private fun pausedNid(id: String): Int = progressNid(id)
+    private fun pausedNid(id: Long): Int = progressNid(id)
+    private fun doneNid(id: String): Int = progressNid(id) + 0x20000000
+    private fun doneNid(id: Long): Int = progressNid(id) + 0x20000000
+    private fun failedNid(id: String): Int = progressNid(id) + 0x30000000
+    private fun failedNid(id: Long): Int = progressNid(id) + 0x30000000
+
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        preferences = PeliculaPreferences(applicationContext)
-        NotificationUtils.initNotificationChannels(applicationContext)
-
-        // Promote to Foreground Service immediately to satisfy Android OS requirements
-        startInForeground()
-    }
-
-    private fun startInForeground() {
-        try {
-            val summaryNotif = NotificationUtils.buildSummaryNotification(applicationContext)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    FOREGROUND_SERVICE_NOTIFICATION_ID,
-                    summaryNotif,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                )
-            } else {
-                startForeground(FOREGROUND_SERVICE_NOTIFICATION_ID, summaryNotif)
-            }
-        } catch (_: Exception) {}
+        helper = DownloadHelper.getActiveInstance(applicationContext)
+        NotificationUtils.initNotificationChannels(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent == null) {
-            checkServiceLiveness()
-            return START_NOT_STICKY
-        }
+        val action = intent?.action ?: return START_NOT_STICKY
+        val downloadId = intent.getStringExtra(DownloadHelper.EXTRA_DOWNLOAD_ID)
+            ?: intent.getLongExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, -1L).takeIf { it != -1L }?.toString()
 
-        when (intent.action) {
-            ACTION_START_DOWNLOAD -> {
-                val id = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
-                if (!id.isNullOrBlank()) {
-                    val helper = DownloadHelper.getActiveInstance(applicationContext)
-                    val item = helper.getItem(id)
-                    if (item != null) {
-                        handleStartDownload(item)
+        when (action) {
+            DownloadHelper.ACTION_START_DOWNLOAD,
+            "com.downloadfree.ACTION_RESUME_DOWNLOAD" -> {
+                val item = downloadId?.let { helper.getItem(it) }
+                if (item == null) {
+                    if (downloadId != null) {
+                        notificationManager.cancel(pausedNid(downloadId))
+                        notificationManager.cancel(failedNid(downloadId))
                     }
+                    stopIfIdle()
+                } else {
+                    startDownloadJob(item)
                 }
             }
-            ACTION_PAUSE_DOWNLOAD -> {
-                val id = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
-                if (!id.isNullOrBlank()) {
-                    handlePauseDownload(id)
-                }
-            }
-            ACTION_QUEUE_DOWNLOAD -> {
-                val id = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
-                if (!id.isNullOrBlank()) {
-                    handleQueueDownload(id)
-                }
-            }
-            ACTION_RESUME_DOWNLOAD -> {
-                val id = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
-                if (!id.isNullOrBlank()) {
-                    handleResumeDownload(id)
-                }
-            }
-            ACTION_CANCEL_DOWNLOAD -> {
-                val id = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
-                if (!id.isNullOrBlank()) {
-                    handleCancelDownload(id)
-                }
-            }
-            ACTION_PAUSE_ALL -> {
-                handlePauseAll()
-            }
-            ACTION_RESUME_ALL -> {
-                handleResumeAll()
-            }
-            ACTION_CANCEL_ALL -> {
-                handleCancelAll()
+            DownloadHelper.ACTION_PAUSE_DOWNLOAD -> downloadId?.let { pauseDownload(it) }
+            DownloadHelper.ACTION_CANCEL_DOWNLOAD -> downloadId?.let { cancelDownload(it) }
+            ACTION_PAUSE_ALL, "com.downloadfree.ACTION_PAUSE_ALL" -> {
+                val ids = downloadJobs.keys.toList()
+                if (ids.isEmpty()) stopIfIdle() else ids.forEach { pauseDownload(it) }
             }
         }
-
         return START_NOT_STICKY
     }
 
-    private fun handleStartDownload(item: DownloadItem) {
-        // Cancel any existing job for this item
-        activeJobs.remove(item.id)?.cancel()
-        activeItems[item.id] = item
+    private fun activeItems(): List<DownloadItem> =
+        helper.downloadsFlow.value.filter { it.status == DownloadStatus.DOWNLOADING }
 
-        val job = serviceScope.launch {
-            executeDownload(item)
-        }
-        activeJobs[item.id] = job
-        updateForegroundSummary()
-    }
-
-    private fun handleQueueDownload(downloadId: String) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        val job = activeJobs.remove(downloadId)
-        val live = helper.getLiveProgress(downloadId)
-        val item = activeItems.remove(downloadId) ?: helper.getItem(downloadId)
-
-        job?.cancel()
-
-        if (item != null) {
-            val file = File(item.localFilePath)
-            val fileLen = if (file.exists()) file.length() else 0L
-            val downloadedBytes = when {
-                fileLen > 0L -> fileLen
-                live != null && live.downloadedBytes > 0L -> live.downloadedBytes
-                item.downloadedBytes > 0L -> item.downloadedBytes
-                else -> 0L
-            }
-            val totalBytes = when {
-                live != null && live.totalBytes > 0L -> live.totalBytes
-                item.totalBytes > 0L -> item.totalBytes
-                else -> 0L
-            }
-            val progress = when {
-                totalBytes > 0L && downloadedBytes > 0L -> ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99)
-                live != null && live.progress > 0 -> live.progress
-                item.progress > 0 -> item.progress
-                else -> 0
-            }
-
-            helper.clearLiveProgress(downloadId)
-
-            val queuedItem = item.copy(
-                status = DownloadStatus.PENDING,
-                downloadedBytes = downloadedBytes,
-                totalBytes = totalBytes,
-                progress = progress,
-                speedBytesPerSec = 0L,
-                etaSeconds = 0L
-            )
-
-            helper.updateItemState(queuedItem)
-            serviceScope.launch {
-                preferences.addOrUpdateDownload(queuedItem)
-            }
-
-            promoteNextForegroundNotification(NotificationUtils.getNotificationId(downloadId))
-        } else {
-            helper.clearLiveProgress(downloadId)
-        }
-        checkServiceLiveness()
-    }
-
-    private fun handlePauseDownload(downloadId: String) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        val job = activeJobs.remove(downloadId)
-        val live = helper.getLiveProgress(downloadId)
-        val item = activeItems.remove(downloadId) ?: helper.getItem(downloadId)
-
-        job?.cancel()
-
-        if (item != null) {
-            val file = File(item.localFilePath)
-            val fileLen = if (file.exists()) file.length() else 0L
-            val downloadedBytes = when {
-                fileLen > 0L -> fileLen
-                live != null && live.downloadedBytes > 0L -> live.downloadedBytes
-                item.downloadedBytes > 0L -> item.downloadedBytes
-                else -> 0L
-            }
-            val totalBytes = when {
-                live != null && live.totalBytes > 0L -> live.totalBytes
-                item.totalBytes > 0L -> item.totalBytes
-                else -> 0L
-            }
-            val progress = when {
-                totalBytes > 0L && downloadedBytes > 0L -> ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99)
-                live != null && live.progress > 0 -> live.progress
-                item.progress > 0 -> item.progress
-                else -> 0
-            }
-
-            helper.clearLiveProgress(downloadId)
-
-            val pausedItem = item.copy(
-                status = DownloadStatus.PAUSED,
-                downloadedBytes = downloadedBytes,
-                totalBytes = totalBytes,
-                progress = progress,
-                speedBytesPerSec = 0L,
-                etaSeconds = 0L
-            )
-
-            helper.updateItemState(pausedItem)
-            serviceScope.launch {
-                preferences.addOrUpdateDownload(pausedItem)
-                helper.checkAndStartNextPending()
-            }
-
-            promoteNextForegroundNotification(NotificationUtils.getNotificationId(downloadId))
-            if (PermissionHelper.hasNotificationPermission(applicationContext)) {
-                try {
-                    val notif = NotificationUtils.buildPausedNotification(applicationContext, pausedItem)
-                    notificationManager.notify(NotificationUtils.getNotificationId(downloadId), notif)
-                } catch (_: Exception) {}
-            }
-        } else {
-            helper.clearLiveProgress(downloadId)
-        }
-        checkServiceLiveness()
-    }
-
-    private fun handleResumeDownload(downloadId: String) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        val item = helper.getItem(downloadId) ?: return
-
-        if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
-            AppToastManager.show("Desactiva la VPN o Proxy para reanudar la descarga", ToastType.WARNING)
-            return
-        }
-
-        if (!NetworkUtils.isConnected(applicationContext)) {
-            AppToastManager.show("Sin conexión a internet", ToastType.WARNING)
-            return
-        }
-
-        handleStartDownload(item.copy(status = DownloadStatus.DOWNLOADING))
-    }
-
-    private fun handleCancelDownload(downloadId: String) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-
-        // Cancel job and clear tracking immediately
-        activeJobs.remove(downloadId)?.cancel()
-        val item = activeItems.remove(downloadId) ?: helper.getItem(downloadId)
-        helper.clearLiveProgress(downloadId)
-
-        // Immediately dismiss the notification and transfer foreground if needed
-        promoteNextForegroundNotification(NotificationUtils.getNotificationId(downloadId))
-
-        helper.removeItemFromState(downloadId)
-
-        serviceScope.launch {
-            if (item != null) {
-                try {
-                    val file = File(item.localFilePath)
-                    if (file.exists()) {
-                        file.delete()
-                    }
-                } catch (_: Exception) {}
-            }
-            preferences.removeDownload(downloadId)
-            helper.checkAndStartNextPending()
-            checkServiceLiveness()
+    /** Actualiza la notificación resumen (que es la del primer plano). Máximo 1 vez cada 1,5 segundos. */
+    private fun refreshSummary(force: Boolean = false) {
+        synchronized(notifLock) {
+            if (!foregroundStarted) return
+            val now = System.currentTimeMillis()
+            if (!force && now - lastSummaryTime < 1500L) return
+            lastSummaryTime = now
+            val notif = NotificationUtils.buildSummaryNotification(applicationContext, activeItems())
+            notificationManager.notify(SUMMARY_NID, notif)
         }
     }
 
-    private fun handlePauseAll() {
-        val currentActiveIds = activeJobs.keys().toList()
-        currentActiveIds.forEach { id ->
-            handlePauseDownload(id)
-        }
-    }
+    private fun startDownloadJob(item: DownloadItem) {
+        if (userStopping.contains(item.id)) return // se está pausando/cancelando
+        if (downloadJobs[item.id]?.isActive == true) return // ya está corriendo
 
-    private fun handleResumeAll() {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        val pausedOrPending = helper.liveDownloadsState.value.filter {
-            it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING
-        }
-        pausedOrPending.forEach { item ->
-            handleResumeDownload(item.id)
-        }
-    }
+        // Solo se quita la notificación "Fallida". La de pausa comparte ID con la de progreso.
+        notificationManager.cancel(failedNid(item.id))
 
-    private fun handleCancelAll() {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        val activeOrPaused = helper.liveDownloadsState.value.filter {
-            it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING
-        }
-        activeOrPaused.forEach { item ->
-            handleCancelDownload(item.id)
-        }
-    }
-
-    private suspend fun executeDownload(initialItem: DownloadItem) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        val downloadId = initialItem.id
-        val videoUrl = initialItem.originalVideoUrl
-
-        if (videoUrl.isBlank()) {
-            handleDownloadError(initialItem, "URL de video no válida")
-            return
-        }
-
-        // Check VPN / Proxy
-        if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
-            handlePausedOnVpn(initialItem)
-            return
-        }
-
-        var actualFile = File(initialItem.localFilePath)
-        val safeDir = applicationContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            ?: applicationContext.filesDir
-
-        // Validate write access
-        try {
-            actualFile.parentFile?.mkdirs()
-            if (!actualFile.exists()) {
-                actualFile.createNewFile()
-                actualFile.delete()
-            }
-        } catch (_: Exception) {
-            safeDir.mkdirs()
-            actualFile = File(safeDir, actualFile.name)
-        }
-
-        var downloadedBytes = if (actualFile.exists()) actualFile.length() else 0L
-        var totalBytes = initialItem.totalBytes.coerceAtLeast(0L)
-
-        // Show initial connecting / indeterminate progress notification (0%, NEVER 99%)
-        val connectingItem = initialItem.copy(
-            localFilePath = actualFile.absolutePath,
+        val running = item.copy(
             status = DownloadStatus.DOWNLOADING,
-            downloadedBytes = downloadedBytes,
-            totalBytes = totalBytes,
-            progress = if (totalBytes > 0L) ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99) else 0,
             speedBytesPerSec = 0L,
             etaSeconds = 0L
         )
-        helper.updateItemState(connectingItem)
-        postProgressNotification(connectingItem, connectingItem.progress, 0L, 0L)
+        helper.updateItemState(running)
 
-        DownloadBandwidthCoordinator.registerStream(downloadId)
+        // La misma notificación pasa de "En pausa" a "Descargando" de inmediato, en su mismo lugar
+        notificationManager.notify(
+            progressNid(item.id),
+            NotificationUtils.buildProgressNotification(applicationContext, running, running.progress, 0L, 0L)
+        )
 
-        var retryCount = 0
-        val maxRetries = 3
-        var completed = false
-
-        while (serviceScope.isActive && retryCount < maxRetries && !completed) {
-            if (!activeJobs.containsKey(downloadId)) break
-
-            var input: InputStream? = null
-            var raf: RandomAccessFile? = null
-
-            try {
-                if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
-                    DownloadBandwidthCoordinator.unregisterStream(downloadId)
-                    handlePausedOnVpn(connectingItem)
-                    return
-                }
-
-                downloadedBytes = if (actualFile.exists()) actualFile.length() else 0L
-
-                val requestBuilder = Request.Builder().url(videoUrl)
-                if (downloadedBytes > 0L) {
-                    requestBuilder.addHeader("Range", "bytes=$downloadedBytes-")
-                }
-
-                val response = okHttpClient.newCall(requestBuilder.build()).execute()
-
-                if (!response.isSuccessful && response.code != 206) {
-                    if (response.code == 416) {
-                        // Range Not Satisfiable: file might already be complete
-                        if (downloadedBytes > 1024L) {
-                            completed = true
-                        } else {
-                            downloadedBytes = 0L
-                            actualFile.delete()
-                        }
-                    } else {
-                        throw Exception("HTTP ${response.code}: ${response.message}")
-                    }
-                }
-
-                if (completed) {
-                    markDownloadSuccess(connectingItem, actualFile)
-                    return
-                }
-
-                val body = response.body ?: throw Exception("Cuerpo de respuesta vacío")
-                val contentLength = body.contentLength()
-                val contentRangeHeader = response.header("Content-Range")
-                val parsedTotal = contentRangeHeader?.substringAfterLast('/', "")?.toLongOrNull() ?: -1L
-
-                totalBytes = when {
-                    parsedTotal > 0L -> parsedTotal
-                    response.code == 206 && contentLength > 0L -> downloadedBytes + contentLength
-                    contentLength > 0L -> contentLength
-                    else -> 0L
-                }
-
-                actualFile.parentFile?.mkdirs()
-                try {
-                    raf = RandomAccessFile(actualFile, "rw")
-                } catch (_: Exception) {
-                    safeDir.mkdirs()
-                    actualFile = File(safeDir, actualFile.name)
-                    raf = RandomAccessFile(actualFile, "rw")
-                }
-                if (response.code == 206) {
-                    raf.seek(downloadedBytes)
-                } else {
-                    raf.setLength(0)
-                    downloadedBytes = 0L
-                }
-
-                input = body.byteStream()
-                val buffer = ByteArray(32 * 1024)
-                var bytesRead = 0
-                var lastTime = System.currentTimeMillis()
-                var bytesSinceLastUpdate = 0L
-                var lastSpeed = 0L
-                var lastEta = 0L
-
-                while (serviceScope.isActive && activeJobs.containsKey(downloadId)) {
-                    bytesRead = input.read(buffer)
-                    if (bytesRead == -1) break
-
-                    raf.write(buffer, 0, bytesRead)
-                    downloadedBytes += bytesRead
-                    bytesSinceLastUpdate += bytesRead
-
-                    val now = System.currentTimeMillis()
-                    val timeDiff = now - lastTime
-
-                    // Throttle notification and UI updates to exactly 800ms
-                    if (timeDiff >= 800L) {
-                        val isWifiOnly = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
-                        if (isWifiOnly && !NetworkUtils.isWifiOrEthernet(applicationContext)) {
-                            throw Exception("Conexión Wi-Fi requerida")
-                        }
-                        if (!NetworkUtils.isConnected(applicationContext)) {
-                            throw Exception("Conexión a internet perdida")
-                        }
-
-                        lastSpeed = (bytesSinceLastUpdate * 1000L) / timeDiff.coerceAtLeast(1L)
-                        val remainingBytes = (totalBytes - downloadedBytes).coerceAtLeast(0L)
-                        lastEta = if (lastSpeed > 2048 && remainingBytes > 0) remainingBytes / lastSpeed else 0L
-
-                        // Progress calculation: ALWAYS 0 if totalBytes is unknown/zero, NEVER 99%
-                        val currentProgress = if (totalBytes > 0L) {
-                            ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99)
-                        } else {
-                            0
-                        }
-
-                        val progressItem = connectingItem.copy(
-                            localFilePath = actualFile.absolutePath,
-                            downloadedBytes = downloadedBytes,
-                            totalBytes = totalBytes,
-                            progress = currentProgress,
-                            speedBytesPerSec = lastSpeed,
-                            etaSeconds = lastEta
-                        )
-
-                        // Report to SSOT for Compose UI
-                        helper.reportProgress(
-                            downloadId = downloadId,
-                            downloadedBytes = downloadedBytes,
-                            totalBytes = totalBytes,
-                            progress = currentProgress,
-                            speedBytesPerSec = lastSpeed,
-                            etaSeconds = lastEta
-                        )
-
-                        // Update Notification
-                        postProgressNotification(progressItem, currentProgress, lastSpeed, lastEta)
-
-                        bytesSinceLastUpdate = 0L
-                        lastTime = now
-                    }
-                }
-
-                if (bytesRead == -1 && activeJobs.containsKey(downloadId)) {
-                    markDownloadSuccess(connectingItem.copy(totalBytes = downloadedBytes), actualFile)
-                    completed = true
-                    return
-                }
-
-            } catch (e: CancellationException) {
-                // Cancelled or paused by user
-                break
-            } catch (e: Exception) {
-                if (!activeJobs.containsKey(downloadId)) break
-                if (e.message?.contains("Wi-Fi", ignoreCase = true) == true) {
-                    val waitingItem = connectingItem.copy(
-                        status = DownloadStatus.PENDING,
-                        downloadedBytes = downloadedBytes,
-                        totalBytes = totalBytes,
-                        progress = if (totalBytes > 0L) ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99) else 0,
-                        speedBytesPerSec = 0L,
-                        etaSeconds = 0L
-                    )
-                    helper.updateItemState(waitingItem)
-                    serviceScope.launch(Dispatchers.IO) {
-                        preferences.addOrUpdateDownload(waitingItem)
-                    }
-                    handleQueueDownload(waitingItem.id)
-                    return
-                }
-                retryCount++
-                if (retryCount < maxRetries) {
-                    delay(1500L)
-                } else {
-                    val cleanMsg = NotificationUtils.sanitizeErrorMessage(e.localizedMessage)
-                    handleDownloadError(connectingItem, cleanMsg)
-                    return
-                }
-            } finally {
-                try { input?.close() } catch (_: Exception) {}
-                try { raf?.close() } catch (_: Exception) {}
-            }
-        }
-
-        DownloadBandwidthCoordinator.unregisterStream(downloadId)
-        checkServiceLiveness()
-    }
-
-    private fun promoteNextForegroundNotification(stoppingNotifId: Int) {
         synchronized(notifLock) {
-            if (currentForegroundId == stoppingNotifId) {
-                // Find another active job to be the foreground anchor
-                val nextActiveItem = activeItems.values.firstOrNull {
-                    NotificationUtils.getNotificationId(it.id) != stoppingNotifId
+            if (!foregroundStarted) {
+                val notif = NotificationUtils.buildSummaryNotification(this, activeItems())
+                startForegroundCompat(SUMMARY_NID, notif)
+                foregroundStarted = true
+                lastSummaryTime = System.currentTimeMillis()
+            }
+        }
+
+        val job = serviceScope.launch(start = CoroutineStart.LAZY) {
+            executeDownloadLoop(running)
+        }
+        downloadJobs[item.id] = job
+        job.start()
+        refreshSummary(force = true)
+    }
+
+    private suspend fun executeDownloadLoop(item: DownloadItem) {
+        val myJob = currentCoroutineContext()[Job]
+        val destinationFile = File(item.localFilePath)
+        val partFile = File(destinationFile.absolutePath + ".part")
+        var downloadedBytes = if (partFile.exists()) partFile.length() else 0L
+
+        var connection: HttpURLConnection? = null
+        var input: InputStream? = null
+        var raf: RandomAccessFile? = null
+
+        try {
+            val conn = (URL(item.downloadUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000
+                readTimeout = 20000
+                instanceFollowRedirects = true
+                setRequestProperty("Accept-Encoding", "identity")
+                if (downloadedBytes > 0L) {
+                    setRequestProperty("Range", "bytes=$downloadedBytes-")
                 }
-                if (nextActiveItem != null) {
-                    val nextId = NotificationUtils.getNotificationId(nextActiveItem.id)
-                    currentForegroundId = nextId
-                    val helper = DownloadHelper.getActiveInstance(applicationContext)
-                    val live = helper.getItem(nextActiveItem.id) ?: nextActiveItem
-                    val nextNotif = NotificationUtils.buildProgressNotification(
-                        applicationContext,
-                        live,
-                        live.progress,
-                        live.speedBytesPerSec,
-                        live.etaSeconds
-                    )
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        startForeground(nextId, nextNotif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-                    } else {
-                        startForeground(nextId, nextNotif)
-                    }
-                } else {
-                    currentForegroundId = FOREGROUND_SERVICE_NOTIFICATION_ID
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                            stopForeground(STOP_FOREGROUND_REMOVE)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            stopForeground(true)
-                        }
-                    } catch (_: Exception) {}
+            }
+            connection = conn
+            connections[item.id] = conn
+            currentCoroutineContext().ensureActive()
+
+            val code = conn.responseCode
+            if (code == 416) {
+                // El servidor no acepta ese rango: el .part no sirve, se empieza de cero
+                partFile.delete()
+                throw Exception("No se pudo reanudar. Pulsa reanudar otra vez.")
+            }
+            val isPartial = code == HttpURLConnection.HTTP_PARTIAL
+            val isOk = code == HttpURLConnection.HTTP_OK
+            if (!isPartial && !isOk) {
+                throw Exception("Error de respuesta HTTP: $code")
+            }
+
+            // TOTAL REAL: Content-Range en 206, Content-Length en 200
+            val lengthHeader = conn.contentLengthLong
+            val rangeTotal = if (isPartial) {
+                parseContentRangeTotal(conn.getHeaderField("Content-Range"))
+            } else null
+
+            var totalFromServer = true
+            var totalBytes = when {
+                rangeTotal != null -> rangeTotal
+                isPartial && lengthHeader > 0L -> lengthHeader + downloadedBytes
+                !isPartial && lengthHeader > 0L -> lengthHeader
+                else -> {
+                    totalFromServer = false
+                    item.totalBytes.coerceAtLeast(0L)
                 }
             }
 
-            try {
-                notificationManager.cancel(stoppingNotifId)
-            } catch (_: Exception) {}
+            // Si el servidor ignoró Range (200), se empieza desde cero
+            if (isOk) downloadedBytes = 0L
+
+            // Un total menor o igual a lo descargado es falso: se trata como desconocido
+            if (!totalFromServer && totalBytes in 1L..downloadedBytes) totalBytes = 0L
+
+            val stream = conn.inputStream
+            input = stream
+            val file = RandomAccessFile(partFile, "rw")
+            raf = file
+            if (downloadedBytes > 0L) file.seek(downloadedBytes) else file.setLength(0L)
+
+            // Mostrar de inmediato el total correcto
+            publishProgress(item, downloadedBytes, totalBytes, 0L, 0L)
+
+            val buffer = ByteArray(32 * 1024)
+            var bytesSinceLastUpdate = 0L
+            var lastTime = System.currentTimeMillis()
+            var smoothedSpeed = 0L
+
+            while (currentCoroutineContext().isActive) {
+                val bytesRead = stream.read(buffer)
+                if (bytesRead == -1) break
+                // Si se pausó mientras leía, no escribir ese último bloque
+                if (!currentCoroutineContext().isActive) break
+
+                file.write(buffer, 0, bytesRead)
+                downloadedBytes += bytesRead
+                bytesSinceLastUpdate += bytesRead
+
+                val now = System.currentTimeMillis()
+                val timeDiff = now - lastTime
+                if (timeDiff >= 1000L) {
+                    // Velocidad medida en esta ventana de ~1 segundo
+                    val instantSpeed = (bytesSinceLastUpdate * 1000L) / timeDiff.coerceAtLeast(1L)
+                    // Suavizado EMA: 70% valor anterior + 30% medición nueva
+                    smoothedSpeed = if (smoothedSpeed <= 0L) {
+                        instantSpeed
+                    } else {
+                        ((smoothedSpeed * 0.70) + (instantSpeed * 0.30)).toLong()
+                    }
+                    val speed = smoothedSpeed
+
+                    if (totalBytes in 1L until downloadedBytes) totalBytes = 0L
+                    val remaining = (totalBytes - downloadedBytes).coerceAtLeast(0L)
+                    val eta = if (speed > 2048 && remaining > 0L) remaining / speed else 0L
+
+                    publishProgress(item, downloadedBytes, totalBytes, speed, eta)
+
+                    bytesSinceLastUpdate = 0L
+                    lastTime = now
+                }
+            }
+
+            if (currentCoroutineContext().isActive) {
+                file.close()
+                stream.close()
+                // Conexión cortada antes de tiempo: no marcar como completa
+                if (totalFromServer && totalBytes > 0L && downloadedBytes < totalBytes) {
+                    throw Exception("Conexión interrumpida")
+                }
+                if (destinationFile.exists()) destinationFile.delete()
+                partFile.renameTo(destinationFile)
+                markDownloadSuccess(item, destinationFile.length())
+            }
+
+        } catch (e: Exception) {
+            if (currentCoroutineContext().isActive) {
+                markDownloadFailed(item, e.message ?: "Error de descarga")
+            }
+        } finally {
+            connection?.let {
+                connections.remove(item.id, it)
+                try { it.disconnect() } catch (_: Exception) {}
+            }
+            try { raf?.close() } catch (_: Exception) {}
+            try { input?.close() } catch (_: Exception) {}
+
+            myJob?.let { downloadJobs.remove(item.id, it) }
+            // Si el usuario pausó, NO se cancela: la notificación se actualiza a "En pausa" en su lugar
+            if (!userStopping.contains(item.id)) {
+                try { notificationManager.cancel(progressNid(item.id)) } catch (_: Exception) {}
+            }
+            refreshSummary(force = true)
+            stopIfIdle()
         }
     }
 
-    private fun postProgressNotification(
+    private fun publishProgress(
         item: DownloadItem,
-        progress: Int,
+        downloaded: Long,
+        total: Long,
         speed: Long,
         eta: Long
     ) {
-        if (!PermissionHelper.hasNotificationPermission(applicationContext)) return
-        if (!activeJobs.containsKey(item.id)) return
+        val progress = if (total > 0L) {
+            ((downloaded * 100L) / total).toInt().coerceIn(0, 99)
+        } else 0
 
-        try {
-            val notif = NotificationUtils.buildProgressNotification(
-                applicationContext,
-                item,
-                progress,
-                speed,
-                eta
-            )
-            val notifId = NotificationUtils.getNotificationId(item.id)
+        helper.reportProgress(
+            downloadId = item.id,
+            downloadedBytes = downloaded,
+            totalBytes = total,
+            progress = progress,
+            speedBytesPerSec = speed,
+            etaSeconds = eta
+        )
 
-            synchronized(notifLock) {
-                if (currentForegroundId == FOREGROUND_SERVICE_NOTIFICATION_ID || currentForegroundId == notifId) {
-                    currentForegroundId = notifId
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        startForeground(notifId, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-                    } else {
-                        startForeground(notifId, notif)
-                    }
-                    try {
-                        notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
-                    } catch (_: Exception) {}
-                } else {
-                    notificationManager.notify(notifId, notif)
-                }
-            }
-        } catch (_: Exception) {}
+        val shown = item.copy(
+            downloadedBytes = downloaded,
+            totalBytes = total,
+            progress = progress,
+            speedBytesPerSec = speed,
+            etaSeconds = eta,
+            status = DownloadStatus.DOWNLOADING
+        )
+        notificationManager.notify(
+            progressNid(item.id),
+            NotificationUtils.buildProgressNotification(applicationContext, shown, progress, speed, eta)
+        )
+        refreshSummary()
     }
 
-    private fun markDownloadSuccess(item: DownloadItem, actualFile: File) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        DownloadBandwidthCoordinator.unregisterStream(item.id)
-        activeJobs.remove(item.id)
-        activeItems.remove(item.id)
+    private fun parseContentRangeTotal(header: String?): Long? {
+        // Formato: "bytes 5000-999999/1000000" (o "/*" si es desconocido)
+        val total = header?.substringAfterLast('/')?.trim() ?: return null
+        return total.toLongOrNull()?.takeIf { it > 0L }
+    }
 
-        val finalSize = actualFile.length()
+    /** Cuando no queda nada activo ni en proceso de pausa/cancelación, suelta el primer plano y se detiene. */
+    private fun stopIfIdle() {
+        synchronized(notifLock) {
+            if (downloadJobs.isEmpty() && userStopping.isEmpty()) {
+                if (foregroundStarted) {
+                    foregroundStarted = false
+                    stopForegroundCompat()
+                }
+                stopSelf()
+            }
+        }
+    }
+
+    private fun startForegroundCompat(id: Int, notif: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(id, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(id, notif)
+        }
+    }
+
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+    }
+
+    private fun markDownloadSuccess(item: DownloadItem, finalSize: Long) {
         val completedItem = item.copy(
-            localFilePath = actualFile.absolutePath,
             status = DownloadStatus.COMPLETED,
             progress = 100,
             downloadedBytes = finalSize,
@@ -766,110 +446,91 @@ class DownloadForegroundService : Service() {
             speedBytesPerSec = 0L,
             etaSeconds = 0L
         )
-
         helper.markCompleted(completedItem)
 
-        val notifId = NotificationUtils.getNotificationId(item.id)
-        promoteNextForegroundNotification(notifId)
-
-        if (PermissionHelper.hasNotificationPermission(applicationContext)) {
-            try {
-                val notif = NotificationUtils.buildCompletedNotification(applicationContext, completedItem)
-                notificationManager.notify(notifId, notif)
-            } catch (_: Exception) {}
-        }
-
-        checkServiceLiveness()
+        val successNotif = NotificationUtils.buildCompletedNotification(applicationContext, completedItem)
+        notificationManager.notify(doneNid(item.id), successNotif)
     }
 
-    private fun handlePausedOnVpn(item: DownloadItem) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        activeJobs.remove(item.id)
-        activeItems.remove(item.id)
-        helper.clearLiveProgress(item.id)
-
-        val pausedItem = item.copy(
-            status = DownloadStatus.PAUSED,
-            speedBytesPerSec = 0L,
-            etaSeconds = 0L
+    private fun markDownloadFailed(item: DownloadItem, errorReason: String) {
+        val live = helper.getItem(item.id) ?: item
+        val failed = live.copy(status = DownloadStatus.FAILED, speedBytesPerSec = 0L, etaSeconds = 0L)
+        helper.updateItemState(failed)
+        notificationManager.notify(
+            failedNid(item.id),
+            NotificationUtils.buildFailedNotification(applicationContext, failed)
         )
-        helper.updateItemState(pausedItem)
-        serviceScope.launch {
-            preferences.addOrUpdateDownload(pausedItem)
-        }
-
-        val notifId = NotificationUtils.getNotificationId(item.id)
-        promoteNextForegroundNotification(notifId)
-
-        try {
-            val notif = NotificationUtils.buildPausedNotification(applicationContext, pausedItem)
-            notificationManager.notify(notifId, notif)
-        } catch (_: Exception) {}
-
-        AppToastManager.show("Descarga en pausa: VPN o Proxy detectado", ToastType.WARNING)
-        checkServiceLiveness()
     }
 
-    private fun handleDownloadError(item: DownloadItem, errorMessage: String) {
-        val helper = DownloadHelper.getActiveInstance(applicationContext)
-        activeJobs.remove(item.id)
-        activeItems.remove(item.id)
-        helper.clearLiveProgress(item.id)
+    /** Cancela el hilo, corta el socket para que el read() falle al instante y espera a que termine. */
+    private suspend fun stopJob(id: String) {
+        val job = downloadJobs[id]
+        job?.cancel()
+        try { connections[id]?.disconnect() } catch (_: Exception) {}
+        job?.join()
+    }
 
-        val failedItem = item.copy(
-            status = DownloadStatus.FAILED,
-            speedBytesPerSec = 0L,
-            etaSeconds = 0L
-        )
-        helper.updateItemState(failedItem)
+    private fun pauseDownload(id: String) {
+        if (!userStopping.add(id)) return
         serviceScope.launch {
-            preferences.addOrUpdateDownload(failedItem)
-        }
-
-        val notifId = NotificationUtils.getNotificationId(item.id)
-        promoteNextForegroundNotification(notifId)
-
-        if (PermissionHelper.hasNotificationPermission(applicationContext)) {
             try {
-                val notif = NotificationUtils.buildErrorNotification(applicationContext, failedItem, errorMessage)
-                notificationManager.notify(notifId, notif)
-            } catch (_: Exception) {}
-        }
+                stopJob(id)
+                val live = helper.getItem(id)
+                if (live != null && live.status != DownloadStatus.COMPLETED) {
+                    // Datos reales del archivo, no la copia vieja
+                    val part = File(live.localFilePath + ".part")
+                    val realBytes = if (part.exists()) part.length() else live.downloadedBytes
+                    val progress = if (live.totalBytes > 0L) {
+                        ((realBytes * 100L) / live.totalBytes).toInt().coerceIn(0, 99)
+                    } else 0
 
-        checkServiceLiveness()
-    }
-
-    private fun updateForegroundSummary() {
-        try {
-            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
-        } catch (_: Exception) {}
-    }
-
-    private fun checkServiceLiveness() {
-        if (activeJobs.isEmpty()) {
-            serviceScope.launch {
-                delay(800L)
-                if (activeJobs.isEmpty()) {
-                    synchronized(notifLock) {
-                        currentForegroundId = FOREGROUND_SERVICE_NOTIFICATION_ID
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                                stopForeground(STOP_FOREGROUND_REMOVE)
-                            } else {
-                                @Suppress("DEPRECATION")
-                                stopForeground(true)
-                            }
-                        } catch (_: Exception) {}
-                    }
-                    stopSelf()
+                    val paused = live.copy(
+                        status = DownloadStatus.PAUSED,
+                        downloadedBytes = realBytes,
+                        progress = progress,
+                        speedBytesPerSec = 0L,
+                        etaSeconds = 0L
+                    )
+                    helper.updateItemState(paused)
+                    notificationManager.notify(
+                        pausedNid(id),
+                        NotificationUtils.buildPausedNotification(applicationContext, paused)
+                    )
                 }
+            } finally {
+                userStopping.remove(id)
+                refreshSummary(force = true)
+                stopIfIdle()
             }
         }
     }
 
+    private fun cancelDownload(id: String) {
+        if (!userStopping.add(id)) return
+        serviceScope.launch {
+            try {
+                stopJob(id)
+                helper.removeItem(id)
+                notificationManager.cancel(progressNid(id))
+                notificationManager.cancel(pausedNid(id))
+                notificationManager.cancel(failedNid(id))
+            } finally {
+                userStopping.remove(id)
+                refreshSummary(force = true)
+                stopIfIdle()
+            }
+        }
+    }
+
+    private fun pauseDownload(id: Long) = pauseDownload(id.toString())
+    private fun cancelDownload(id: Long) = cancelDownload(id.toString())
+
     override fun onDestroy() {
-        super.onDestroy()
+        connections.values.forEach {
+            try { it.disconnect() } catch (_: Exception) {}
+        }
         serviceScope.cancel()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

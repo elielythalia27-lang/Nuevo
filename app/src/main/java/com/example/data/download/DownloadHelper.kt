@@ -60,6 +60,7 @@ class DownloadHelper(
     val liveDownloadsState: StateFlow<List<DownloadItem>> = _liveDownloadsState.asStateFlow()
 
     companion object {
+        const val ACTION_START_DOWNLOAD = "com.downloadfree.ACTION_START_DOWNLOAD"
         const val ACTION_PAUSE_DOWNLOAD = "com.downloadfree.ACTION_PAUSE_DOWNLOAD"
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
@@ -244,6 +245,9 @@ class DownloadHelper(
         speedBytesPerSec: Long,
         etaSeconds: Long
     ) {
+        val current = _liveDownloadsState.value.find { it.id == downloadId } ?: return
+        if (current.status == DownloadStatus.PAUSED) return
+
         liveProgressMap[downloadId] = LiveProgressUpdate(
             downloadId = downloadId,
             downloadedBytes = downloadedBytes,
@@ -252,20 +256,44 @@ class DownloadHelper(
             speedBytesPerSec = speedBytesPerSec,
             etaSeconds = etaSeconds
         )
+
         // Keep in-memory SSOT state updated immediately so UI and pause calls never drop to 0
         _liveDownloadsState.update { list ->
             list.map { item ->
                 if (item.id == downloadId) {
-                    item.copy(
-                        downloadedBytes = downloadedBytes,
-                        totalBytes = if (totalBytes > 0L) totalBytes else item.totalBytes,
-                        progress = progress,
-                        speedBytesPerSec = speedBytesPerSec,
-                        etaSeconds = etaSeconds
-                    )
+                    if (item.status == DownloadStatus.PAUSED) {
+                        item
+                    } else {
+                        item.copy(
+                            downloadedBytes = downloadedBytes,
+                            totalBytes = if (totalBytes > 0L) totalBytes else item.totalBytes,
+                            progress = progress,
+                            speedBytesPerSec = speedBytesPerSec,
+                            etaSeconds = etaSeconds,
+                            status = DownloadStatus.DOWNLOADING
+                        )
+                    }
                 } else item
             }
         }
+    }
+
+    fun reportProgress(
+        downloadId: Long,
+        downloadedBytes: Long,
+        totalBytes: Long,
+        progress: Int,
+        speedBytesPerSec: Long,
+        etaSeconds: Long
+    ) {
+        reportProgress(
+            downloadId.toString(),
+            downloadedBytes,
+            totalBytes,
+            progress,
+            speedBytesPerSec,
+            etaSeconds
+        )
     }
 
     fun getLiveProgress(downloadId: String): LiveProgressUpdate? = liveProgressMap[downloadId]
