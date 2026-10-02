@@ -24,6 +24,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -378,7 +379,7 @@ fun AppBottomNav(
                         contentAlignment = Alignment.Center
                     ) {
                         val isDownloadsTab = screen == ScreenRoute.DOWNLOADS
-                        val hasActiveDownloads = isDownloadsTab && downloadsCount > 0
+                        val hasActiveDownloads = isDownloadsTab && downloadsCount > 0 && !isSelected
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -406,50 +407,56 @@ fun AppBottomNav(
                                     )
                                 }
 
-                                // Radiant animated expanding ripple wave (matches empty list icons)
-                                if (hasActiveDownloads) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .scale(rippleScale)
-                                            .clip(CircleShape)
-                                            .background(activeColor.copy(alpha = rippleAlpha))
-                                    )
-                                }
-
-                                // Icon with breathing pulse on active downloads
+                                // Icon
                                 Box(
-                                    modifier = Modifier.scale(if (hasActiveDownloads) iconScale * pulseScale else iconScale),
+                                    modifier = Modifier.scale(iconScale),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                                         contentDescription = screen.title,
-                                        tint = if (hasActiveDownloads && !isSelected) activeColor else contentColor,
+                                        tint = contentColor,
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }
 
-                                // Number badge of active downloads count placed at top-end
+                                // Number badge of active downloads count placed at top-end with expanding ripple wave and breathing pulse
                                 if (hasActiveDownloads) {
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
-                                            .offset(x = 6.dp, y = (-3).dp)
-                                            .clip(CircleShape)
-                                            .background(activeColor)
-                                            .border(1.5.dp, containerBg, CircleShape)
-                                            .padding(horizontal = 4.5.dp, vertical = 1.dp),
+                                            .offset(x = 6.dp, y = (-3).dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = if (downloadsCount > 99) "99+" else downloadsCount.toString(),
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            lineHeight = 10.sp,
-                                            textAlign = TextAlign.Center
+                                        // Radiant animated expanding ripple ring around the number badge
+                                        Box(
+                                            modifier = Modifier
+                                                .size(26.dp)
+                                                .scale(rippleScale)
+                                                .clip(CircleShape)
+                                                .background(activeColor.copy(alpha = rippleAlpha))
                                         )
+
+                                        // Number badge with breathing pulse
+                                        Box(
+                                            modifier = Modifier
+                                                .scale(pulseScale)
+                                                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                                                .clip(CircleShape)
+                                                .background(activeColor)
+                                                .border(1.5.dp, containerBg, CircleShape)
+                                                .padding(horizontal = 4.5.dp, vertical = 1.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = if (downloadsCount > 99) "99+" else downloadsCount.toString(),
+                                                color = Color.White,
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                lineHeight = 10.sp,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
                                     }
                                 }
                             }

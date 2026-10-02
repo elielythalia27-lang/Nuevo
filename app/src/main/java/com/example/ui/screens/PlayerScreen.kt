@@ -175,16 +175,13 @@ fun PlayerScreen(
     var showVolumeHud by remember { mutableStateOf(false) }
     var volumeHudCounter by remember { mutableIntStateOf(0) }
 
-    val sharedPrefs = remember { context.getSharedPreferences("VideoPlayerPrefs", Context.MODE_PRIVATE) }
     val initialBrightness = remember {
         try {
-            if (sharedPrefs.contains("brillo_global")) {
-                val savedPercent = sharedPrefs.getInt("brillo_global", 50)
-                (savedPercent / 100f).coerceIn(0.05f, 1f)
-            } else {
-                val winBrightness = activity?.window?.attributes?.screenBrightness ?: -1f
-                if (winBrightness in 0.05f..1f) winBrightness else 0.5f
-            }
+            val sysBrightness = android.provider.Settings.System.getInt(
+                context.contentResolver,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS
+            )
+            (sysBrightness / 255f).coerceIn(0.05f, 1f)
         } catch (_: Exception) {
             0.5f
         }
@@ -449,7 +446,7 @@ fun PlayerScreen(
                         "Sin conexión a internet. Conéctate a una red Wi-Fi o datos para reproducir este video."
                     error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
                     error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-                        "Error de conexión con el servidor. Revisa tu red o intenta de nuevo."
+                        "Error de conexión a internet. Revisa tu red o intenta de nuevo."
                     error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
                         "El archivo de video no existe o fue eliminado del almacenamiento."
                     error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
@@ -644,7 +641,6 @@ fun PlayerScreen(
                                             val newBrightness = (brightnessLevel + deltaPercent).coerceIn(0.05f, 1f)
                                             brightnessLevel = newBrightness
                                             showBrightnessHud = true
-                                            sharedPrefs.edit().putInt("brillo_global", (newBrightness * 100).toInt()).apply()
                                         } else {
                                             volumeAccumulator = (volumeAccumulator + deltaPercent * maxVolume).coerceIn(0f, maxVolume.toFloat())
                                             val newVol = volumeAccumulator.toInt().coerceIn(0, maxVolume)

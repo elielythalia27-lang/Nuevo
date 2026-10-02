@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -152,17 +153,17 @@ fun HomeScreen(
     val subtitleTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val badgeBg = MaterialTheme.colorScheme.surfaceVariant
 
-    val gridStateAll = rememberLazyGridState()
-    val gridStateMovies = rememberLazyGridState()
-    val gridStateVideos = rememberLazyGridState()
-    val gridStateSearch = rememberLazyGridState()
+    val gridStateAll = rememberSaveable(saver = LazyGridState.Saver, key = "grid_state_all") { LazyGridState() }
+    val gridStateMovies = rememberSaveable(saver = LazyGridState.Saver, key = "grid_state_movies") { LazyGridState() }
+    val gridStateVideos = rememberSaveable(saver = LazyGridState.Saver, key = "grid_state_videos") { LazyGridState() }
+    val gridStateSearch = rememberSaveable(saver = LazyGridState.Saver, key = "grid_state_search") { LazyGridState() }
 
     val activeGridState = if (uiState.searchQuery.isNotEmpty()) {
         gridStateSearch
     } else {
-        when (uiState.selectedType) {
-            "movie" -> gridStateMovies
-            "video" -> gridStateVideos
+        when (uiState.selectedType.uppercase()) {
+            "MOVIE" -> gridStateMovies
+            "VIDEO" -> gridStateVideos
             else -> gridStateAll
         }
     }
@@ -421,34 +422,36 @@ fun HomeScreen(
                         }
 
                         // Responsive catalog grid supporting 2-col, 3-col, and detailed list with independent scroll per tab
-                        LazyVerticalGrid(
-                            columns = columns,
-                            state = activeGridState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("movies_grid"),
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
-                            horizontalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else 14.dp),
-                            verticalArrangement = Arrangement.spacedBy(if (isListMode) 12.dp else 16.dp)
-                        ) {
-                            items(
-                                items = uiState.filteredPeliculas,
-                                key = { it.id },
-                                contentType = { "pelicula_card" }
-                            ) { pelicula ->
-                                val downloadItem = downloadsMap[pelicula.id]
-                                PeliculaCard(
-                                    pelicula = pelicula,
-                                    downloadItem = downloadItem,
-                                    isDarkTheme = isDark,
-                                    isListMode = isListMode,
-                                    onCardClick = {
-                                        selectedPeliculaForSheet = pelicula
-                                    },
-                                    onDownloadClick = {
-                                        onDownloadPelicula(pelicula)
-                                    }
-                                )
+                        androidx.compose.runtime.key(if (uiState.searchQuery.isNotEmpty()) "search" else uiState.selectedType) {
+                            LazyVerticalGrid(
+                                columns = columns,
+                                state = activeGridState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("movies_grid"),
+                                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+                                horizontalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(if (isListMode) 12.dp else 16.dp)
+                            ) {
+                                items(
+                                    items = uiState.filteredPeliculas,
+                                    key = { it.id },
+                                    contentType = { "pelicula_card" }
+                                ) { pelicula ->
+                                    val downloadItem = downloadsMap[pelicula.id]
+                                    PeliculaCard(
+                                        pelicula = pelicula,
+                                        downloadItem = downloadItem,
+                                        isDarkTheme = isDark,
+                                        isListMode = isListMode,
+                                        onCardClick = {
+                                            selectedPeliculaForSheet = pelicula
+                                        },
+                                        onDownloadClick = {
+                                            onDownloadPelicula(pelicula)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -638,7 +641,7 @@ fun HomeScreen(
                                 isVerifyingServerForPlay = false
                                 if (!isReachable) {
                                     AppToastManager.show(
-                                        "Sin conexión con el servidor. Comprueba tu red o intenta más tarde.",
+                                        "Sin conexión a internet. Comprueba tu red o intenta más tarde.",
                                         ToastType.ERROR
                                     )
                                     return@launch
@@ -665,7 +668,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "Comprobando servidor...",
+                                text = "Verificando enlace...",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
@@ -958,7 +961,7 @@ fun HomeScreen(
                                     isVerifyingServerForDownload = false
                                     if (!isReachable) {
                                         AppToastManager.show(
-                                            "Sin conexión con el servidor. Comprueba tu red o intenta más tarde.",
+                                            "Sin conexión a internet. Comprueba tu red o intenta más tarde.",
                                             ToastType.ERROR
                                         )
                                         return@launch
@@ -985,7 +988,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "Comprobando servidor...",
+                                    text = "Verificando enlace...",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
                                     color = MaterialTheme.colorScheme.primary

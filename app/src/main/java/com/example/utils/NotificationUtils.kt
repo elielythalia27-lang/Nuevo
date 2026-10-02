@@ -156,8 +156,8 @@ object NotificationUtils {
         }
 
         val speedStr = if (speed > 0L) {
-            if (speed >= 1024 * 1024) String.format(java.util.Locale.US, "%.1f MB/s", speed / (1024.0 * 1024.0))
-            else "${speed / 1024} KB/s"
+            if (speed >= 1024 * 1024) String.format(java.util.Locale.US, "%.2f MB/s", speed / (1024.0 * 1024.0))
+            else String.format(java.util.Locale.US, "%.2f KB/s", speed / 1024.0)
         } else "Conectando..."
         val etaStr = if (eta > 0L) {
             val hours = eta / 3600
@@ -189,6 +189,8 @@ object NotificationUtils {
             .setColor(0xFF00897B.toInt())
             .setProgress(100, if (isIndeterminate) 0 else progress, isIndeterminate)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
+            .addAction(R.drawable.ic_notification_pause, "Pausar", createPausePendingIntent(context, item.id))
+            .addAction(R.drawable.ic_notification_cancel, "Cancelar", createCancelPendingIntent(context, item.id))
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
@@ -227,6 +229,8 @@ object NotificationUtils {
             .setColor(0xFFF59E0B.toInt())
             .setProgress(100, item.progress, false)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
+            .addAction(R.drawable.ic_notification_download, "Reanudar", createResumePendingIntent(context, item.id))
+            .addAction(R.drawable.ic_notification_cancel, "Cancelar", createCancelPendingIntent(context, item.id))
             .setAutoCancel(false)
             .setOngoing(false)
             .setShowWhen(false)
@@ -270,7 +274,7 @@ object NotificationUtils {
             lower.contains("wi-fi") || lower.contains("wifi") -> "Conexión Wi-Fi requerida"
             lower.contains("vpn") || lower.contains("proxy") -> "En pausa por VPN activa"
             lower.contains("sin conexión") || lower.contains("internet") || lower.contains("connect") || lower.contains("timeout") || lower.contains("host") || lower.contains("socket") -> "Sin conexión a internet"
-            else -> "Error de conexión con el servidor"
+            else -> "Error al descargar el archivo"
         }
     }
 
@@ -296,6 +300,8 @@ object NotificationUtils {
             .setSmallIcon(R.drawable.ic_notification_error)
             .setColor(0xFFEF4444.toInt())
             .setContentIntent(createOpenDownloadsPendingIntent(context))
+            .addAction(R.drawable.ic_notification_download, "Reintentar", createResumePendingIntent(context, item.id))
+            .addAction(R.drawable.ic_notification_cancel, "Cancelar", createCancelPendingIntent(context, item.id))
             .setAutoCancel(true)
             .setOngoing(false)
             .setCategory(NotificationCompat.CATEGORY_ERROR)
@@ -307,7 +313,7 @@ object NotificationUtils {
 
         return createCompatBuilder(context, CHANNEL_PROGRESS_ID)
             .setContentTitle("Download Free")
-            .setContentText("Servicio de descargas activo en segundo plano")
+            .setContentText("Descargas activas")
             .setSmallIcon(R.drawable.ic_notification_download)
             .setColor(0xFF00897B.toInt())
             .setOngoing(true)
@@ -342,7 +348,7 @@ object NotificationUtils {
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        return PendingIntent.getBroadcast(context, (itemId + "_pause").hashCode(), intent, flags)
+        return PendingIntent.getBroadcast(context, Math.abs((itemId + "_pause").hashCode()), intent, flags)
     }
 
     fun createResumePendingIntent(context: Context, itemId: String): PendingIntent {
@@ -355,7 +361,7 @@ object NotificationUtils {
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        return PendingIntent.getBroadcast(context, (itemId + "_resume").hashCode(), intent, flags)
+        return PendingIntent.getBroadcast(context, Math.abs((itemId + "_resume").hashCode()), intent, flags)
     }
 
     fun createCancelPendingIntent(context: Context, itemId: String): PendingIntent {
@@ -368,7 +374,7 @@ object NotificationUtils {
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        return PendingIntent.getBroadcast(context, (itemId + "_cancel").hashCode(), intent, flags)
+        return PendingIntent.getBroadcast(context, Math.abs((itemId + "_cancel").hashCode()), intent, flags)
     }
 
     fun formatByteSize(bytes: Long): String {

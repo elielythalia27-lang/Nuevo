@@ -94,10 +94,10 @@ class PeliculaRepository(
                 preferences.saveCachedPeliculas(remoteList)
                 emit(Resource.Success(remoteList, isOffline = false))
             } else {
-                emit(Resource.Error("No se pudo obtener el catálogo del servidor"))
+                emit(Resource.Error("No se pudo obtener el catálogo"))
             }
         } catch (e: Exception) {
-            emit(Resource.Error("Sin conexión con el servidor: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
+            emit(Resource.Error("Sin conexión a internet: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
         }
     }
 

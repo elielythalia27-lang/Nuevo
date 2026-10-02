@@ -54,6 +54,10 @@ class DownloadForegroundService : Service() {
     private val activeJobs = ConcurrentHashMap<String, Job>()
     private val activeItems = ConcurrentHashMap<String, DownloadItem>()
 
+    @Volatile
+    private var currentForegroundId: Int = FOREGROUND_SERVICE_NOTIFICATION_ID
+    private val notifLock = Any()
+
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -84,7 +88,7 @@ class DownloadForegroundService : Service() {
                 action = ACTION_START_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, item.id)
             }
-            startServiceCompat(context, intent)
+            startForegroundServiceCompat(context, intent)
         }
 
         fun pauseDownload(context: Context, downloadId: String) {
@@ -92,7 +96,7 @@ class DownloadForegroundService : Service() {
                 action = ACTION_PAUSE_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startServiceCompat(context, intent)
+            sendServiceCommand(context, intent)
         }
 
         fun queueDownload(context: Context, downloadId: String) {
@@ -100,7 +104,7 @@ class DownloadForegroundService : Service() {
                 action = ACTION_QUEUE_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startServiceCompat(context, intent)
+            sendServiceCommand(context, intent)
         }
 
         fun resumeDownload(context: Context, downloadId: String) {
@@ -108,7 +112,7 @@ class DownloadForegroundService : Service() {
                 action = ACTION_RESUME_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startServiceCompat(context, intent)
+            startForegroundServiceCompat(context, intent)
         }
 
         fun cancelDownload(context: Context, downloadId: String) {
@@ -116,37 +120,43 @@ class DownloadForegroundService : Service() {
                 action = ACTION_CANCEL_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startServiceCompat(context, intent)
+            sendServiceCommand(context, intent)
         }
 
         fun pauseAll(context: Context) {
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_PAUSE_ALL
             }
-            startServiceCompat(context, intent)
+            sendServiceCommand(context, intent)
         }
 
         fun resumeAll(context: Context) {
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_RESUME_ALL
             }
-            startServiceCompat(context, intent)
+            startForegroundServiceCompat(context, intent)
         }
 
         fun cancelAll(context: Context) {
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_CANCEL_ALL
             }
-            startServiceCompat(context, intent)
+            sendServiceCommand(context, intent)
         }
 
-        private fun startServiceCompat(context: Context, intent: Intent) {
+        private fun startForegroundServiceCompat(context: Context, intent: Intent) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     ContextCompat.startForegroundService(context, intent)
                 } else {
                     context.startService(intent)
                 }
+            } catch (_: Exception) {}
+        }
+
+        private fun sendServiceCommand(context: Context, intent: Intent) {
+            try {
+                context.startService(intent)
             } catch (_: Exception) {}
         }
     }
@@ -288,9 +298,7 @@ class DownloadForegroundService : Service() {
                 preferences.addOrUpdateDownload(queuedItem)
             }
 
-            try {
-                notificationManager.cancel(NotificationUtils.getNotificationId(downloadId))
-            } catch (_: Exception) {}
+            promoteNextForegroundNotification(NotificationUtils.getNotificationId(downloadId))
         } else {
             helper.clearLiveProgress(downloadId)
         }
@@ -343,6 +351,7 @@ class DownloadForegroundService : Service() {
                 helper.checkAndStartNextPending()
             }
 
+            promoteNextForegroundNotification(NotificationUtils.getNotificationId(downloadId))
             if (PermissionHelper.hasNotificationPermission(applicationContext)) {
                 try {
                     val notif = NotificationUtils.buildPausedNotification(applicationContext, pausedItem)
@@ -380,10 +389,8 @@ class DownloadForegroundService : Service() {
         val item = activeItems.remove(downloadId) ?: helper.getItem(downloadId)
         helper.clearLiveProgress(downloadId)
 
-        // Immediately dismiss the notification so it never lingers or shows 99%
-        try {
-            notificationManager.cancel(NotificationUtils.getNotificationId(downloadId))
-        } catch (_: Exception) {}
+        // Immediately dismiss the notification and transfer foreground if needed
+        promoteNextForegroundNotification(NotificationUtils.getNotificationId(downloadId))
 
         helper.removeItemFromState(downloadId)
 
@@ -663,6 +670,49 @@ class DownloadForegroundService : Service() {
         checkServiceLiveness()
     }
 
+    private fun promoteNextForegroundNotification(stoppingNotifId: Int) {
+        synchronized(notifLock) {
+            if (currentForegroundId == stoppingNotifId) {
+                // Find another active job to be the foreground anchor
+                val nextActiveItem = activeItems.values.firstOrNull {
+                    NotificationUtils.getNotificationId(it.id) != stoppingNotifId
+                }
+                if (nextActiveItem != null) {
+                    val nextId = NotificationUtils.getNotificationId(nextActiveItem.id)
+                    currentForegroundId = nextId
+                    val helper = DownloadHelper.getActiveInstance(applicationContext)
+                    val live = helper.getItem(nextActiveItem.id) ?: nextActiveItem
+                    val nextNotif = NotificationUtils.buildProgressNotification(
+                        applicationContext,
+                        live,
+                        live.progress,
+                        live.speedBytesPerSec,
+                        live.etaSeconds
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        startForeground(nextId, nextNotif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                    } else {
+                        startForeground(nextId, nextNotif)
+                    }
+                } else {
+                    currentForegroundId = FOREGROUND_SERVICE_NOTIFICATION_ID
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            stopForeground(true)
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            try {
+                notificationManager.cancel(stoppingNotifId)
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun postProgressNotification(
         item: DownloadItem,
         progress: Int,
@@ -681,12 +731,22 @@ class DownloadForegroundService : Service() {
                 eta
             )
             val notifId = NotificationUtils.getNotificationId(item.id)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(notifId, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-            } else {
-                startForeground(notifId, notif)
+
+            synchronized(notifLock) {
+                if (currentForegroundId == FOREGROUND_SERVICE_NOTIFICATION_ID || currentForegroundId == notifId) {
+                    currentForegroundId = notifId
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        startForeground(notifId, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                    } else {
+                        startForeground(notifId, notif)
+                    }
+                    try {
+                        notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
+                    } catch (_: Exception) {}
+                } else {
+                    notificationManager.notify(notifId, notif)
+                }
             }
-            notificationManager.cancel(FOREGROUND_SERVICE_NOTIFICATION_ID)
         } catch (_: Exception) {}
     }
 
@@ -709,14 +769,15 @@ class DownloadForegroundService : Service() {
 
         helper.markCompleted(completedItem)
 
-        // Dismiss progress notification and post completed notification
-        try {
-            notificationManager.cancel(NotificationUtils.getNotificationId(item.id))
-            if (PermissionHelper.hasNotificationPermission(applicationContext)) {
+        val notifId = NotificationUtils.getNotificationId(item.id)
+        promoteNextForegroundNotification(notifId)
+
+        if (PermissionHelper.hasNotificationPermission(applicationContext)) {
+            try {
                 val notif = NotificationUtils.buildCompletedNotification(applicationContext, completedItem)
-                notificationManager.notify(NotificationUtils.getNotificationId(item.id), notif)
-            }
-        } catch (_: Exception) {}
+                notificationManager.notify(notifId, notif)
+            } catch (_: Exception) {}
+        }
 
         checkServiceLiveness()
     }
@@ -737,9 +798,12 @@ class DownloadForegroundService : Service() {
             preferences.addOrUpdateDownload(pausedItem)
         }
 
+        val notifId = NotificationUtils.getNotificationId(item.id)
+        promoteNextForegroundNotification(notifId)
+
         try {
             val notif = NotificationUtils.buildPausedNotification(applicationContext, pausedItem)
-            notificationManager.notify(NotificationUtils.getNotificationId(item.id), notif)
+            notificationManager.notify(notifId, notif)
         } catch (_: Exception) {}
 
         AppToastManager.show("Descarga en pausa: VPN o Proxy detectado", ToastType.WARNING)
@@ -762,13 +826,15 @@ class DownloadForegroundService : Service() {
             preferences.addOrUpdateDownload(failedItem)
         }
 
-        try {
-            notificationManager.cancel(NotificationUtils.getNotificationId(item.id))
-            if (PermissionHelper.hasNotificationPermission(applicationContext)) {
+        val notifId = NotificationUtils.getNotificationId(item.id)
+        promoteNextForegroundNotification(notifId)
+
+        if (PermissionHelper.hasNotificationPermission(applicationContext)) {
+            try {
                 val notif = NotificationUtils.buildErrorNotification(applicationContext, failedItem, errorMessage)
-                notificationManager.notify(NotificationUtils.getNotificationId(item.id), notif)
-            }
-        } catch (_: Exception) {}
+                notificationManager.notify(notifId, notif)
+            } catch (_: Exception) {}
+        }
 
         checkServiceLiveness()
     }
@@ -782,11 +848,19 @@ class DownloadForegroundService : Service() {
     private fun checkServiceLiveness() {
         if (activeJobs.isEmpty()) {
             serviceScope.launch {
-                delay(1200L)
+                delay(800L)
                 if (activeJobs.isEmpty()) {
-                    try {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
-                    } catch (_: Exception) {}
+                    synchronized(notifLock) {
+                        currentForegroundId = FOREGROUND_SERVICE_NOTIFICATION_ID
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                stopForeground(STOP_FOREGROUND_REMOVE)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                stopForeground(true)
+                            }
+                        } catch (_: Exception) {}
+                    }
                     stopSelf()
                 }
             }
