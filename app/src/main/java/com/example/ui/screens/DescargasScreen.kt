@@ -131,6 +131,7 @@ import com.example.data.model.DownloadStatus
 import com.example.data.model.formatByteSize
 import com.example.data.model.formatDownloadSpeed
 import com.example.ui.components.SleekLinearProgressBar
+import com.example.ui.components.SystemDownloadAnimatedIcon
 import com.example.ui.components.shimmerEffect
 import com.example.utils.PermissionHelper
 
@@ -385,12 +386,9 @@ fun DescargasScreen(
                             ) {
                                 val isDownloading = activeList.any { it.status == DownloadStatus.DOWNLOADING }
                                 if (isDownloading) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .scale(tabPulseScale)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary)
+                                    SystemDownloadAnimatedIcon(
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 } else {
                                     Icon(
@@ -1518,21 +1516,32 @@ fun ActiveDownloadingCard(
                                 else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                             }
                         ) {
-                            Text(
-                                text = when {
-                                    isFailed -> "Error"
-                                    isPaused -> "En Pausa"
-                                    else -> "Descargando"
-                                },
-                                color = when {
-                                    isFailed -> Color(0xFFEF4444)
-                                    isPaused -> Color(0xFFF59E0B)
-                                    else -> MaterialTheme.colorScheme.primary
-                                },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
+                            ) {
+                                if (!isPaused && !isFailed) {
+                                    SystemDownloadAnimatedIcon(
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                                Text(
+                                    text = when {
+                                        isFailed -> "Error"
+                                        isPaused -> "En Pausa"
+                                        else -> "Descargando"
+                                    },
+                                    color = when {
+                                        isFailed -> Color(0xFFEF4444)
+                                        isPaused -> Color(0xFFF59E0B)
+                                        else -> MaterialTheme.colorScheme.primary
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
 

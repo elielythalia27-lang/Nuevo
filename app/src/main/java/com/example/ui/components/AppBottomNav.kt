@@ -74,6 +74,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -383,7 +384,7 @@ fun AppBottomNav(
                         contentAlignment = Alignment.Center
                     ) {
                         val isDownloadsTab = screen == ScreenRoute.DOWNLOADS
-                        val hasActiveDownloads = isDownloadsTab && downloadsCount > 0 && !isSelected
+                        val hasActiveDownloads = isDownloadsTab && downloadsCount > 0
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -448,11 +449,11 @@ fun AppBottomNav(
                                                 .background(activeColor.copy(alpha = rippleAlpha))
                                         )
 
-                                        // Number badge with breathing pulse, perfectly centered
+                                        // Number badge with breathing pulse, perfectly centered horizontally and vertically
                                         Box(
                                             modifier = Modifier
                                                 .scale(pulseScale)
-                                                .size(19.dp)
+                                                .size(20.dp)
                                                 .clip(CircleShape)
                                                 .background(activeColor)
                                                 .border(1.5.dp, containerBg, CircleShape),
@@ -462,11 +463,15 @@ fun AppBottomNav(
                                                 text = if (downloadsCount > 99) "99+" else downloadsCount.toString(),
                                                 color = Color.White,
                                                 fontSize = 10.sp,
-                                                fontWeight = FontWeight.ExtraBold,
+                                                fontWeight = FontWeight.Black,
                                                 textAlign = TextAlign.Center,
                                                 style = androidx.compose.ui.text.TextStyle(
                                                     platformStyle = androidx.compose.ui.text.PlatformTextStyle(
                                                         includeFontPadding = false
+                                                    ),
+                                                    lineHeightStyle = LineHeightStyle(
+                                                        alignment = LineHeightStyle.Alignment.Center,
+                                                        trim = LineHeightStyle.Trim.Both
                                                     ),
                                                     lineHeight = 10.sp
                                                 )
@@ -500,76 +505,97 @@ fun AppBottomNav(
  * Displays a stationary bottom tray and a downward moving arrow with continuous looping animation.
  */
 @Composable
-private fun SystemDownloadAnimatedIcon(
+fun SystemDownloadAnimatedIcon(
     tint: Color,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "system_download_arrow")
-    val arrowOffset by infiniteTransition.animateFloat(
-        initialValue = -3.5f,
-        targetValue = 2.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(850, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "arrow_y_offset"
-    )
-    val arrowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
+    val animProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(850, easing = LinearEasing),
+            animation = tween(900, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "arrow_alpha"
+        label = "system_download_anim"
     )
 
-    Box(
-        modifier = modifier.size(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        // Bottom tray line representing device storage / destination
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = 2.dp.toPx()
-            val startX = size.width * 0.20f
-            val endX = size.width * 0.80f
-            val bottomY = size.height * 0.82f
-            val lipHeight = 3.5.dp.toPx()
+    Canvas(modifier = modifier.size(24.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = 2.dp.toPx()
 
-            // Horizontal tray base
-            drawLine(
-                color = tint,
-                start = Offset(startX, bottomY),
-                end = Offset(endX, bottomY),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
-            // Left lip
-            drawLine(
-                color = tint,
-                start = Offset(startX, bottomY),
-                end = Offset(startX, bottomY - lipHeight),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
-            // Right lip
-            drawLine(
-                color = tint,
-                start = Offset(endX, bottomY),
-                end = Offset(endX, bottomY - lipHeight),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
+        // 1. System Tray at bottom: |_|
+        val trayLeft = w * 0.20f
+        val trayRight = w * 0.80f
+        val trayBottom = h * 0.82f
+        val lipHeight = 3.5.dp.toPx()
+
+        // Tray base line
+        drawLine(
+            color = tint,
+            start = Offset(trayLeft, trayBottom),
+            end = Offset(trayRight, trayBottom),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        // Left lip
+        drawLine(
+            color = tint,
+            start = Offset(trayLeft, trayBottom),
+            end = Offset(trayLeft, trayBottom - lipHeight),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        // Right lip
+        drawLine(
+            color = tint,
+            start = Offset(trayRight, trayBottom),
+            end = Offset(trayRight, trayBottom - lipHeight),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+
+        // 2. Animated Downward Arrow: moves from top towards tray, fading in and then fading out
+        val startY = h * 0.20f
+        val endY = h * 0.65f
+        val arrowTipY = startY + (endY - startY) * animProgress
+
+        val alpha = when {
+            animProgress < 0.20f -> (animProgress / 0.20f).coerceIn(0f, 1f)
+            animProgress > 0.80f -> ((1f - animProgress) / 0.20f).coerceIn(0f, 1f)
+            else -> 1f
         }
+        val arrowColor = tint.copy(alpha = alpha)
 
-        // Downward animated arrow moving down into the tray
-        Icon(
-            imageVector = Icons.Default.ArrowDownward,
-            contentDescription = null,
-            tint = tint.copy(alpha = arrowAlpha),
-            modifier = Modifier
-                .size(16.dp)
-                .offset(y = arrowOffset.dp)
+        val centerX = w * 0.5f
+        val stemLength = 8.dp.toPx()
+        val arrowHeadWidth = 4.5.dp.toPx()
+        val arrowHeadHeight = 4.5.dp.toPx()
+
+        // Vertical arrow shaft
+        drawLine(
+            color = arrowColor,
+            start = Offset(centerX, arrowTipY - stemLength),
+            end = Offset(centerX, arrowTipY),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        // Left arrowhead wing
+        drawLine(
+            color = arrowColor,
+            start = Offset(centerX - arrowHeadWidth, arrowTipY - arrowHeadHeight),
+            end = Offset(centerX, arrowTipY),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        // Right arrowhead wing
+        drawLine(
+            color = arrowColor,
+            start = Offset(centerX + arrowHeadWidth, arrowTipY - arrowHeadHeight),
+            end = Offset(centerX, arrowTipY),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
         )
     }
 }

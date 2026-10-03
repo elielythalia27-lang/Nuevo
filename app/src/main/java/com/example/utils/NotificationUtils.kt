@@ -16,6 +16,7 @@ import com.example.data.download.DownloadForegroundService
 import com.example.data.download.DownloadHelper
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
+import com.example.data.model.formatDownloadSpeed
 import java.util.Locale
 
 object NotificationUtils {
@@ -143,8 +144,7 @@ object NotificationUtils {
     fun formatSpeed(speed: Long): String {
         return when {
             speed <= 0L -> "Conectando..."
-            speed >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB/s", speed / (1024.0 * 1024.0))
-            else -> "${(speed / 1024).coerceAtLeast(1L)} KB/s"
+            else -> formatDownloadSpeed(speed)
         }
     }
 

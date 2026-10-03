@@ -5,10 +5,12 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import java.net.NetworkInterface
 
 data class VpnProxyStatus(
     val isBlocked: Boolean = false,
@@ -25,14 +27,65 @@ object VpnProxyDetector {
             val activeNetwork = cm?.activeNetwork
             val caps = if (activeNetwork != null) cm.getNetworkCapabilities(activeNetwork) else null
 
-            val hasVpn = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            // 1. VPN detection via NetworkCapabilities
+            var hasVpn = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            if (!hasVpn && cm != null) {
+                try {
+                    hasVpn = cm.allNetworks.any { net ->
+                        cm.getNetworkCapabilities(net)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+                    }
+                } catch (_: Exception) {}
+            }
 
+            // 2. VPN detection via NetworkInterface names (tun, ppp, p2p, tap, utun)
+            if (!hasVpn) {
+                try {
+                    val interfaces = NetworkInterface.getNetworkInterfaces()
+                    if (interfaces != null) {
+                        for (intf in interfaces) {
+                            if (intf.isUp && (intf.name.startsWith("tun", ignoreCase = true) ||
+                                    intf.name.startsWith("ppp", ignoreCase = true) ||
+                                    intf.name.startsWith("p2p", ignoreCase = true) ||
+                                    intf.name.startsWith("tap", ignoreCase = true) ||
+                                    intf.name.startsWith("utun", ignoreCase = true))) {
+                                hasVpn = true
+                                break
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // 3. Proxy detection: Java system properties
             val proxyHost = System.getProperty("http.proxyHost")
             val proxyPort = System.getProperty("http.proxyPort")
-            val hasProxy = !proxyHost.isNullOrEmpty() &&
+            val hasSystemPropertyProxy = !proxyHost.isNullOrEmpty() &&
                     proxyHost != "127.0.0.1" &&
                     proxyHost != "localhost" &&
                     !proxyPort.isNullOrEmpty()
+
+            // 4. Proxy detection: Android LinkProperties & ConnectivityManager defaultProxy
+            var hasAndroidSystemProxy = false
+            if (cm != null) {
+                try {
+                    val linkProxy = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && activeNetwork != null) {
+                        cm.getLinkProperties(activeNetwork)?.httpProxy
+                    } else null
+                    val defaultProxy = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        cm.defaultProxy
+                    } else null
+
+                    val p = linkProxy ?: defaultProxy
+                    if (p != null && !p.host.isNullOrBlank() && p.port > 0) {
+                        val host = p.host ?: ""
+                        if (host != "127.0.0.1" && host != "localhost") {
+                            hasAndroidSystemProxy = true
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
+            val hasProxy = hasSystemPropertyProxy || hasAndroidSystemProxy
 
             val isBlocked = hasVpn || hasProxy
             val reason = when {

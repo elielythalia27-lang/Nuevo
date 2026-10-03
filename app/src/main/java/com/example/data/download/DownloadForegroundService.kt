@@ -29,6 +29,9 @@ private fun DownloadHelper.removeItem(id: String) = this.removeItemFromState(id)
 private fun DownloadHelper.removeItem(id: Long) = this.removeItemFromState(id.toString())
 private fun DownloadHelper.getItem(id: Long): DownloadItem? = this.getItem(id.toString())
 
+/** Se lanza dentro del bucle de descarga cuando se detecta VPN o Proxy: pausa, no es un fallo. */
+private class VpnBlockedException : Exception("VPN o Proxy detectado")
+
 class DownloadForegroundService : Service() {
 
     companion object {
@@ -41,6 +44,7 @@ class DownloadForegroundService : Service() {
         const val ACTION_RESUME_ALL = "com.downloadfree.ACTION_RESUME_ALL"
         const val ACTION_CANCEL_ALL = "com.downloadfree.ACTION_CANCEL_ALL"
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
+        const val EXTRA_FILE_PATH = "extra_file_path"
         private const val SUMMARY_NID = 0x7FFF0000
 
         fun startDownload(context: Context, item: DownloadItem) {
@@ -71,10 +75,12 @@ class DownloadForegroundService : Service() {
             startForegroundServiceCompat(context, intent)
         }
 
-        fun cancelDownload(context: Context, downloadId: String) {
+        fun cancelDownload(context: Context, downloadId: String, localFilePath: String? = null) {
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_CANCEL_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
+                // Ruta del archivo, para borrar el .part al cancelar
+                if (!localFilePath.isNullOrBlank()) putExtra(EXTRA_FILE_PATH, localFilePath)
             }
             sendServiceCommand(context, intent)
         }
@@ -112,8 +118,16 @@ class DownloadForegroundService : Service() {
 
         private fun sendServiceCommand(context: Context, intent: Intent) {
             try {
-                context.startService(intent)
-            } catch (_: Exception) {}
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (_: Exception) {
+                try {
+                    context.startService(intent)
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -121,6 +135,7 @@ class DownloadForegroundService : Service() {
     private val downloadJobs = ConcurrentHashMap<String, Job>()
     private val connections = ConcurrentHashMap<String, HttpURLConnection>()
     private val userStopping: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val startJobLock = Any()
 
     private val notifLock = Any()
     private var foregroundStarted = false
@@ -152,6 +167,18 @@ class DownloadForegroundService : Service() {
         val downloadId = intent.getStringExtra(DownloadHelper.EXTRA_DOWNLOAD_ID)
             ?: intent.getLongExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, -1L).takeIf { it != -1L }?.toString()
 
+        // Si nos arrancaron con startForegroundService, hay que llamar a startForeground
+        // SIEMPRE y rápido, aunque después no haya nada que descargar. Si no, Android
+        // cierra la app a los pocos segundos (ForegroundServiceDidNotStartInTimeException).
+        val startedAsForeground = action == DownloadHelper.ACTION_START_DOWNLOAD ||
+            action == DownloadHelper.ACTION_RESUME_DOWNLOAD ||
+            action == ACTION_RESUME_ALL
+        if (startedAsForeground) ensureForeground()
+
+        // Si el proceso acaba de arrancar (por ejemplo, desde un botón de la notificación),
+        // esperar a que la lista de descargas se cargue antes de buscar la descarga.
+        waitUntilHelperLoaded()
+
         when (action) {
             DownloadHelper.ACTION_START_DOWNLOAD,
             "com.downloadfree.ACTION_RESUME_DOWNLOAD" -> {
@@ -167,13 +194,43 @@ class DownloadForegroundService : Service() {
                 }
             }
             DownloadHelper.ACTION_PAUSE_DOWNLOAD -> downloadId?.let { pauseDownload(it) }
-            DownloadHelper.ACTION_CANCEL_DOWNLOAD -> downloadId?.let { cancelDownload(it) }
+            DownloadHelper.ACTION_CANCEL_DOWNLOAD -> downloadId?.let {
+                // La ruta viene en el intent (desde la app) o se toma de la lista (desde la notificación)
+                val path = intent.getStringExtra(EXTRA_FILE_PATH) ?: helper.getItem(it)?.localFilePath
+                cancelDownload(it, path)
+            }
             ACTION_PAUSE_ALL, "com.downloadfree.ACTION_PAUSE_ALL" -> {
                 val ids = downloadJobs.keys.toList()
-                if (ids.isEmpty()) stopIfIdle() else ids.forEach { pauseDownload(it) }
+                // Al pausar todo, la cola NO debe arrancar sola (startNext = false)
+                if (ids.isEmpty()) stopIfIdle() else ids.forEach { pauseDownload(it, startNext = false) }
+            }
+            ACTION_RESUME_ALL -> {
+                helper.resumeAllDownloads()
+            }
+            ACTION_CANCEL_ALL -> {
+                helper.cancelAllDownloads()
             }
         }
         return START_NOT_STICKY
+    }
+
+    /** Arranca el primer plano con la notificación resumen si todavía no está arrancado. */
+    private fun ensureForeground() {
+        synchronized(notifLock) {
+            if (!foregroundStarted) {
+                val notif = NotificationUtils.buildSummaryNotification(this, activeItems())
+                startForegroundCompat(SUMMARY_NID, notif)
+                foregroundStarted = true
+                lastSummaryTime = System.currentTimeMillis()
+            }
+        }
+    }
+
+    private fun waitUntilHelperLoaded() {
+        if (helper.isLoaded()) return
+        try {
+            runBlocking { withTimeoutOrNull(2500L) { helper.awaitLoaded() } }
+        } catch (_: Exception) {}
     }
 
     private fun activeItems(): List<DownloadItem> =
@@ -200,31 +257,37 @@ class DownloadForegroundService : Service() {
         }
     }
 
-    private fun startDownloadJob(item: DownloadItem) {
+    private fun startDownloadJob(item: DownloadItem) = synchronized(startJobLock) {
+        // Primero lo más barato: si ya está corriendo o se está pausando/cancelando, no hacer nada
+        if (userStopping.contains(item.id)) return@synchronized
+        if (downloadJobs[item.id]?.isActive == true) return@synchronized
+
         if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
             val paused = item.copy(status = DownloadStatus.PAUSED, speedBytesPerSec = 0L, etaSeconds = 0L)
-            helper.updateItemState(paused)
+            helper.updateAndPersist(paused)
             notificationManager.notify(
                 pausedNid(item.id),
                 NotificationUtils.buildPausedNotification(applicationContext, paused)
             )
             AppToastManager.show("Desactiva la VPN o Proxy para descargar", ToastType.WARNING)
             stopIfIdle()
-            return
+            return@synchronized
         }
 
-        val activeRunningJobs = downloadJobs.values.count { it.isActive }
-        val maxLimit = helper.getMaxConcurrentLimit()
+        // No contar las descargas que se están pausando/cancelando: ya están liberando su lugar
+        val activeRunningJobs = downloadJobs.entries.count {
+            it.value.isActive && !userStopping.contains(it.key)
+        }
+        val maxLimit = helper.getMaxConcurrentLimit().coerceIn(1, 5)
         if (activeRunningJobs >= maxLimit) {
             val pending = item.copy(status = DownloadStatus.PENDING, speedBytesPerSec = 0L, etaSeconds = 0L)
-            helper.updateItemState(pending)
+            helper.updateAndPersist(pending)
+            // Una descarga en cola no debe seguir mostrando "En pausa" en la bandeja
+            try { notificationManager.cancel(progressNid(item.id)) } catch (_: Exception) {}
             AppToastManager.show("En cola (máximo $maxLimit descargas activas)", ToastType.INFO)
             stopIfIdle()
-            return
+            return@synchronized
         }
-
-        userStopping.remove(item.id)
-        if (downloadJobs[item.id]?.isActive == true) return // ya está corriendo
 
         // Solo se quita la notificación "Fallida". La de pausa comparte ID con la de progreso.
         notificationManager.cancel(failedNid(item.id))
@@ -234,7 +297,7 @@ class DownloadForegroundService : Service() {
             speedBytesPerSec = 0L,
             etaSeconds = 0L
         )
-        helper.updateItemState(running)
+        helper.updateAndPersist(running)
 
         // La misma notificación pasa de "En pausa" a "Descargando" de inmediato, en su mismo lugar
         notificationManager.notify(
@@ -242,14 +305,7 @@ class DownloadForegroundService : Service() {
             NotificationUtils.buildProgressNotification(applicationContext, running, running.progress, 0L, 0L)
         )
 
-        synchronized(notifLock) {
-            if (!foregroundStarted) {
-                val notif = NotificationUtils.buildSummaryNotification(this, activeItems())
-                startForegroundCompat(SUMMARY_NID, notif)
-                foregroundStarted = true
-                lastSummaryTime = System.currentTimeMillis()
-            }
-        }
+        ensureForeground()
 
         val job = serviceScope.launch(start = CoroutineStart.LAZY) {
             executeDownloadLoop(running)
@@ -346,7 +402,7 @@ class DownloadForegroundService : Service() {
                 val timeDiff = now - lastTime
                 if (timeDiff >= 1000L) {
                     if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
-                        throw Exception("Descarga pausada: VPN o Proxy detectado")
+                        throw VpnBlockedException()
                     }
                     // Velocidad medida en esta ventana de ~1 segundo
                     val instantSpeed = (bytesSinceLastUpdate * 1000L) / timeDiff.coerceAtLeast(1L)
@@ -383,7 +439,12 @@ class DownloadForegroundService : Service() {
 
         } catch (e: Exception) {
             if (currentCoroutineContext().isActive) {
-                markDownloadFailed(item, e.message ?: "Error de descarga")
+                if (e is VpnBlockedException) {
+                    // VPN/Proxy detectado a mitad de descarga: se pausa (no es un fallo)
+                    pauseBecauseOfVpn(item)
+                } else {
+                    markDownloadFailed(item, e.message ?: "Error de descarga")
+                }
             }
         } finally {
             connection?.let {
@@ -394,8 +455,11 @@ class DownloadForegroundService : Service() {
             try { input?.close() } catch (_: Exception) {}
 
             myJob?.let { downloadJobs.remove(item.id, it) }
-            // Si el usuario pausó, NO se cancela: la notificación se actualiza a "En pausa" en su lugar
-            if (!userStopping.contains(item.id)) {
+            // Si la descarga quedó en pausa (por el usuario o por la VPN), NO se cancela la
+            // notificación: se queda como "En pausa" en su mismo lugar.
+            val keepNotification = userStopping.contains(item.id) ||
+                helper.getItem(item.id)?.status == DownloadStatus.PAUSED
+            if (!keepNotification) {
                 try { notificationManager.cancel(progressNid(item.id)) } catch (_: Exception) {}
             }
             refreshSummary(force = true)
@@ -447,7 +511,8 @@ class DownloadForegroundService : Service() {
     /** Cuando no queda nada activo ni en proceso de pausa/cancelación, suelta el primer plano y se detiene. */
     private fun stopIfIdle() {
         synchronized(notifLock) {
-            if (downloadJobs.isEmpty() && userStopping.isEmpty()) {
+            val active = activeItems()
+            if (active.isEmpty() && downloadJobs.isEmpty() && userStopping.isEmpty()) {
                 if (foregroundStarted) {
                     foregroundStarted = false
                     stopForegroundCompat()
@@ -490,10 +555,29 @@ class DownloadForegroundService : Service() {
         notificationManager.notify(doneNid(item.id), successNotif)
     }
 
+    /** VPN o Proxy detectado a mitad de descarga: queda en pausa, con su notificación "En pausa". */
+    private fun pauseBecauseOfVpn(item: DownloadItem) {
+        val live = helper.getItem(item.id) ?: item
+        val part = File(live.localFilePath + ".part")
+        val realBytes = if (part.exists()) part.length() else live.downloadedBytes
+        val paused = live.copy(
+            status = DownloadStatus.PAUSED,
+            downloadedBytes = realBytes,
+            speedBytesPerSec = 0L,
+            etaSeconds = 0L
+        )
+        helper.updateAndPersist(paused)
+        notificationManager.notify(
+            pausedNid(item.id),
+            NotificationUtils.buildPausedNotification(applicationContext, paused)
+        )
+        AppToastManager.show("Descarga en pausa: desactiva la VPN o Proxy", ToastType.WARNING)
+    }
+
     private fun markDownloadFailed(item: DownloadItem, errorReason: String) {
         val live = helper.getItem(item.id) ?: item
         val failed = live.copy(status = DownloadStatus.FAILED, speedBytesPerSec = 0L, etaSeconds = 0L)
-        helper.updateItemState(failed)
+        helper.updateAndPersist(failed)
         notificationManager.notify(
             failedNid(item.id),
             NotificationUtils.buildFailedNotification(applicationContext, failed)
@@ -508,7 +592,12 @@ class DownloadForegroundService : Service() {
         job?.join()
     }
 
-    private fun pauseDownload(id: String) {
+    /**
+     * Detiene la descarga. Si el helper la había puesto en cola (PENDING), se queda en cola;
+     * en cualquier otro caso queda en pausa. startNext = false evita que la cola arranque sola
+     * (se usa en "Pausar todo").
+     */
+    private fun pauseDownload(id: String, startNext: Boolean = true) {
         if (!userStopping.add(id)) return
         serviceScope.launch {
             try {
@@ -522,28 +611,34 @@ class DownloadForegroundService : Service() {
                         ((realBytes * 100L) / live.totalBytes).toInt().coerceIn(0, 99)
                     } else 0
 
-                    val paused = live.copy(
-                        status = DownloadStatus.PAUSED,
+                    val queued = live.status == DownloadStatus.PENDING
+                    val stopped = live.copy(
+                        status = if (queued) DownloadStatus.PENDING else DownloadStatus.PAUSED,
                         downloadedBytes = realBytes,
                         progress = progress,
                         speedBytesPerSec = 0L,
                         etaSeconds = 0L
                     )
-                    helper.updateItemState(paused)
-                    notificationManager.notify(
-                        pausedNid(id),
-                        NotificationUtils.buildPausedNotification(applicationContext, paused)
-                    )
+                    helper.updateAndPersist(stopped)
+                    if (queued) {
+                        notificationManager.cancel(progressNid(id))
+                    } else {
+                        notificationManager.notify(
+                            pausedNid(id),
+                            NotificationUtils.buildPausedNotification(applicationContext, stopped)
+                        )
+                    }
                 }
             } finally {
                 userStopping.remove(id)
                 refreshSummary(force = true)
+                if (startNext) helper.checkAndStartNextPending()
                 stopIfIdle()
             }
         }
     }
 
-    private fun cancelDownload(id: String) {
+    private fun cancelDownload(id: String, localFilePath: String? = null) {
         if (!userStopping.add(id)) return
         serviceScope.launch {
             try {
@@ -552,9 +647,28 @@ class DownloadForegroundService : Service() {
                 notificationManager.cancel(progressNid(id))
                 notificationManager.cancel(pausedNid(id))
                 notificationManager.cancel(failedNid(id))
+                // El hilo ya terminó (join), así que nadie sigue escribiendo: se borra el archivo parcial
+                if (!localFilePath.isNullOrBlank()) {
+                    try { File("$localFilePath.part").delete() } catch (_: Exception) {}
+                }
             } finally {
                 userStopping.remove(id)
+                // Asegurar que las notificaciones de las descargas restantes no desaparezcan
+                val remainingActive = activeItems()
+                remainingActive.forEach { rem ->
+                    notificationManager.notify(
+                        progressNid(rem.id),
+                        NotificationUtils.buildProgressNotification(
+                            applicationContext,
+                            rem,
+                            rem.progress,
+                            rem.speedBytesPerSec,
+                            rem.etaSeconds
+                        )
+                    )
+                }
                 refreshSummary(force = true)
+                helper.checkAndStartNextPending()
                 stopIfIdle()
             }
         }

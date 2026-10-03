@@ -60,6 +60,15 @@ class DownloadHelper(
     // In-memory Single Source of Truth for 0ms latency UI updates
     private val _liveDownloadsState = MutableStateFlow<List<DownloadItem>>(emptyList())
     val liveDownloadsState: StateFlow<List<DownloadItem>> = _liveDownloadsState.asStateFlow()
+    private val isLoadedState = MutableStateFlow(false)
+
+    fun isLoaded(): Boolean = isLoadedState.value
+
+    suspend fun awaitLoaded() {
+        if (!isLoadedState.value) {
+            isLoadedState.first { it }
+        }
+    }
 
     companion object {
         const val ACTION_START_DOWNLOAD = "com.downloadfree.ACTION_START_DOWNLOAD"
@@ -90,6 +99,7 @@ class DownloadHelper(
         scope.launch(Dispatchers.IO) {
             val initial = preferences.downloads.first()
             _liveDownloadsState.value = initial
+            isLoadedState.value = true
 
             preferences.downloads.collect { storedList ->
                 _liveDownloadsState.update { currentMemList ->
@@ -221,6 +231,13 @@ class DownloadHelper(
             } else {
                 list + item
             }
+        }
+    }
+
+    fun updateAndPersist(item: DownloadItem) {
+        updateItemState(item)
+        scope.launch(Dispatchers.IO) {
+            preferences.addOrUpdateDownload(item)
         }
     }
 
@@ -515,14 +532,28 @@ class DownloadHelper(
 
     fun forceStartPendingDownload(download: DownloadItem) {
         scope.launch(Dispatchers.IO) {
-            val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
-            if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+            if (VpnProxyDetector.isVpnOrProxyActive(context)) {
+                AppToastManager.show("Desactiva la VPN o Proxy para iniciar la descarga", ToastType.WARNING)
                 return@launch
             }
-            val resuming = download.copy(status = DownloadStatus.DOWNLOADING)
-            updateItemState(resuming)
-            preferences.addOrUpdateDownload(resuming)
-            DownloadForegroundService.startDownload(context, resuming)
+            val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+            if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+                AppToastManager.show("Solo Wi-Fi activado. Conéctate a Wi-Fi para descargar.", ToastType.ERROR)
+                return@launch
+            }
+            queueMutex.withLock {
+                val limit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
+                val currentList = _liveDownloadsState.value
+                val activeDownloads = currentList.filter { it.status == DownloadStatus.DOWNLOADING && it.id != download.id }
+                if (activeDownloads.size >= limit) {
+                    AppToastManager.show("Límite de $limit descargas alcanzado. Espera a que termine una descarga.", ToastType.WARNING)
+                    return@launch
+                }
+                val resuming = download.copy(status = DownloadStatus.DOWNLOADING)
+                updateItemState(resuming)
+                preferences.addOrUpdateDownload(resuming)
+                DownloadForegroundService.startDownload(context, resuming)
+            }
         }
     }
 
@@ -531,11 +562,47 @@ class DownloadHelper(
     }
 
     fun resumeAllDownloads() {
-        DownloadForegroundService.resumeAll(context)
+        if (VpnProxyDetector.isVpnOrProxyActive(context)) {
+            AppToastManager.show("Desactiva la VPN o Proxy para reanudar descargas", ToastType.WARNING)
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            queueMutex.withLock {
+                val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+                if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+                    AppToastManager.show("Solo Wi-Fi activado. Conéctate a Wi-Fi para reanudar.", ToastType.ERROR)
+                    return@launch
+                }
+
+                val limit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
+                val currentList = _liveDownloadsState.value
+                val pausedOrPending = currentList.filter { it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING }
+                var activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
+
+                for (item in pausedOrPending) {
+                    if (activeCount < limit) {
+                        val resuming = item.copy(status = DownloadStatus.DOWNLOADING)
+                        updateItemState(resuming)
+                        preferences.addOrUpdateDownload(resuming)
+                        DownloadForegroundService.startDownload(context, resuming)
+                        activeCount++
+                    } else {
+                        val pending = item.copy(status = DownloadStatus.PENDING)
+                        updateItemState(pending)
+                        preferences.addOrUpdateDownload(pending)
+                    }
+                }
+            }
+        }
     }
 
     fun cancelAllDownloads() {
-        DownloadForegroundService.cancelAll(context)
+        scope.launch(Dispatchers.IO) {
+            val list = _liveDownloadsState.value
+            list.forEach { item ->
+                cancelDownload(item)
+            }
+        }
     }
 
     fun deleteMultipleDownloads(items: List<DownloadItem>) {
