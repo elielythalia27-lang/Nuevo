@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+
+    <!-- Solid Pure White Background Rounded Card -->
+    <path
+        android:pathData="M24,8 L104,8 C112.8,8 120,15.2 120,24 L120,104 C120,112.8 112.8,120 104,120 L24,120 C15.2,120 8,112.8 8,104 L8,24 C8,15.2 15.2,8 24,8 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- 3D Soft Ambient Ground Shadow -->
+    <path
+        android:pathData="M38,92 C38,88 90,88 90,92 C90,96 38,96 38,92 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="64"
+                android:startY="88"
+                android:endX="64"
+                android:endY="96"
+                android:type="linear">
+                <item android:color="#35004D40" android:offset="0.0" />
+                <item android:color="#00000000" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3D Isometric Teal Anchor Spine - Back Depth Layer -->
+    <path
+        android:pathData="M37,41 C37,37.5 40,35 43.5,35 L50.5,35 L50.5,91.5 L43.5,91.5 C40,91.5 37,89 37,85.5 Z"
+        android:fillColor="#004D40" />
+
+    <!-- 3D Isometric Teal Anchor Spine - Front Face -->
+    <path
+        android:pathData="M35.5,39 C35.5,35.5 38.5,33 42,33 L48,33 L48,89.5 L42,89.5 C38.5,89.5 35.5,87 35.5,83.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="35.5"
+                android:startY="33"
+                android:endX="48.5"
+                android:endY="89.5"
+                android:type="linear">
+                <item android:color="#00BFA5" android:offset="0.0" />
+                <item android:color="#00897B" android:offset="0.45" />
+                <item android:color="#00695C" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Spine 3D Top Highlight Chamfer -->
+    <path
+        android:pathData="M37,39 C37,36.5 39,34.5 42,34.5 L48,34.5 L48,37.5 L42,37.5 C39.5,37.5 38,38.5 37.5,40 Z"
+        android:fillColor="#80E0F2F1" />
+
+    <!-- 3D Teal Download/Media Loop - Depth Shadow Layer -->
+    <path
+        android:pathData="M49,36 C68,36 88.5,42 93.5,58.5 C98.5,74 90,87 77,93 C67.5,96.5 57,94 50,94 L52.5,84.5 C57,84.5 64.5,87 72,83.5 C81.5,78.5 86,69 82.5,58.5 C79,48 63.5,43 50,44 Z"
+        android:fillColor="#00382E" />
+
+    <!-- 3D Teal Download/Media Loop - Main Body -->
+    <path
+        android:pathData="M47.5,33 C66.5,33 87,39 92,55.5 C97,71 88.5,84 75.5,90 C66,93.5 55.5,91 48.5,91 L51,81.5 C55.5,81.5 63,84 70.5,80.5 C80,75.5 84.5,66 81,55.5 C77.5,45 62,40 48.5,41 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="47.5"
+                android:startY="33"
+                android:endX="92"
+                android:endY="91"
+                android:type="linear">
+                <item android:color="#1DE9B6" android:offset="0.0" />
+                <item android:color="#00BFA5" android:offset="0.25" />
+                <item android:color="#00897B" android:offset="0.65" />
+                <item android:color="#004D40" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3D Loop Top Specular Edge Highlight -->
+    <path
+        android:pathData="M48.5,33 C65,33 84,38.5 89.5,53 C87,41 71,36 48.5,36 Z"
+        android:fillColor="#90FFFFFF" />
+
+    <!-- 3D Download Arrow Pointer - Depth Edge -->
+    <path
+        android:pathData="M66,83 L77.5,93 L62.5,95.5 L65,84 Z"
+        android:fillColor="#00332A" />
+
+    <!-- 3D Download Arrow Pointer - Front -->
+    <path
+        android:pathData="M65,81 L76,91 L61,93.5 L63.5,82 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="61"
+                android:startY="81"
+                android:endX="76"
+                android:endY="93.5"
+                android:type="linear">
+                <item android:color="#00E676" android:offset="0.0" />
+                <item android:color="#00BFA5" android:offset="0.4" />
+                <item android:color="#00796B" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3D Ruby Red Play Button Jewel - Soft Drop Shadow -->
+    <path
+        android:pathData="M52,51.5 C53.5,50.5 55.5,50.5 57,51.5 L75,62 C77,63.5 77,66.5 75,67.5 L57,78 C55.5,79 53.5,79 52,78 C51,77 50,75.5 50,74 L50,55.5 C50,54 51,52.5 52,51.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="50"
+                android:startY="50"
+                android:endX="77"
+                android:endY="79"
+                android:type="linear">
+                <item android:color="#50000000" android:offset="0.0" />
+                <item android:color="#30000000" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3D Ruby Red Play Button Jewel - 3D Bevel Body -->
+    <path
+        android:pathData="M51,49.5 C52.5,48.5 54.5,48.5 56,49.5 L74,60 C76,61.5 76,64.5 74,65.5 L56,76 C54.5,77 52.5,77 51,76 C50,75 49,73.5 49,72 L49,53.5 C49,52 50,50.5 51,49.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="49"
+                android:startY="48.5"
+                android:endX="76"
+                android:endY="76"
+                android:type="linear">
+                <item android:color="#FF5252" android:offset="0.0" />
+                <item android:color="#FF1744" android:offset="0.3" />
+                <item android:color="#D50000" android:offset="0.75" />
+                <item android:color="#8B0000" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3D Ruby Red Top Gloss Facet -->
+    <path
+        android:pathData="M51,49.5 L73,62.5 L51,62.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="51"
+                android:startY="49.5"
+                android:endX="73"
+                android:endY="62.5"
+                android:type="linear">
+                <item android:color="#80FFFFFF" android:offset="0.0" />
+                <item android:color="#00FFFFFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3D Specular Center Highlight -->
+    <path
+        android:pathData="M52.5,53 C52.5,52 53.5,52 54,52.5 L61.5,57 C62,57.5 62,58.2 61.5,58.7 L54,63.2 C53.5,63.7 52.5,63.7 52.5,62.7 Z"
+        android:fillColor="#40FFFFFF" />
+
+</vector>

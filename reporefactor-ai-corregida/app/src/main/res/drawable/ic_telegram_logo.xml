@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Official Circular Background with smooth Telegram gradient -->
+    <path
+        android:pathData="M50,50 m-48,0 a48,48 0 1,0 96,0 a48,48 0 1,0 -96,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="50"
+                android:startY="2"
+                android:endX="50"
+                android:endY="98"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#29B6F6" />
+                <item android:offset="0.4" android:color="#039BE5" />
+                <item android:offset="1.0" android:color="#0277BD" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Paper Airplane: Lower Shaded Bottom Wing -->
+    <path
+        android:pathData="M45.5,58.6 L44.4,70.1 C45.7,70.1 46.3,69.5 47.0,68.8 L53.4,62.6 L66.6,72.3 C69.0,73.6 70.8,72.9 71.4,70.0 L80.0,29.3 C80.9,25.6 78.5,24.0 76.2,25.0 L24.9,44.6 C21.3,46.0 21.4,48.0 24.3,49.0 L37.9,53.0 L68.0,34.0 C69.4,33.2 70.7,33.6 69.6,34.6 L45.5,58.6 Z"
+        android:fillColor="#D0E6F8" />
+
+    <!-- Paper Airplane: Pure White Main Top Wing -->
+    <path
+        android:pathData="M24.3,49.0 L68.0,34.0 C69.4,33.2 70.7,33.6 69.6,34.6 L45.5,58.6 L37.9,53.0 L24.3,49.0 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Paper Airplane: Center Fold Shading -->
+    <path
+        android:pathData="M45.5,58.6 L53.4,62.6 L47.0,68.8 C46.3,69.5 45.7,70.1 44.4,70.1 L45.5,58.6 Z"
+        android:fillColor="#C0DCF5" />
+
+    <!-- Paper Airplane: Pure White Right Swept Wing Body -->
+    <path
+        android:pathData="M45.5,58.6 L69.6,34.6 L80.0,29.3 L66.6,72.3 L45.5,58.6 Z"
+        android:fillColor="#FFFFFF" />
+</vector>

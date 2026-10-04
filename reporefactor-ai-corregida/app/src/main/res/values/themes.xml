@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MyApplication" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Seamless cold start background matching app theme -->
+        <item name="android:windowBackground">@color/app_window_bg</item>
+        <item name="android:colorBackground">@color/app_window_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/app_window_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon_light</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>

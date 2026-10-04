@@ -1,0 +1,6 @@
+{
+  "name": "Download Free",
+  "description": "Aplicación de películas y videos con reproductor profesional integrado, descargas pausables, notificaciones y ajustes avanzados.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

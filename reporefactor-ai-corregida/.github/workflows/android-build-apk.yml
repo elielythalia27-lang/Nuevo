@@ -53,13 +53,7 @@ jobs:
           if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
             echo "Decodificando keystore desde GitHub Secrets..."
             echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
-          elif [ -f release.keystore ]; then
-            echo "Usando release.keystore permanente del repositorio..."
-            cp -f release.keystore my-upload-key.jks
-          elif [ -f app/release.keystore ]; then
-            echo "Usando app/release.keystore permanente del repositorio..."
-            cp -f app/release.keystore my-upload-key.jks
-          elif [ ! -f my-upload-key.jks ]; then
+          elif [ ! -f my-upload-key.jks ] && [ ! -f release.keystore ]; then
             echo "Generando almacén de claves Release automatizado con keytool..."
             keytool -genkeypair -v \
               -keystore my-upload-key.jks \
@@ -71,9 +65,8 @@ jobs:
               -keypass "${{ secrets.KEY_PASSWORD || 'android' }}" \
               -dname "CN=DownloadFree, OU=Mobile, O=Eliel, L=Havana, ST=Havana, C=CU"
           fi
-          # Asegurar copia en app/ y raíz para redundancia en cualquier contexto de ejecución
+          # Asegurar copia en app/ para redundancia en cualquier contexto de ejecución
           cp -f my-upload-key.jks app/my-upload-key.jks || true
-          cp -f my-upload-key.jks release.keystore || true
 
       - name: Compilar APK Release
         env:
