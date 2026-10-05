@@ -12,8 +12,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.R
-import com.example.data.download.DownloadForegroundService
 import com.example.data.download.DownloadHelper
+import com.example.data.download.DownloadActionReceiver
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
 import com.example.data.model.formatDownloadSpeed
@@ -101,17 +101,15 @@ object NotificationUtils {
      * PendingIntent de los botones de la notificación. Lleva un Uri único en data:
      * un PendingIntent se distingue por action+data, NO por los extras.
      */
-    private fun serviceActionIntent(
+    private fun receiverActionIntent(
         context: Context,
         intentAction: String,
-        downloadId: String,
-        asForeground: Boolean = false
+        downloadId: String
     ): PendingIntent {
-        val intent = Intent(context, DownloadForegroundService::class.java).apply {
+        val intent = Intent(context, DownloadActionReceiver::class.java).apply {
             action = intentAction
             putExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, downloadId)
-            downloadId.toLongOrNull()?.let { putExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, it) }
-            data = Uri.parse("downloadfree://action/$intentAction/$downloadId")
+            data = Uri.parse("downloadfree://notification/$intentAction/$downloadId")
         }
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -119,19 +117,55 @@ object NotificationUtils {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
         val requestCode = intentAction.hashCode() * 31 + downloadId.hashCode()
-        return if (asForeground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            PendingIntent.getForegroundService(context, requestCode, intent, flags)
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
+    }
+
+    private fun receiverActionIntent(
+        context: Context,
+        intentAction: String,
+        downloadId: Long
+    ): PendingIntent = receiverActionIntent(context, intentAction, downloadId.toString())
+
+    /**
+     * Android 14+ requires UIDT to be scheduled while the app is visible (or under
+     * a documented exemption). Therefore a Resume action launches MainActivity,
+     * which then schedules the UIDT job while the app is visible.
+     */
+    private fun resumeActionIntent(
+        context: Context,
+        downloadId: String
+    ): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_NOTIFICATION_RESUME_DOWNLOAD
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(DownloadHelper.EXTRA_DOWNLOAD_ID, downloadId)
+            data = Uri.parse("downloadfree://resume/$downloadId")
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
-            PendingIntent.getService(context, requestCode, intent, flags)
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            PendingIntent.getActivity(
+                context,
+                ("resume:$downloadId").hashCode(),
+                intent,
+                flags
+            )
+        } else {
+            receiverActionIntent(
+                context,
+                DownloadHelper.ACTION_RESUME_DOWNLOAD,
+                downloadId
+            )
         }
     }
 
-    private fun serviceActionIntent(
+    private fun resumeActionIntent(
         context: Context,
-        intentAction: String,
-        downloadId: Long,
-        asForeground: Boolean = false
-    ): PendingIntent = serviceActionIntent(context, intentAction, downloadId.toString(), asForeground)
+        downloadId: Long
+    ): PendingIntent = resumeActionIntent(context, downloadId.toString())
 
     private fun displayTitle(item: DownloadItem): String {
         return if (item.year.isNotBlank() && !item.title.contains("(${item.year})")) {
@@ -204,7 +238,12 @@ object NotificationUtils {
             .addAction(
                 android.R.drawable.ic_media_pause,
                 "Pausar todo",
-                serviceActionIntent(context, DownloadForegroundService.ACTION_PAUSE_ALL, -1L)
+                receiverActionIntent(context, DownloadHelper.ACTION_PAUSE_ALL, -1L)
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Cancelar todo",
+                receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_ALL, -1L)
             )
             .build()
     }
@@ -275,12 +314,12 @@ object NotificationUtils {
             .addAction(
                 android.R.drawable.ic_media_pause,
                 "Pausar",
-                serviceActionIntent(context, DownloadHelper.ACTION_PAUSE_DOWNLOAD, item.id)
+                receiverActionIntent(context, DownloadHelper.ACTION_PAUSE_DOWNLOAD, item.id)
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Cancelar",
-                serviceActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
+                receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
     }
@@ -313,7 +352,7 @@ object NotificationUtils {
             .setProgress(100, item.progress, false)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .setAutoCancel(false)
-            .setOngoing(false)
+            .setOngoing(true)
             .setShowWhen(false)
             .setWhen(0L)
             .setSortKey("download_${item.id}")
@@ -322,12 +361,12 @@ object NotificationUtils {
             .addAction(
                 android.R.drawable.ic_media_play,
                 "Reanudar",
-                serviceActionIntent(context, DownloadHelper.ACTION_RESUME_DOWNLOAD, item.id, asForeground = true)
+                resumeActionIntent(context, item.id)
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Cancelar",
-                serviceActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
+                receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
     }
@@ -364,12 +403,12 @@ object NotificationUtils {
             .addAction(
                 android.R.drawable.ic_media_play,
                 "Reintentar",
-                serviceActionIntent(context, DownloadHelper.ACTION_RESUME_DOWNLOAD, item.id, asForeground = true)
+                resumeActionIntent(context, item.id)
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Cancelar",
-                serviceActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
+                receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
     }

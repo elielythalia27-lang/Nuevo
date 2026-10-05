@@ -167,12 +167,16 @@ class DownloadForegroundService : Service() {
 
         private fun pauseUidtDownload(context: Context, downloadId: String) {
             val app = context.applicationContext
-            DownloadUidtJobService.cancel(app, downloadId)
             val helper = DownloadHelper.getActiveInstance(app)
             val item = helper.getItem(downloadId) ?: return
             val part = File(item.localFilePath + ".part")
             val bytes = if (part.exists()) part.length() else item.downloadedBytes
-            val progress = if (item.totalBytes > 0L) ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99) else item.progress
+            val progress = if (item.totalBytes > 0L) {
+                ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99)
+            } else item.progress
+
+            // Mark paused before cancelling the job. The downloader checks this state
+            // and will no longer publish a "downloading" notification after the tap.
             val paused = item.copy(
                 status = DownloadStatus.PAUSED,
                 downloadedBytes = bytes,
@@ -181,15 +185,27 @@ class DownloadForegroundService : Service() {
                 etaSeconds = 0L
             )
             helper.updateAndPersist(paused)
+
+            DownloadUidtJobService.cancel(app, downloadId)
+
             val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(progressNidStatic(downloadId), NotificationUtils.buildPausedNotification(app, paused))
+            // Re-post after the JobScheduler cancellation so the UIDT notification cannot
+            // win a race and remove the user's paused notification.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                manager.notify(
+                    progressNidStatic(downloadId),
+                    NotificationUtils.buildPausedNotification(app, paused)
+                )
+            }, 180L)
         }
 
         private fun cancelUidtDownload(context: Context, downloadId: String, localFilePath: String?) {
             val app = context.applicationContext
-            DownloadUidtJobService.cancel(app, downloadId)
             val helper = DownloadHelper.getActiveInstance(app)
+            // Remove from the SSOT first. If JobScheduler calls onStopJob after this,
+            // it sees no item and cannot resurrect it as PAUSED.
             helper.removeItemFromState(downloadId)
+            DownloadUidtJobService.cancel(app, downloadId)
             val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val nid = progressNidStatic(downloadId)
             manager.cancel(nid)

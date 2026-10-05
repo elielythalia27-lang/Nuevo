@@ -1,77 +1,71 @@
-# Auditoría y correcciones — reporefactor-ai
-
-Fecha: 2026-10-05
+# Auditoría integral — versión de corrección de descargas
 
 ## Alcance
-Se revisó el árbol principal `app/` del proyecto, incluyendo:
-- AndroidManifest y configuración Gradle
-- servicio de descargas foreground
-- gestor/estado/persistencia de descargas
-- notificaciones y PendingIntent
-- permisos y almacenamiento
-- Home, Descargas, Ajustes y Player
-- componentes Compose y ciclo de vida
-- búsqueda estática de patrones peligrosos y consistencia de llaves/XML
 
-## Correcciones aplicadas
+Se revisó el árbol principal `app/` de este ZIP como proyecto independiente. No se mezcló código de la carpeta histórica `reporefactor-ai-corregida/`.
 
-### 1. Acciones de notificación: Pausar/Cancelar/Cola
-Las acciones de control estaban enviando `startForegroundService()` incluso cuando la operación era Pausar, Cancelar o poner en cola.
+## Correcciones principales
 
-Eso es incorrecto porque esas acciones no necesitan convertirse en un servicio foreground y no ejecutan `startForeground()`. En versiones modernas de Android puede provocar que el sistema mate el servicio por no completar el arranque foreground.
+### 1. Descargas Android 14/15/16+
+- Se mantiene `DownloadUidtJobService` para transferencias largas iniciadas explícitamente por el usuario.
+- Se evita usar `dataSync` como motor de descargas en API 34+.
+- Los controles de la notificación no intentan iniciar un foreground service para pausar/cancelar.
+- Reanudar desde una notificación en Android 14+ abre la Activity mediante un PendingIntent explícito; la Activity, ya visible, programa el UIDT. Esto respeta la condición de Android de que un UIDT se programe desde una app visible o una condición permitida.
+- Se conserva el `.part` para reanudar después de interrupciones.
+- Al volver a la aplicación se recuperan descargas que quedaron `DOWNLOADING` sin progreso en memoria, sin tocar descargas marcadas explícitamente como `PAUSED`.
 
-Ahora:
-- iniciar/reanudar una descarga usa `startForegroundService()`;
-- pausar/cancelar/poner en cola usa `startService()`;
-- la notificación conserva su ID individual y no depende de reiniciar el foreground service para actualizarse.
+### 2. Notificaciones estilo gestor de descargas
+- Acciones de Pausar/Cancelar pasan por `DownloadActionReceiver`.
+- Reanudar en Android 14+ pasa por `MainActivity` para poder programar UIDT correctamente.
+- La notificación pausada queda persistente y conserva Reanudar/Cancelar.
+- Se evita que un último bloque leído por la red vuelva a publicar una notificación de "Descargando" después de que el usuario haya pulsado Pausar.
+- Al cancelar UIDT se elimina primero el elemento del estado persistente/en memoria para impedir que `onStopJob()` lo resucite como pausado.
+- Al pausar UIDT se publica nuevamente la notificación después de cancelar el job para evitar una carrera entre JobScheduler y NotificationManager.
+- Las acciones usan PendingIntents explícitos y datos únicos por descarga.
 
-### 2. Límite de `dataSync` de Android 15+
-El servicio declara `dataSync` y el proyecto apunta a SDK 36. Android 15+ limita los servicios foreground `dataSync` a un total de 6 horas por cada periodo de 24 horas.
+### 3. BottomSheet de detalles
+Al confirmar "Descargar", el `ModalBottomSheet` se oculta inmediatamente mediante `sheetState.hide()` y se elimina el elemento seleccionado. La descarga continúa independientemente de la UI.
 
-Se añadió `Service.onTimeout(startId, fgsType)` para que, si Android termina el periodo permitido:
-- se cancelen los trabajos de descarga;
-- se cierren las conexiones HTTP;
-- las descargas activas se conviertan en `PAUSED`;
-- se conserve el tamaño parcial del `.part`;
-- se persista el estado para poder continuar;
-- el servicio salga correctamente del foreground.
+### 4. Catálogo y permisos
+- El catálogo ahora usa estrategia cache-first.
+- Si ya existe catálogo local, se muestra inmediatamente mientras se intenta actualizar.
+- Un fallo temporal de red ya no borra una lista válida que ya estaba en pantalla.
+- Al recuperar conectividad se vuelve a intentar automáticamente cuando el catálogo está vacío o falló.
+- Al terminar de conceder permisos se fuerza una actualización del catálogo.
+- El monitor de red ya no considera suficiente que exista una interfaz con Internet: espera `NET_CAPABILITY_VALIDATED`, evitando la carrera de arranque que podía requerir desconectar/reconectar.
 
-### 3. Persistencia ante interrupciones del servicio
-Se añadió una operación de recuperación que convierte las descargas `DOWNLOADING` en `PAUSED` al recibir el timeout del sistema, evitando que queden permanentemente marcadas como "Descargando".
+### 5. Reanudación y cola
+- Una descarga PAUSED o FAILED reutiliza su archivo `.part` en lugar de crear innecesariamente otra descarga.
+- Pulsar repetidamente sobre una descarga PENDING/DOWNLOADING no crea duplicados.
+- La pausa calcula el progreso usando primero el `.part` real.
+- Se evita sobrescribir silenciosamente otro archivo terminado con el mismo nombre; se genera un sufijo seguro cuando corresponde.
+- Los elementos explícitamente pausados no se reanudan solos.
 
-## Hallazgos que NO se cambiaron deliberadamente
-- `POST_NOTIFICATIONS`: Android 13+ puede ocultar las notificaciones si el usuario deniega el permiso; esto es comportamiento del sistema, no un fallo que la aplicación pueda saltarse.
-- `READ_MEDIA_*`: se mantiene porque forma parte del flujo actual de permisos/medios del proyecto; no se eliminó sin validar cada flujo de reproducción/selección.
-- `usesCleartextTraffic="true"`: se mantiene porque el descargador contempla URLs HTTP además de HTTPS. Debería eliminarse cuando todas las fuentes sean HTTPS.
-- La carpeta `reporefactor-ai-corregida/` existente dentro del ZIP se dejó intacta para no mezclarla con el árbol principal.
+## Investigación de soluciones externas
 
-## Verificación
-- XML del manifest: válido.
-- Balance de llaves Kotlin en `app/src/main/java`: correcto.
-- Búsqueda de `TODO`/`FIXME`: sin resultados.
-- Búsqueda de `GlobalScope`: sin resultados.
-- Búsqueda de `!!`: sin resultados.
-- Se intentó ejecutar Gradle con `testDebugUnitTest` y `assembleDebug`, pero el entorno no pudo descargar Gradle 9.3.1 desde `services.gradle.org` por falta de acceso de red. Por ello, la compilación final debe ejecutarse en Android Studio o CI con acceso a dependencias.
+Se revisaron soluciones públicas de GitHub:
 
-## Resultado
-Los cambios se aplicaron únicamente al árbol principal `app/` del proyecto.
+- Fetch: ofrece cola persistente, pausa/reanudación, concurrencia, reintentos y notificaciones.
+- Downpour: aporta una arquitectura moderna con estado persistente, reanudación y máquina de estados.
+- SimpleDownloader/QDM: ofrecen ideas útiles como Range, cola, concurrencia y recuperación.
 
-## Actualización: arquitectura Android 14–16 para descargas largas
+No se incorporaron literalmente como dependencias porque sus arquitecturas de ejecución no sustituyen el requisito de UIDT en Android 14+ y algunas dependen de foreground services. Se conservaron las ideas útiles (estado persistente, máquina de estados, reanudación, acciones de notificación y cola) dentro de la arquitectura de este proyecto.
 
-Se añadió una segunda ruta de ejecución para las versiones modernas de Android:
+## Limitación de validación
 
-- Android 14 (API 34) y posteriores: las descargas iniciadas por el usuario usan `DownloadUidtJobService` mediante User-Initiated Data Transfer Jobs (UIDT / JobScheduler).
-- Se añadió `android.permission.RUN_USER_INITIATED_JOBS`.
-- Se registró `DownloadUidtJobService` como `JobService` con `BIND_JOB_SERVICE`.
-- Android 13 (API 33) e inferiores: se conserva `DownloadForegroundService` con `dataSync` como fallback.
-- En Android 14+ ninguna acción de pausa/reanudación/cancelación de notificación inicia accidentalmente el foreground service `dataSync`.
-- Las acciones de notificación de reanudación usan un servicio normal para entregar la acción y después programan UIDT.
-- Pausar UIDT cancela el JobScheduler job, conserva el archivo `.part`, guarda bytes/progreso y muestra nuevamente la notificación de pausa.
-- Cancelar UIDT cancela el trabajo, elimina el estado persistido y elimina el `.part` cuando se conoce su ruta.
-- Si Android detiene un UIDT, el estado se convierte en PAUSED y queda listo para reanudarse.
-- El progreso se persiste periódicamente a través de `DownloadHelper`, y la descarga usa el mismo archivo `.part` para continuar desde donde quedó.
+La compilación no pudo ejecutarse en este entorno porque el wrapper necesita descargar Gradle 9.3.1 desde `services.gradle.org` y este entorno no tiene acceso de red a ese host.
 
-### Limitación importante
-UIDT evita la cuota normal de los foreground services `dataSync` y está diseñado para transferencias largas iniciadas por el usuario, pero Android sigue pudiendo detener trabajos por condiciones del sistema, restricciones térmicas, memoria u otras razones. La aplicación por ello conserva siempre el estado y el archivo parcial para reanudar.
+Se realizaron:
+- comprobación estructural de llaves/paréntesis en los archivos modificados;
+- búsqueda de `TODO`, `FIXME`, `GlobalScope` y `!!`;
+- revisión de las rutas de acciones de notificación;
+- revisión del Manifest;
+- revisión de las rutas de catálogo, permisos, bottom sheet y descargas.
 
-La documentación oficial de Android indica que `dataSync` tiene un límite acumulado de 6 horas en 24 horas para apps que apuntan a Android 15+, y recomienda UIDT para transferencias largas iniciadas por el usuario. Android 16 además recomienda UIDT para evitar las cuotas ordinarias de JobScheduler en este caso.
+## Referencias técnicas
+
+- Android UIDT: https://developer.android.com/develop/background-work/background-tasks/uidt
+- Android foreground-service timeout: https://developer.android.com/develop/background-work/services/fgs/timeout
+- Android 16 background behavior: https://developer.android.com/about/versions/16/behavior-changes-all
+- Fetch: https://github.com/tonyofrancis/Fetch
+- Downpour: https://github.com/AlirezaJavan/Downpour

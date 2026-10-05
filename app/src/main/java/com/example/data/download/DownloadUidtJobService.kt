@@ -245,7 +245,13 @@ class DownloadUidtJobService : JobService() {
     ) {
         val progress = if (total > 0) ((downloaded * 100L) / total).toInt().coerceIn(0, 99) else 0
         helper.reportProgress(item.id, downloaded, total, progress, speed, eta)
-        val shown = (helper.getItem(item.id) ?: item).copy(
+        // A user can press Pause while the socket is finishing a read. Once the
+        // persisted state is PAUSED/CANCELLED, never overwrite its notification
+        // with a late progress update.
+        val current = helper.getItem(item.id) ?: return
+        if (current.status != DownloadStatus.DOWNLOADING) return
+
+        val shown = current.copy(
             status = DownloadStatus.DOWNLOADING,
             downloadedBytes = downloaded,
             totalBytes = total,
@@ -275,13 +281,11 @@ class DownloadUidtJobService : JobService() {
             val scheduler = context.getSystemService(android.app.job.JobScheduler::class.java) ?: return false
             val component = android.content.ComponentName(context, DownloadUidtJobService::class.java)
             val jobId = jobId(item.id)
+            val estimatedBytes = item.totalBytes.coerceAtLeast(item.downloadedBytes + 1L)
             val jobInfo = android.app.job.JobInfo.Builder(jobId, component)
                 .setUserInitiated(true)
                 .setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_ANY)
-                .setEstimatedNetworkBytes(
-                    if (item.totalBytes > 0) item.totalBytes else 1L,
-                    if (item.totalBytes > 0) item.totalBytes else 1L
-                )
+                .setEstimatedNetworkBytes(estimatedBytes, estimatedBytes)
                 .setExtras(android.os.PersistableBundle().apply { putString(EXTRA_ITEM_ID, item.id) })
                 .build()
             return try { scheduler.schedule(jobInfo) == android.app.job.JobScheduler.RESULT_SUCCESS } catch (_: Exception) { false }
@@ -289,7 +293,11 @@ class DownloadUidtJobService : JobService() {
 
         fun cancel(context: android.content.Context, itemId: String) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
-            try { context.getSystemService(android.app.job.JobScheduler::class.java)?.cancel(jobId(itemId)) } catch (_: Exception) {}
+            try {
+                context.getSystemService(android.app.job.JobScheduler::class.java)?.cancel(jobId(itemId))
+            } catch (_: Exception) {
+                // Best effort; the persisted state is still authoritative.
+            }
         }
     }
 }

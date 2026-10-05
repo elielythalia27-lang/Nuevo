@@ -76,6 +76,8 @@ import com.example.data.model.Pelicula
 import com.example.data.model.ThemeMode
 import com.example.ui.components.AppBottomNav
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import com.example.ui.components.BatteryOptimizationBottomSheet
 import com.example.ui.components.BatteryOptimizationNoticeBanner
 import com.example.ui.components.CustomToastHost
@@ -94,6 +96,16 @@ import com.example.utils.VpnProxyDetector
 import com.example.viewmodel.HomeViewModel
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val ACTION_NOTIFICATION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_NOTIFICATION_RESUME_DOWNLOAD"
+    }
+
+    private val _notificationResumeActions = MutableSharedFlow<String>(
+        extraBufferCapacity = 8
+    )
+    val notificationResumeActions = _notificationResumeActions.asSharedFlow()
+    private var pendingNotificationResumeId: String? = null
+
     private var isPlayerActive: Boolean = false
     private var onPlayerVolumeKey: ((Int) -> Unit)? = null
 
@@ -105,6 +117,26 @@ class MainActivity : ComponentActivity() {
     fun unregisterPlayerVolumeHandler() {
         isPlayerActive = false
         onPlayerVolumeKey = null
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == ACTION_NOTIFICATION_RESUME_DOWNLOAD) {
+            val id = intent.getStringExtra(com.example.data.download.DownloadHelper.EXTRA_DOWNLOAD_ID)
+                ?: intent.getLongExtra(com.example.data.download.DownloadHelper.EXTRA_DOWNLOAD_ID, -1L)
+                    .takeIf { it != -1L }?.toString()
+            if (!id.isNullOrBlank()) {
+                pendingNotificationResumeId = id
+                _notificationResumeActions.tryEmit(id)
+            }
+        }
+    }
+
+    fun consumePendingNotificationResumeId(): String? {
+        val value = pendingNotificationResumeId
+        pendingNotificationResumeId = null
+        return value
     }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
@@ -176,9 +208,26 @@ class MainActivity : ComponentActivity() {
         val skipSplash = intent.getBooleanExtra("skip_splash", false)
         val initialTab = intent.getIntExtra("initial_tab", 0)
 
+        if (intent.action == ACTION_NOTIFICATION_RESUME_DOWNLOAD) {
+            pendingNotificationResumeId =
+                intent.getStringExtra(com.example.data.download.DownloadHelper.EXTRA_DOWNLOAD_ID)
+                    ?: intent.getLongExtra(com.example.data.download.DownloadHelper.EXTRA_DOWNLOAD_ID, -1L)
+                        .takeIf { it != -1L }?.toString()
+        }
+
         setContent {
             val homeViewModel: HomeViewModel = viewModel()
             val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+
+            val notificationResumeActivity = this@MainActivity
+            LaunchedEffect(notificationResumeActivity) {
+                notificationResumeActivity.consumePendingNotificationResumeId()?.let {
+                    homeViewModel.resumeDownloadById(it)
+                }
+                notificationResumeActivity.notificationResumeActions.collect { id ->
+                    homeViewModel.resumeDownloadById(id)
+                }
+            }
 
             val isDark = when (uiState.themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -279,6 +328,7 @@ fun MainAppNavigation(
                 isBatteryExempt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
                 hasNotificationsPermission = PermissionHelper.hasNotificationPermission(context)
                 hasStoragePermission = PermissionHelper.hasStoragePermission(context)
+                viewModel.recoverDownloadsWhenVisible()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -315,6 +365,7 @@ fun MainAppNavigation(
         hasStoragePermission = PermissionHelper.hasStoragePermission(context)
         val granted = PermissionHelper.hasAllRequiredPermissions(context)
         if (granted) {
+            viewModel.loadPeliculas(forceRefresh = true)
             pendingDownloadPelicula?.let {
                 viewModel.startDownload(it)
                 pendingDownloadPelicula = null
@@ -328,6 +379,7 @@ fun MainAppNavigation(
     ) { _ ->
         hasStoragePermission = PermissionHelper.hasStoragePermission(context)
         if (hasStoragePermission && PermissionHelper.hasAllRequiredPermissions(context)) {
+            viewModel.loadPeliculas(forceRefresh = true)
             pendingDownloadPelicula?.let {
                 viewModel.startDownload(it)
                 pendingDownloadPelicula = null

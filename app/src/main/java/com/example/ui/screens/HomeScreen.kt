@@ -958,6 +958,13 @@ fun HomeScreen(
                                     return@OutlinedButton
                                 }
                                 onDownloadPelicula(toDown)
+                                // Close the movie details sheet immediately after the user
+                                // confirms the download. The download itself is owned by the
+                                // ViewModel and continues independently of this UI.
+                                sheetScope.launch {
+                                    sheetState.hide()
+                                    selectedPeliculaForSheet = null
+                                }
                             },
                             enabled = !isVerifyingServerForPlay && !isVerifyingServerForDownload,
                             modifier = Modifier

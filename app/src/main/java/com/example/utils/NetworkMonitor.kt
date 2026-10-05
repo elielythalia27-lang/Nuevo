@@ -17,7 +17,10 @@ class NetworkMonitor(private val context: Context) {
     val isOnline: Flow<Boolean> = callbackFlow {
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                trySend(true)
+                // onAvailable() only means a network object exists. Wait for
+                // VALIDATED so the first catalog request is not raced against
+                // captive portals/DNS setup.
+                trySend(hasValidatedInternet(network))
             }
 
             override fun onLost(network: Network) {
@@ -47,9 +50,14 @@ class NetworkMonitor(private val context: Context) {
         }
     }.distinctUntilChanged()
 
+    private fun hasValidatedInternet(network: Network): Boolean {
+        val caps = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
     fun checkCurrentConnectivity(): Boolean {
         val activeNetwork = connectivityManager.activeNetwork ?: return false
-        val caps = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        return hasValidatedInternet(activeNetwork)
     }
 }

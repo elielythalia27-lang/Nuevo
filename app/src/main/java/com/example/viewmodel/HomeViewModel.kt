@@ -142,8 +142,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // Collect network state
         viewModelScope.launch {
+            var previous = false
             networkMonitor.isOnline.collectLatest { online: Boolean ->
                 _uiState.update { it.copy(isNetworkOnline = online) }
+                if (online && !previous) {
+                    // Retry the catalog when connectivity returns. This fixes the
+                    // startup race where permissions finish while validation of the
+                    // network is still settling.
+                    if (_uiState.value.allPeliculas.isEmpty() || _uiState.value.errorMessage != null) {
+                        loadPeliculas(forceRefresh = true)
+                    }
+                }
+                previous = online
             }
         }
 
@@ -275,13 +285,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                     is Resource.Error -> {
                         _uiState.update { state ->
-                            state.copy(
+                            val keepExisting = state.allPeliculas.isNotEmpty()
+                            val updated = state.copy(
                                 isLoading = false,
-                                errorMessage = resource.message,
-                                allPeliculas = emptyList(),
-                                filteredPeliculas = emptyList(),
-                                isDataOffline = true
+                                errorMessage = if (keepExisting) null else resource.message,
+                                isDataOffline = keepExisting || state.isDataOffline,
+                                allPeliculas = if (keepExisting) state.allPeliculas else emptyList(),
+                                filteredPeliculas = if (keepExisting) state.filteredPeliculas else emptyList()
                             )
+                            updated
                         }
                     }
                 }
@@ -394,13 +406,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val existing = _uiState.value.downloads.find { it.id == pelicula.id }
-        if (existing != null && existing.status == DownloadStatus.PAUSED) {
-            resumeDownload(existing)
-            return
+        if (existing != null) {
+            when (existing.status) {
+                DownloadStatus.PAUSED, DownloadStatus.FAILED -> {
+                    resumeDownload(existing)
+                    return
+                }
+                DownloadStatus.DOWNLOADING, DownloadStatus.PENDING, DownloadStatus.COMPLETED -> {
+                    return
+                }
+                else -> Unit
+            }
         }
+
         _uiState.update { state ->
             val isAlreadyActive = state.downloads.any {
-                it.id == pelicula.id && (it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.COMPLETED)
+                it.id == pelicula.id && it.status != DownloadStatus.CANCELLED
             }
             if (isAlreadyActive) return@update state
 
@@ -447,6 +468,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         downloadHelper.resumeDownload(item)
+    }
+
+    fun resumeDownloadById(downloadId: String) {
+        val item = _uiState.value.downloads.firstOrNull { it.id == downloadId }
+            ?: downloadHelper.getItem(downloadId)
+        if (item != null) {
+            resumeDownload(item)
+        }
+    }
+
+    fun recoverDownloadsWhenVisible() {
+        downloadHelper.recoverDownloadsWhenVisible()
+        // If the first catalog request happened while permissions/network state was settling,
+        // retry only when the screen is visible and the catalog is still unavailable.
+        if (_uiState.value.allPeliculas.isEmpty() && NetworkUtils.isConnected(getApplication())) {
+            loadPeliculas(forceRefresh = true)
+        }
     }
 
     fun cancelDownload(item: DownloadItem) {

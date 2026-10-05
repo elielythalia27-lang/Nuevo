@@ -75,29 +75,42 @@ class PeliculaRepository(
     }
 
     fun getPeliculasFlow(forceRefresh: Boolean = false): Flow<Resource<List<Pelicula>>> = flow {
-        // Verificar primero que el dispositivo cuente con conexión y que el servidor sea alcanzable
+        // Always hydrate the UI from the last known catalog first. This prevents a
+        // permission/network startup race from presenting an empty catalog.
+        val cached = try {
+            preferences.cachedPeliculas.first()
+        } catch (_: Exception) {
+            readDiskCache()
+        }
+
+        if (cached.isNotEmpty()) {
+            emit(Resource.Success(cached, isOffline = true))
+        } else {
+            emit(Resource.Loading)
+        }
+
         val isNetworkAvailable = com.example.utils.NetworkUtils.isConnected(context)
         if (!isNetworkAvailable) {
-            emit(Resource.Error("Sin conexión a internet. Conéctate a una red para ver el catálogo."))
+            if (cached.isEmpty()) {
+                emit(Resource.Error("Sin conexión a internet. Conéctate a una red para ver el catálogo."))
+            }
             return@flow
         }
 
-        // Emitir estado de carga
-        emit(Resource.Loading)
-
         try {
-            // Cargar y desencriptar desde el endpoint seguro
             val remoteList = SecureEndpointManager.fetchAndDecryptPeliculas()
-
             if (remoteList.isNotEmpty()) {
                 writeDiskCache(remoteList)
                 preferences.saveCachedPeliculas(remoteList)
                 emit(Resource.Success(remoteList, isOffline = false))
-            } else {
+            } else if (cached.isEmpty()) {
                 emit(Resource.Error("No se pudo obtener el catálogo"))
             }
         } catch (e: Exception) {
-            emit(Resource.Error("Sin conexión a internet: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
+            // Keep the cached catalog visible if the endpoint is temporarily unavailable.
+            if (cached.isEmpty()) {
+                emit(Resource.Error("No se pudo actualizar el catálogo: ${e.localizedMessage ?: "Comprueba tu conexión"}"))
+            }
         }
     }
 

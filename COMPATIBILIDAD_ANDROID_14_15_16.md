@@ -1,28 +1,38 @@
-# Compatibilidad de descargas Android 14 / 15 / 16
+# Compatibilidad de descargas Android 14–16
 
 ## Arquitectura
 
-| Android | Ejecución de descargas largas | Motivo |
+| Android | Ejecución principal | Motivo |
 |---|---|---|
-| 24–33 | `DownloadForegroundService` (`dataSync`) | Compatibilidad con versiones antiguas |
-| 34–36+ | `DownloadUidtJobService` (UIDT) | Transferencias largas iniciadas por el usuario sin depender del límite `dataSync` |
+| API 24–33 | Foreground service `dataSync` existente | Compatibilidad con dispositivos anteriores |
+| API 34+ | `JobScheduler` + UIDT | Transferencias largas iniciadas por el usuario |
+| API 35+ | UIDT para descargas | Evita depender del límite de `dataSync` de 6 h/24 h |
+| API 36+ | UIDT | Evita las cuotas ordinarias de trabajos para transferencias iniciadas por el usuario |
 
-## Android 15
+Android documenta UIDT como la API para transferencias de red largas iniciadas por el usuario y exige que el job se programe mientras la app está visible (salvo condiciones permitidas). Por ello, Reanudar desde una notificación en API 34+ lleva primero la acción a `MainActivity`.
 
-No se usa `dataSync` para las descargas modernas. Android 15 limita los servicios foreground `dataSync` a un total de 6 horas en 24 horas. La ruta UIDT evita que esa cuota sea el mecanismo de terminación de las descargas.
+## Persistencia
 
-## Android 16
+Cada descarga utiliza:
+- estado persistente en DataStore;
+- archivo parcial `<destino>.part`;
+- progreso/bytes descargados;
+- URL original;
+- ruta local;
+- estado PENDING/DOWNLOADING/PAUSED/FAILED/COMPLETED.
 
-UIDT es especialmente importante porque los trabajos normales y los long-running workers están sujetos a las nuevas cuotas de JobScheduler. Las transferencias iniciadas por el usuario mediante UIDT están exentas de las cuotas ordinarias de jobs.
+El archivo parcial se conserva al pausar o cuando el sistema interrumpe una transferencia, permitiendo continuar con HTTP Range cuando el servidor lo soporta.
 
 ## Notificaciones
 
-Cada descarga conserva un ID estable de notificación. Pausar y reanudar actualiza la misma notificación; cancelar la elimina; completar cambia a la notificación de finalización.
+Las notificaciones son controlables:
+- Descargando → Pausar / Cancelar
+- En pausa → Reanudar / Cancelar
+- Fallida → Reintentar / Cancelar
+- Completada → Abrir Descargas
 
-## Recuperación
+En API 34+, Reanudar usa una Activity explícita para cumplir las condiciones de programación de UIDT.
 
-El archivo parcial se guarda como `archivo.ext.part`. El servidor se solicita con `Range` cuando existe progreso previo. El estado se persiste para que el proceso pueda recuperarse después de una detención del sistema.
+## Importante
 
-## Validación
-
-La compilación automática no pudo ejecutarse en el entorno de revisión porque Gradle 9.3.1 no estaba disponible localmente y el entorno no pudo acceder a `services.gradle.org`. Se realizó validación estática de manifest, referencias, rutas de ejecución y estructura Kotlin.
+Ninguna aplicación puede garantizar que Android nunca detenga una transferencia: el sistema puede intervenir por memoria, térmica, restricciones de red u otras condiciones. La arquitectura está diseñada para persistir el estado y recuperar la transferencia, no para intentar evadir las políticas del sistema.

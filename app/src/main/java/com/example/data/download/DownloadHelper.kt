@@ -3,6 +3,7 @@ package com.example.data.download
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Environment
+import android.os.Build
 import com.example.data.local.PeliculaPreferences
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
@@ -14,6 +15,8 @@ import com.example.utils.NetworkUtils
 import com.example.utils.NotificationUtils
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -75,6 +78,9 @@ class DownloadHelper(
         const val ACTION_PAUSE_DOWNLOAD = "com.downloadfree.ACTION_PAUSE_DOWNLOAD"
         const val ACTION_RESUME_DOWNLOAD = "com.downloadfree.ACTION_RESUME_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.downloadfree.ACTION_CANCEL_DOWNLOAD"
+        const val ACTION_PAUSE_ALL = "com.downloadfree.PAUSE_ALL"
+        const val ACTION_RESUME_ALL = "com.downloadfree.ACTION_RESUME_ALL"
+        const val ACTION_CANCEL_ALL = "com.downloadfree.ACTION_CANCEL_ALL"
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
 
         @Volatile
@@ -216,6 +222,29 @@ class DownloadHelper(
 
     fun getItem(id: String): DownloadItem? {
         return _liveDownloadsState.value.find { it.id == id }
+    }
+
+    /**
+     * Called when the app becomes visible. Downloads that were DOWNLOADING before
+     * process death are safe to restart because the engine resumes from the .part file.
+     * Explicitly PAUSED items are never auto-resumed.
+     */
+    fun recoverDownloadsWhenVisible() {
+        if (!ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            queueMutex.withLock {
+                val interrupted = _liveDownloadsState.value.filter {
+                    it.status == DownloadStatus.DOWNLOADING && liveProgressMap[it.id] == null
+                }
+                for (item in interrupted) {
+                    // Re-scheduling the same UIDT job id replaces a stale job and lets
+                    // the downloader continue from the existing .part file.
+                    DownloadForegroundService.startDownload(context, item)
+                }
+            }
+        }
     }
 
     fun isPaused(id: String): Boolean {
@@ -371,11 +400,25 @@ class DownloadHelper(
             queueMutex.withLock {
                 val currentList = _liveDownloadsState.value
                 val existing = currentList.find { it.id == pelicula.id }
-                if (existing != null && existing.status == DownloadStatus.COMPLETED) {
-                    val f = File(existing.localFilePath)
-                    if (f.exists() && f.length() > 0L) {
-                        AppToastManager.show("Esta película ya fue descargada", ToastType.INFO)
-                        return@launch
+                if (existing != null) {
+                    when (existing.status) {
+                        DownloadStatus.COMPLETED -> {
+                            val f = File(existing.localFilePath)
+                            if (f.exists() && f.length() > 0L) {
+                                AppToastManager.show("Esta película ya fue descargada", ToastType.INFO)
+                                return@launch
+                            }
+                        }
+                        DownloadStatus.DOWNLOADING, DownloadStatus.PENDING -> {
+                            AppToastManager.show("La descarga ya está en curso o en cola", ToastType.INFO)
+                            return@launch
+                        }
+                        DownloadStatus.PAUSED, DownloadStatus.FAILED -> {
+                            // Keep the original path so the existing .part file can be resumed.
+                            resumeDownload(existing)
+                            return@launch
+                        }
+                        else -> Unit
                     }
                 }
 
@@ -418,10 +461,13 @@ class DownloadHelper(
 
     fun pauseDownload(item: DownloadItem) {
         val live = liveProgressMap[item.id]
+        val partFile = File(item.localFilePath + ".part")
+        val partialLen = if (partFile.exists()) partFile.length() else 0L
         val file = File(item.localFilePath)
         val fileLen = if (file.exists()) file.length() else 0L
 
         val currentDownloaded = when {
+            partialLen > 0L -> partialLen
             fileLen > 0L -> fileLen
             live != null && live.downloadedBytes > 0L -> live.downloadedBytes
             item.downloadedBytes > 0L -> item.downloadedBytes
@@ -547,6 +593,13 @@ class DownloadHelper(
 
     fun forceStartPendingDownload(download: DownloadItem) {
         scope.launch(Dispatchers.IO) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                !ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            ) {
+                // UIDT must be scheduled while the app is visible (unless a documented
+                // background-start exemption applies). Leave it pending until next resume.
+                return@launch
+            }
             if (VpnProxyDetector.isVpnOrProxyActive(context)) {
                 AppToastManager.show("Desactiva la VPN o Proxy para iniciar la descarga", ToastType.WARNING)
                 return@launch
@@ -729,18 +782,38 @@ class DownloadHelper(
     private fun resolveDestinationFile(title: String, secondaryTag: String, savedFolderPath: String): File {
         val fileName = buildSafeFileName(title, secondaryTag)
 
-        if (savedFolderPath.isNotBlank()) {
+        val targetDir = if (savedFolderPath.isNotBlank()) {
             try {
                 val customDir = File(savedFolderPath)
-                if (customDir.exists() && customDir.canWrite()) {
-                    return File(customDir, fileName)
-                }
-            } catch (_: Exception) {}
+                if (customDir.exists() && customDir.canWrite()) customDir else null
+            } catch (_: Exception) {
+                null
+            }
+        } else null
+
+        val dir = targetDir ?: (
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?: File(context.filesDir, "Download Free")
+            )
+        dir.mkdirs()
+
+        // Never silently overwrite another completed download with the same title.
+        var candidate = File(dir, fileName)
+        if (!candidate.exists() && !File(candidate.absolutePath + ".part").exists()) {
+            return candidate
         }
 
-        val safeAppDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            ?: File(context.filesDir, "Download Free")
-        safeAppDir.mkdirs()
-        return File(safeAppDir, fileName)
+        val dot = fileName.lastIndexOf('.')
+        val stem = if (dot > 0) fileName.substring(0, dot) else fileName
+        val ext = if (dot > 0) fileName.substring(dot) else ""
+        var index = 1
+        while (index < 10_000) {
+            candidate = File(dir, "$stem ($index)$ext")
+            if (!candidate.exists() && !File(candidate.absolutePath + ".part").exists()) {
+                return candidate
+            }
+            index++
+        }
+        return File(dir, "$stem (${System.currentTimeMillis()})$ext")
     }
 }
