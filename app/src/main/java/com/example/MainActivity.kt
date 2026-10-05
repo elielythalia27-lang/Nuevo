@@ -259,18 +259,21 @@ fun MainAppNavigation(
     val coroutineScope = rememberCoroutineScope()
 
     val requiredPermissions = remember { PermissionHelper.getRequiredAppPermissions() }
-    var showPermissionDialog by remember { mutableStateOf(false) }
     var pendingDownloadPelicula by remember { mutableStateOf<Pelicula?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var isBatteryExempt by remember {
         mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context))
     }
+    var hasNotificationsPermission by remember {
+        mutableStateOf(PermissionHelper.hasNotificationPermission(context))
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 isBatteryExempt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+                hasNotificationsPermission = PermissionHelper.hasNotificationPermission(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -281,19 +284,21 @@ fun MainAppNavigation(
 
     val batteryOptDontShowAgain by viewModel.batteryOptDontShowAgain.collectAsStateWithLifecycle(initialValue = false)
     val batteryOptLastPromptTimestamp by viewModel.batteryOptLastPromptTimestamp.collectAsStateWithLifecycle(initialValue = 0L)
+    val autoStartConfigured by viewModel.autoStartConfigured.collectAsStateWithLifecycle(initialValue = false)
     val showBatteryDownloadNotice by viewModel.showBatteryDownloadNotice.collectAsStateWithLifecycle()
 
     var showBatteryBottomSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(isBatteryExempt, batteryOptDontShowAgain, batteryOptLastPromptTimestamp, uiState.activeDownloadsCount) {
-        if (!isBatteryExempt && !batteryOptDontShowAgain && uiState.activeDownloadsCount == 0) {
+    LaunchedEffect(isBatteryExempt, hasNotificationsPermission, batteryOptDontShowAgain, batteryOptLastPromptTimestamp, uiState.activeDownloadsCount) {
+        val hasPendingSettings = !isBatteryExempt || !hasNotificationsPermission
+        if (hasPendingSettings && !batteryOptDontShowAgain && uiState.activeDownloadsCount == 0) {
             val now = System.currentTimeMillis()
             val threeDaysMs = 3L * 24L * 60L * 60L * 1000L
             val shouldShow = batteryOptLastPromptTimestamp == 0L || (now - batteryOptLastPromptTimestamp >= threeDaysMs)
             if (shouldShow) {
                 showBatteryBottomSheet = true
             }
-        } else if (isBatteryExempt) {
+        } else if (!hasPendingSettings) {
             showBatteryBottomSheet = false
         }
     }
@@ -301,9 +306,9 @@ fun MainAppNavigation(
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
+        hasNotificationsPermission = PermissionHelper.hasNotificationPermission(context)
         val granted = PermissionHelper.hasAllRequiredPermissions(context)
         if (granted) {
-            showPermissionDialog = false
             pendingDownloadPelicula?.let {
                 viewModel.startDownload(it)
                 pendingDownloadPelicula = null
@@ -313,7 +318,7 @@ fun MainAppNavigation(
 
     LaunchedEffect(Unit) {
         if (!PermissionHelper.hasAllRequiredPermissions(context)) {
-            showPermissionDialog = true
+            showBatteryBottomSheet = true
         }
     }
 
@@ -443,7 +448,7 @@ fun MainAppNavigation(
                                             viewModel.startDownload(pelicula)
                                         } else {
                                             pendingDownloadPelicula = pelicula
-                                            showPermissionDialog = true
+                                            showBatteryBottomSheet = true
                                         }
                                     },
                                     onRefresh = { viewModel.loadPeliculas(forceRefresh = true) },
@@ -502,7 +507,7 @@ fun MainAppNavigation(
                                     },
                                     isDarkTheme = isDark,
                                     onRequestPermissions = {
-                                        showPermissionDialog = true
+                                        showBatteryBottomSheet = true
                                     },
                                     barBehavior = barBehavior,
                                     isCurrentPage = !pagerState.isScrollInProgress && pagerState.settledPage == 1,
@@ -539,8 +544,15 @@ fun MainAppNavigation(
                                         BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
                                     },
                                     onOpenAutoStartSettings = {
+                                        viewModel.setAutoStartConfigured(true)
                                         BatteryOptimizationHelper.openAutoStartOrAppDetails(context)
                                     },
+                                    notificationsGranted = hasNotificationsPermission,
+                                    onRequestNotifications = {
+                                        permissionLauncher.launch(requiredPermissions.toTypedArray())
+                                    },
+                                    autoStartConfigured = autoStartConfigured,
+                                    onAutoStartConfiguredChange = { viewModel.setAutoStartConfigured(it) },
                                     barBehavior = barBehavior,
                                     isCurrentPage = !pagerState.isScrollInProgress && pagerState.settledPage == 2,
                                     onBottomNavVisibilityChange = { if (it) barBehavior.show() }
@@ -583,14 +595,22 @@ fun MainAppNavigation(
                             .padding(bottom = 76.dp)
                     )
 
-                    // Hoja inferior al entrar a la app si la batería está restringida
-                    if (showBatteryBottomSheet && !isBatteryExempt) {
+                    // Hoja inferior interactiva de 3 pasos ("Mantén tus descargas activas")
+                    if (showBatteryBottomSheet && (!isBatteryExempt || !hasNotificationsPermission || !autoStartConfigured)) {
                         BatteryOptimizationBottomSheet(
                             isDarkTheme = isDark,
-                            onAllowClick = {
-                                showBatteryBottomSheet = false
-                                viewModel.setBatteryOptLastPromptTimestamp(System.currentTimeMillis())
+                            notificationsGranted = hasNotificationsPermission,
+                            batteryExempt = isBatteryExempt,
+                            autoStartConfigured = autoStartConfigured,
+                            onRequestNotifications = {
+                                permissionLauncher.launch(requiredPermissions.toTypedArray())
+                            },
+                            onRequestBatteryExemption = {
                                 BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                            },
+                            onOpenAutoStart = {
+                                viewModel.setAutoStartConfigured(true)
+                                BatteryOptimizationHelper.openAutoStartOrAppDetails(context)
                             },
                             onDismissClick = { dontShowAgain ->
                                 showBatteryBottomSheet = false
@@ -598,20 +618,15 @@ fun MainAppNavigation(
                                 if (dontShowAgain) {
                                     viewModel.setBatteryOptDontShowAgain(true)
                                 }
-                            }
-                        )
-                    }
-
-                    if (showPermissionDialog) {
-                        PermissionRequestDialog(
-                            isDark = isDark,
-                            onGrantClick = {
-                                permissionLauncher.launch(requiredPermissions.toTypedArray())
-                                showPermissionDialog = false
-                            },
-                            onDismiss = {
-                                showPermissionDialog = false
                                 pendingDownloadPelicula = null
+                            },
+                            onAllReady = {
+                                showBatteryBottomSheet = false
+                                viewModel.setBatteryOptLastPromptTimestamp(System.currentTimeMillis())
+                                pendingDownloadPelicula?.let {
+                                    viewModel.startDownload(it)
+                                    pendingDownloadPelicula = null
+                                }
                             }
                         )
                     }

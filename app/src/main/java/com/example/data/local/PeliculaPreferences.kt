@@ -47,6 +47,21 @@ class PeliculaPreferences(private val context: Context) {
         val BATTERY_OPT_DONT_SHOW_AGAIN_KEY = booleanPreferencesKey("battery_opt_dont_show_again")
         val BATTERY_OPT_LAST_PROMPT_KEY = longPreferencesKey("battery_opt_last_prompt_timestamp")
         val BATTERY_NOTICE_ON_DOWNLOAD_SHOWN_KEY = booleanPreferencesKey("battery_notice_on_download_shown")
+        val AUTO_START_CONFIGURED_KEY = booleanPreferencesKey("auto_start_configured")
+    }
+
+    val autoStartConfigured: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[AUTO_START_CONFIGURED_KEY] ?: false
+        }
+
+    suspend fun setAutoStartConfigured(configured: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[AUTO_START_CONFIGURED_KEY] = configured
+        }
     }
 
     val batteryOptDontShowAgain: Flow<Boolean> = context.dataStore.data

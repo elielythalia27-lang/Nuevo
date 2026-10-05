@@ -131,6 +131,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val autoStartConfigured = preferences.autoStartConfigured
+
+    fun setAutoStartConfigured(configured: Boolean) {
+        viewModelScope.launch {
+            preferences.setAutoStartConfigured(configured)
+        }
+    }
+
     init {
         // Collect network state
         viewModelScope.launch {
