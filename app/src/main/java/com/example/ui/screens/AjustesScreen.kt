@@ -42,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -158,6 +159,9 @@ fun AjustesScreen(
     onDownloadFolderChange: (name: String, path: String) -> Unit = { _, _ -> },
     wifiOnly: Boolean = false,
     onWifiOnlyChange: (Boolean) -> Unit = {},
+    isBatteryExempt: Boolean = false,
+    onRequestBatteryExemption: () -> Unit = {},
+    onOpenAutoStartSettings: () -> Unit = {},
     barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
     isCurrentPage: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {},
@@ -741,6 +745,179 @@ fun AjustesScreen(
                                 textSecondary = textSecondary,
                                 onCheckedChange = onWifiOnlyChange
                             )
+                        }
+                    }
+                }
+            }
+
+            // Section: Descargas sin interrupciones (Optimización de batería y segundo plano)
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SettingsCategoryHeader(title = "DESCARGAS SIN INTERRUPCIONES", icon = Icons.Default.BatteryAlert)
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        border = BorderStroke(1.dp, cardBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Fila de estado de la batería
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isBatteryExempt) {
+                                                    Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                                                } else {
+                                                    Color(0xFFF59E0B).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isBatteryExempt) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = Color(0xFF10B981),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.BatteryAlert,
+                                                contentDescription = null,
+                                                tint = Color(0xFFF59E0B),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                    }
+                                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Text(
+                                            text = if (isBatteryExempt) "Sin restricciones" else "Batería restringida",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Text(
+                                            text = if (isBatteryExempt) "Tus descargas no se cortarán" else "El sistema puede detener tus descargas",
+                                            fontSize = 12.sp,
+                                            color = if (isBatteryExempt) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                            fontWeight = if (isBatteryExempt) FontWeight.Medium else FontWeight.Normal
+                                        )
+                                    }
+                                }
+
+                                if (!isBatteryExempt) {
+                                    Button(
+                                        onClick = onRequestBatteryExemption,
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Permitir sin restricciones",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // Segundo botón: Ajustes de la app e inicio automático
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(42.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Settings,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                                            Text(
+                                                text = "Inicio automático y fondo",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = textPrimary
+                                            )
+                                            Text(
+                                                text = "Configuración del sistema",
+                                                fontSize = 12.sp,
+                                                color = textSecondary
+                                            )
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = onOpenAutoStartSettings,
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.25f else 0.15f),
+                                            contentColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Ajustes de la app",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isDarkTheme) Color(0xFF0F172A).copy(alpha = 0.6f) else Color(0xFFF1F5F9),
+                                    border = BorderStroke(1.dp, dividerColor.copy(alpha = 0.7f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "En Xiaomi, Oppo, Realme y similares, activa también 'Inicio automático' y pon la batería en 'Sin restricciones'.",
+                                        fontSize = 11.5.sp,
+                                        color = textSecondary,
+                                        lineHeight = 16.sp,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

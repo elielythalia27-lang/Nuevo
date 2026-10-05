@@ -19,12 +19,14 @@ import com.example.data.repository.Resource
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
 import com.example.ui.theme.AppThemeColor
+import com.example.utils.BatteryOptimizationHelper
 import com.example.utils.NetworkMonitor
 import com.example.utils.NetworkUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -95,6 +97,39 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private val _showBatteryDownloadNotice = MutableStateFlow(false)
+    val showBatteryDownloadNotice: StateFlow<Boolean> = _showBatteryDownloadNotice.asStateFlow()
+
+    fun dismissBatteryDownloadNotice() {
+        _showBatteryDownloadNotice.value = false
+    }
+
+    private fun checkAndTriggerBatteryNoticeOnDownload() {
+        viewModelScope.launch {
+            val isRestricted = !BatteryOptimizationHelper.isIgnoringBatteryOptimizations(getApplication())
+            val alreadyShown = preferences.batteryNoticeOnDownloadShown.first()
+            if (isRestricted && !alreadyShown) {
+                preferences.setBatteryNoticeOnDownloadShown(true)
+                _showBatteryDownloadNotice.value = true
+            }
+        }
+    }
+
+    val batteryOptDontShowAgain = preferences.batteryOptDontShowAgain
+    val batteryOptLastPromptTimestamp = preferences.batteryOptLastPromptTimestamp
+
+    fun setBatteryOptDontShowAgain(dontShow: Boolean) {
+        viewModelScope.launch {
+            preferences.setBatteryOptDontShowAgain(dontShow)
+        }
+    }
+
+    fun setBatteryOptLastPromptTimestamp(timestamp: Long) {
+        viewModelScope.launch {
+            preferences.setBatteryOptLastPromptTimestamp(timestamp)
+        }
+    }
 
     init {
         // Collect network state
@@ -342,6 +377,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startDownload(pelicula: Pelicula) {
+        checkAndTriggerBatteryNoticeOnDownload()
         if (_uiState.value.wifiOnly && !NetworkUtils.isWifiOrEthernet(getApplication())) {
             AppToastManager.show(
                 "Descarga bloqueada: 'Solo Wi-Fi' está activo y estás en datos móviles",

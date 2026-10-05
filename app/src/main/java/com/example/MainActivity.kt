@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,6 +63,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.BottomBarScrollBehavior
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -71,6 +75,8 @@ import com.example.data.model.Pelicula
 import com.example.data.model.ThemeMode
 import com.example.ui.components.AppBottomNav
 import kotlinx.coroutines.launch
+import com.example.ui.components.BatteryOptimizationBottomSheet
+import com.example.ui.components.BatteryOptimizationNoticeBanner
 import com.example.ui.components.CustomToastHost
 import com.example.ui.components.PermissionRequestDialog
 import com.example.ui.components.VpnBlockedScreen
@@ -80,6 +86,7 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.theme.AppThemeColor
 import com.example.ui.theme.MyApplicationTheme
+import com.example.utils.BatteryOptimizationHelper
 import com.example.utils.NotificationUtils
 import com.example.utils.PermissionHelper
 import com.example.utils.VpnProxyDetector
@@ -237,6 +244,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppNavigation(
     viewModel: HomeViewModel,
@@ -253,6 +261,42 @@ fun MainAppNavigation(
     val requiredPermissions = remember { PermissionHelper.getRequiredAppPermissions() }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var pendingDownloadPelicula by remember { mutableStateOf<Pelicula?>(null) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isBatteryExempt by remember {
+        mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context))
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isBatteryExempt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val batteryOptDontShowAgain by viewModel.batteryOptDontShowAgain.collectAsStateWithLifecycle(initialValue = false)
+    val batteryOptLastPromptTimestamp by viewModel.batteryOptLastPromptTimestamp.collectAsStateWithLifecycle(initialValue = 0L)
+    val showBatteryDownloadNotice by viewModel.showBatteryDownloadNotice.collectAsStateWithLifecycle()
+
+    var showBatteryBottomSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isBatteryExempt, batteryOptDontShowAgain, batteryOptLastPromptTimestamp, uiState.activeDownloadsCount) {
+        if (!isBatteryExempt && !batteryOptDontShowAgain && uiState.activeDownloadsCount == 0) {
+            val now = System.currentTimeMillis()
+            val threeDaysMs = 3L * 24L * 60L * 60L * 1000L
+            val shouldShow = batteryOptLastPromptTimestamp == 0L || (now - batteryOptLastPromptTimestamp >= threeDaysMs)
+            if (shouldShow) {
+                showBatteryBottomSheet = true
+            }
+        } else if (isBatteryExempt) {
+            showBatteryBottomSheet = false
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -490,6 +534,13 @@ fun MainAppNavigation(
                                     },
                                     wifiOnly = uiState.wifiOnly,
                                     onWifiOnlyChange = { viewModel.setWifiOnly(it) },
+                                    isBatteryExempt = isBatteryExempt,
+                                    onRequestBatteryExemption = {
+                                        BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                                    },
+                                    onOpenAutoStartSettings = {
+                                        BatteryOptimizationHelper.openAutoStartOrAppDetails(context)
+                                    },
                                     barBehavior = barBehavior,
                                     isCurrentPage = !pagerState.isScrollInProgress && pagerState.settledPage == 2,
                                     onBottomNavVisibilityChange = { if (it) barBehavior.show() }
@@ -515,6 +566,41 @@ fun MainAppNavigation(
                         isVisible = barBehavior.isVisible,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
+
+                    // Aviso breve flotante al iniciar descarga con batería restringida
+                    BatteryOptimizationNoticeBanner(
+                        isVisible = showBatteryDownloadNotice && !isBatteryExempt,
+                        isDarkTheme = isDark,
+                        onAllowClick = {
+                            viewModel.dismissBatteryDownloadNotice()
+                            BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                        },
+                        onDismiss = {
+                            viewModel.dismissBatteryDownloadNotice()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 76.dp)
+                    )
+
+                    // Hoja inferior al entrar a la app si la batería está restringida
+                    if (showBatteryBottomSheet && !isBatteryExempt) {
+                        BatteryOptimizationBottomSheet(
+                            isDarkTheme = isDark,
+                            onAllowClick = {
+                                showBatteryBottomSheet = false
+                                viewModel.setBatteryOptLastPromptTimestamp(System.currentTimeMillis())
+                                BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                            },
+                            onDismissClick = { dontShowAgain ->
+                                showBatteryBottomSheet = false
+                                viewModel.setBatteryOptLastPromptTimestamp(System.currentTimeMillis())
+                                if (dontShowAgain) {
+                                    viewModel.setBatteryOptDontShowAgain(true)
+                                }
+                            }
+                        )
+                    }
 
                     if (showPermissionDialog) {
                         PermissionRequestDialog(

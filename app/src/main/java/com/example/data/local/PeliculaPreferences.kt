@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -43,6 +44,51 @@ class PeliculaPreferences(private val context: Context) {
         val DOWNLOAD_FOLDER_NAME_KEY = stringPreferencesKey("download_folder_name")
         val DOWNLOAD_FOLDER_PATH_KEY = stringPreferencesKey("download_folder_path")
         val WIFI_ONLY_KEY = booleanPreferencesKey("wifi_only_downloads")
+        val BATTERY_OPT_DONT_SHOW_AGAIN_KEY = booleanPreferencesKey("battery_opt_dont_show_again")
+        val BATTERY_OPT_LAST_PROMPT_KEY = longPreferencesKey("battery_opt_last_prompt_timestamp")
+        val BATTERY_NOTICE_ON_DOWNLOAD_SHOWN_KEY = booleanPreferencesKey("battery_notice_on_download_shown")
+    }
+
+    val batteryOptDontShowAgain: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[BATTERY_OPT_DONT_SHOW_AGAIN_KEY] ?: false
+        }
+
+    suspend fun setBatteryOptDontShowAgain(dontShow: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[BATTERY_OPT_DONT_SHOW_AGAIN_KEY] = dontShow
+        }
+    }
+
+    val batteryOptLastPromptTimestamp: Flow<Long> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[BATTERY_OPT_LAST_PROMPT_KEY] ?: 0L
+        }
+
+    suspend fun setBatteryOptLastPromptTimestamp(timestamp: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[BATTERY_OPT_LAST_PROMPT_KEY] = timestamp
+        }
+    }
+
+    val batteryNoticeOnDownloadShown: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[BATTERY_NOTICE_ON_DOWNLOAD_SHOWN_KEY] ?: false
+        }
+
+    suspend fun setBatteryNoticeOnDownloadShown(shown: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[BATTERY_NOTICE_ON_DOWNLOAD_SHOWN_KEY] = shown
+        }
     }
 
     val wifiOnly: Flow<Boolean> = context.dataStore.data
