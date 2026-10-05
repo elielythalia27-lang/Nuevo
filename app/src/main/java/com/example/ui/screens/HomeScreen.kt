@@ -546,7 +546,7 @@ fun HomeScreen(
                                 Text(
                                     text = if (pelicula.isVideo) "YouTube" else "Película",
                                     fontSize = 11.sp,
-                                    color = Color.White,
+                                    color = if (pelicula.isVideo) Color.White else MaterialTheme.colorScheme.onPrimary,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
@@ -634,21 +634,16 @@ fun HomeScreen(
                         onClick = {
                             if (isVerifyingServerForPlay || isVerifyingServerForDownload) return@Button
                             val toPlay = selectedPeliculaForSheet ?: return@Button
-                            isVerifyingServerForPlay = true
-                            sheetScope.launch {
-                                val isOnline = NetworkUtils.isConnected(context)
-                                val isReachable = if (isOnline) NetworkUtils.isServerReachable(toPlay.safeVideoUrl) else false
-                                isVerifyingServerForPlay = false
-                                if (!isReachable) {
-                                    AppToastManager.show(
-                                        "Sin conexión a internet. Comprueba tu red o intenta más tarde.",
-                                        ToastType.ERROR
-                                    )
-                                    return@launch
-                                }
-                                selectedPeliculaForSheet = null
-                                onPlayPelicula(toPlay, 0L)
+                            val isOnline = NetworkUtils.isConnected(context)
+                            if (!isOnline && toPlay.safeVideoUrl.startsWith("http", ignoreCase = true)) {
+                                AppToastManager.show(
+                                    "Sin conexión a internet. Comprueba tu red.",
+                                    ToastType.ERROR
+                                )
+                                return@Button
                             }
+                            selectedPeliculaForSheet = null
+                            onPlayPelicula(toPlay, 0L)
                         },
                         enabled = !isVerifyingServerForPlay && !isVerifyingServerForDownload,
                         modifier = Modifier
@@ -954,21 +949,15 @@ fun HomeScreen(
                             onClick = {
                                 if (isVerifyingServerForPlay || isVerifyingServerForDownload) return@OutlinedButton
                                 val toDown = selectedPeliculaForSheet ?: return@OutlinedButton
-                                isVerifyingServerForDownload = true
-                                sheetScope.launch {
-                                    val isOnline = NetworkUtils.isConnected(context)
-                                    val isReachable = if (isOnline) NetworkUtils.isServerReachable(toDown.safeVideoUrl) else false
-                                    isVerifyingServerForDownload = false
-                                    if (!isReachable) {
-                                        AppToastManager.show(
-                                            "Sin conexión a internet. Comprueba tu red o intenta más tarde.",
-                                            ToastType.ERROR
-                                        )
-                                        return@launch
-                                    }
-                                    selectedPeliculaForSheet = null
-                                    onDownloadPelicula(toDown)
+                                val isOnline = NetworkUtils.isConnected(context)
+                                if (!isOnline && toDown.safeVideoUrl.startsWith("http", ignoreCase = true)) {
+                                    AppToastManager.show(
+                                        "Sin conexión a internet. Comprueba tu red.",
+                                        ToastType.ERROR
+                                    )
+                                    return@OutlinedButton
                                 }
+                                onDownloadPelicula(toDown)
                             },
                             enabled = !isVerifyingServerForPlay && !isVerifyingServerForDownload,
                             modifier = Modifier
@@ -980,33 +969,18 @@ fun HomeScreen(
                                 contentColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
-                            if (isVerifyingServerForDownload) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    strokeWidth = 2.2.dp
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Verificando enlace...",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Descargar",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Descargar",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp
+                            )
                         }
                     }
                 }

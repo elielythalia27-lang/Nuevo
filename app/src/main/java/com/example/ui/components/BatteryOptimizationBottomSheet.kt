@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Settings
@@ -51,19 +53,22 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Hoja inferior unificada de permisos y ajustes en segundo plano
- * con lista de verificación interactiva de 3 pasos:
+ * con lista de verificación interactiva de 4 pasos:
  * 1. Notificaciones
- * 2. Batería sin restricciones
- * 3. Inicio automático (Xiaomi, Oppo, Realme, etc.)
+ * 2. Almacenamiento / Multimedia
+ * 3. Batería sin restricciones
+ * 4. Inicio automático (Xiaomi, Oppo, Realme, etc.)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BatteryOptimizationBottomSheet(
     isDarkTheme: Boolean,
     notificationsGranted: Boolean,
+    storageGranted: Boolean,
     batteryExempt: Boolean,
     autoStartConfigured: Boolean,
     onRequestNotifications: () -> Unit,
+    onRequestStorage: () -> Unit,
     onRequestBatteryExemption: () -> Unit,
     onOpenAutoStart: () -> Unit,
     onDismissClick: (dontShowAgain: Boolean) -> Unit,
@@ -71,8 +76,8 @@ fun BatteryOptimizationBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val readyCount = listOf(notificationsGranted, batteryExempt, autoStartConfigured).count { it }
-    val allReady = readyCount == 3
+    val readyCount = listOf(notificationsGranted, storageGranted, batteryExempt, autoStartConfigured).count { it }
+    val allReady = readyCount == 4
 
     val sheetBg = if (isDarkTheme) Color(0xFF131D31) else Color.White
     val textPrimary = if (isDarkTheme) Color.White else Color(0xFF0F172A)
@@ -152,7 +157,7 @@ fun BatteryOptimizationBottomSheet(
                 modifier = Modifier.padding(vertical = 2.dp)
             ) {
                 Text(
-                    text = "$readyCount de 3 listos",
+                    text = "$readyCount de 4 listos",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (allReady) {
@@ -179,7 +184,30 @@ fun BatteryOptimizationBottomSheet(
                 onClick = { if (!notificationsGranted) onRequestNotifications() }
             )
 
-            // 2. Tarjeta: Batería sin restricciones
+            // 2. Tarjeta: Almacenamiento / Multimedia
+            val storageTitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                "Acceso a multimedia"
+            } else {
+                "Almacenamiento"
+            }
+            val storageSubtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                "Para guardar y reproducir películas descargadas."
+            } else {
+                "Para guardar las descargas en tu dispositivo."
+            }
+            PermissionCheckRowCard(
+                title = storageTitle,
+                subtitle = storageSubtitle,
+                isReady = storageGranted,
+                pendingIcon = Icons.Default.Folder,
+                isDarkTheme = isDarkTheme,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                actionLabel = "Permitir",
+                onClick = { if (!storageGranted) onRequestStorage() }
+            )
+
+            // 3. Tarjeta: Batería sin restricciones
             PermissionCheckRowCard(
                 title = "Batería sin restricciones",
                 subtitle = "Evita que el sistema detenga la descarga.",
@@ -192,7 +220,7 @@ fun BatteryOptimizationBottomSheet(
                 onClick = { if (!batteryExempt) onRequestBatteryExemption() }
             )
 
-            // 3. Tarjeta: Inicio automático
+            // 4. Tarjeta: Inicio automático
             PermissionCheckRowCard(
                 title = "Inicio automático",
                 subtitle = "Algunos teléfonos lo piden además.",
@@ -215,6 +243,7 @@ fun BatteryOptimizationBottomSheet(
                     } else {
                         when {
                             !notificationsGranted -> onRequestNotifications()
+                            !storageGranted -> onRequestStorage()
                             !batteryExempt -> onRequestBatteryExemption()
                             !autoStartConfigured -> onOpenAutoStart()
                             else -> onAllReady()

@@ -37,7 +37,7 @@ object VpnProxyDetector {
                 } catch (_: Exception) {}
             }
 
-            // 2. VPN detection via NetworkInterface names (tun, ppp, p2p, tap, utun)
+            // 2. VPN detection via NetworkInterface names (tun, ppp, tap, utun, wg, wireguard, ipsec)
             if (!hasVpn) {
                 try {
                     val interfaces = NetworkInterface.getNetworkInterfaces()
@@ -45,9 +45,11 @@ object VpnProxyDetector {
                         for (intf in interfaces) {
                             if (intf.isUp && (intf.name.startsWith("tun", ignoreCase = true) ||
                                     intf.name.startsWith("ppp", ignoreCase = true) ||
-                                    intf.name.startsWith("p2p", ignoreCase = true) ||
                                     intf.name.startsWith("tap", ignoreCase = true) ||
-                                    intf.name.startsWith("utun", ignoreCase = true))) {
+                                    intf.name.startsWith("utun", ignoreCase = true) ||
+                                    intf.name.startsWith("wg", ignoreCase = true) ||
+                                    intf.name.startsWith("wireguard", ignoreCase = true) ||
+                                    intf.name.startsWith("ipsec", ignoreCase = true))) {
                                 hasVpn = true
                                 break
                             }

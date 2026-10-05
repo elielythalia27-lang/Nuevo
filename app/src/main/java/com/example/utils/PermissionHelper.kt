@@ -19,17 +19,13 @@ object PermissionHelper {
     fun getRequiredAppPermissions(): List<String> {
         val permissions = mutableListOf<String>()
 
-        // Notificaciones (Android 13+ / API 33+)
+        // Notificaciones (Android 13+ / API 33+) para el servicio en primer plano
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
-        } else {
-            // Android 6.0 a Android 12L (API 23 - 32)
+        } else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            // Android 10 o inferior
             permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
-                // Android 10 o inferior
-                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            }
+            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
 
         return permissions
@@ -85,14 +81,24 @@ object PermissionHelper {
     }
 
     /**
+     * Devuelve los permisos de almacenamiento/multimedia según la versión de Android.
+     * En Android 11+ el almacenamiento de descargas es específico de la aplicación (Scoped Storage),
+     * por lo que no se requieren permisos amplios.
+     */
+    fun getStoragePermissions(): List<String> {
+        return if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            listOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            emptyList()
+        }
+    }
+
+    /**
      * Comprueba si los permisos de almacenamiento están concedidos
      */
     fun hasStoragePermission(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_MEDIA_VIDEO
-            ) == PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return true
         }
         val readGranted = ContextCompat.checkSelfPermission(
             context,

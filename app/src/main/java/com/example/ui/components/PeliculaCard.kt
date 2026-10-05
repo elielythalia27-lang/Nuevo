@@ -177,7 +177,7 @@ fun PeliculaCard(
                         ) {
                             Text(
                                 text = if (pelicula.isVideo) "YouTube" else "Película",
-                                color = Color.White,
+                                color = if (pelicula.isVideo) Color.White else MaterialTheme.colorScheme.onPrimary,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -300,6 +300,21 @@ fun PeliculaCard(
                             }
                             else -> {}
                         }
+                    }
+                }
+
+                // Quick download button in list mode
+                if (downloadItem == null) {
+                    IconButton(
+                        onClick = onDownloadClick,
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Descargar ${pelicula.safeTitle}",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }

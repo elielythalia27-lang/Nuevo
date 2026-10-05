@@ -100,3 +100,28 @@ fun Color.toAdaptivePrimary(isDarkTheme: Boolean): Color {
 fun Color.ensureReadableAccent(isDarkBackground: Boolean): Color {
     return this.clampColorForTheme(isDarkBackground)
 }
+
+/**
+ * Returns a high-contrast container color for badge/capsule surfaces.
+ * In Dark Theme, if primary is pure white or very bright (luminance > 0.80),
+ * uses a sleek slate surface (0xFF334155) so white text stands out cleanly.
+ */
+fun highContrastContainerColor(primary: Color, isDarkTheme: Boolean): Color {
+    return if (isDarkTheme && primary.luminance() > 0.80f) {
+        Color(0xFF334155)
+    } else {
+        primary.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+    }
+}
+
+/**
+ * Returns high-contrast text or icon color for elements placed on accent containers or cards.
+ * When primary is white or very bright in Dark Theme, returns crisp white so it pops with 100% legibility.
+ */
+fun highContrastContentColor(primary: Color, isDarkTheme: Boolean): Color {
+    return if (isDarkTheme && primary.luminance() > 0.80f) {
+        Color.White
+    } else {
+        primary
+    }
+}

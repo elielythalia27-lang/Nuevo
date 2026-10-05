@@ -461,7 +461,7 @@ fun AppBottomNav(
                                         ) {
                                             Text(
                                                 text = if (downloadsCount > 99) "99+" else downloadsCount.toString(),
-                                                color = Color.White,
+                                                color = activeColor.contrastingTextColor(),
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Black,
                                                 textAlign = TextAlign.Center,

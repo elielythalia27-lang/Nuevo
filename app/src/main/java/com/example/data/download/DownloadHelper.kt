@@ -106,7 +106,7 @@ class DownloadHelper(
                     if (currentMemList.isEmpty()) {
                         storedList
                     } else {
-                        storedList.map { storedItem ->
+                        val mappedStored = storedList.map { storedItem ->
                             val memItem = currentMemList.find { it.id == storedItem.id }
                             if (memItem != null) {
                                 when (memItem.status) {
@@ -131,6 +131,9 @@ class DownloadHelper(
                                 storedItem
                             }
                         }
+                        // Preserve any newly started downloads in memory that haven't finished saving to DataStore yet
+                        val inFlightMemoryOnly = currentMemList.filter { mem -> storedList.none { it.id == mem.id } }
+                        mappedStored + inFlightMemoryOnly
                     }
                 }
             }
@@ -221,6 +224,23 @@ class DownloadHelper(
 
     fun isCancelled(id: String): Boolean {
         return _liveDownloadsState.value.none { it.id == id }
+    }
+
+    /** Called when Android stops a UIDT job. Persist a resumable state. */
+    fun markStoppedForUidt(id: String) {
+        val item = getItem(id) ?: return
+        if (item.status == DownloadStatus.DOWNLOADING) {
+            val part = File(item.localFilePath + ".part")
+            val bytes = if (part.exists()) part.length() else item.downloadedBytes
+            val progress = if (item.totalBytes > 0L) ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99) else item.progress
+            updateAndPersist(item.copy(
+                status = DownloadStatus.PAUSED,
+                downloadedBytes = bytes,
+                progress = progress,
+                speedBytesPerSec = 0L,
+                etaSeconds = 0L
+            ))
+        }
     }
 
     fun updateItemState(item: DownloadItem) {
@@ -333,11 +353,6 @@ class DownloadHelper(
         val videoUrl = chosenQualityUrl ?: pelicula.safeVideoUrl
         if (videoUrl.isBlank()) {
             AppToastManager.show("URL de video no disponible", ToastType.ERROR)
-            return
-        }
-
-        if (VpnProxyDetector.isVpnOrProxyActive(context)) {
-            AppToastManager.show("Desactiva la VPN o Proxy para iniciar descargas", ToastType.WARNING)
             return
         }
 
@@ -609,6 +624,39 @@ class DownloadHelper(
         items.forEach { item ->
             cancelDownload(item)
         }
+    }
+
+    /**
+     * Persists a safe resumable state when Android terminates the dataSync
+     * foreground-service window (Android 15+).
+     */
+    suspend fun pauseDownloadsForServiceTimeout() {
+        val current = _liveDownloadsState.value
+        val paused = current.map { item ->
+            if (item.status == DownloadStatus.DOWNLOADING) {
+                val part = File(item.localFilePath + ".part")
+                val actualBytes = if (part.exists()) part.length() else item.downloadedBytes
+                val progress = if (item.totalBytes > 0L) {
+                    ((actualBytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99)
+                } else {
+                    item.progress.coerceIn(0, 99)
+                }
+                clearLiveProgress(item.id)
+                item.copy(
+                    status = DownloadStatus.PAUSED,
+                    downloadedBytes = actualBytes,
+                    progress = progress,
+                    speedBytesPerSec = 0L,
+                    etaSeconds = 0L
+                )
+            } else {
+                item
+            }
+        }
+        _liveDownloadsState.value = paused
+        preferences.updateMultipleDownloads(
+            paused.filter { it.status == DownloadStatus.PAUSED }
+        )
     }
 
     fun syncConcurrentDownloadsLimit(newLimit: Int? = null) {

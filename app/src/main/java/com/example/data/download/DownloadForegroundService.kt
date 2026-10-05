@@ -48,14 +48,35 @@ class DownloadForegroundService : Service() {
         private const val SUMMARY_NID = 0x7FFF0000
 
         fun startDownload(context: Context, item: DownloadItem) {
+            // Android 14+: long user-initiated downloads use UIDT instead of
+            // a dataSync foreground service, avoiding Android 15's 6-hour quota.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                if (!DownloadUidtJobService.schedule(context, item)) {
+                    val helper = DownloadHelper.getActiveInstance(context.applicationContext)
+                    helper.updateAndPersist(item.copy(status = DownloadStatus.PENDING, speedBytesPerSec = 0L, etaSeconds = 0L))
+                    AppToastManager.show("Android no permitió iniciar la transferencia en segundo plano. Se reintentará cuando sea posible.", ToastType.INFO)
+                }
+                return
+            }
+
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_START_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, item.id)
+                putExtra(EXTRA_FILE_PATH, item.localFilePath)
+                putExtra("extra_download_url", item.originalVideoUrl)
+                putExtra("extra_title", item.title)
+                putExtra("extra_year", item.year)
+                putExtra("extra_type", item.type)
+                putExtra("extra_cover_url", item.coverUrl)
             }
             startForegroundServiceCompat(context, intent)
         }
 
         fun pauseDownload(context: Context, downloadId: String) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                pauseUidtDownload(context, downloadId)
+                return
+            }
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_PAUSE_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
@@ -68,6 +89,15 @@ class DownloadForegroundService : Service() {
         }
 
         fun resumeDownload(context: Context, downloadId: String) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val helper = DownloadHelper.getActiveInstance(context.applicationContext)
+                val item = helper.getItem(downloadId) ?: return
+                if (!DownloadUidtJobService.schedule(context, item)) {
+                    // Keep the item persisted; a later foreground/user action can retry.
+                    return
+                }
+                return
+            }
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_RESUME_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
@@ -76,6 +106,10 @@ class DownloadForegroundService : Service() {
         }
 
         fun cancelDownload(context: Context, downloadId: String, localFilePath: String? = null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                cancelUidtDownload(context, downloadId, localFilePath)
+                return
+            }
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_CANCEL_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
@@ -86,6 +120,13 @@ class DownloadForegroundService : Service() {
         }
 
         fun pauseAll(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val helper = DownloadHelper.getActiveInstance(context.applicationContext)
+                helper.liveDownloadsState.value.filter { it.status == DownloadStatus.DOWNLOADING }.forEach {
+                    pauseUidtDownload(context, it.id)
+                }
+                return
+            }
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_PAUSE_ALL
             }
@@ -93,6 +134,17 @@ class DownloadForegroundService : Service() {
         }
 
         fun resumeAll(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val helper = DownloadHelper.getActiveInstance(context.applicationContext)
+                helper.liveDownloadsState.value.filter { it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.PENDING }.forEach {
+                    val running = it.copy(status = DownloadStatus.DOWNLOADING)
+                    helper.updateAndPersist(running)
+                    if (!DownloadUidtJobService.schedule(context, running)) {
+                        helper.updateAndPersist(running.copy(status = DownloadStatus.PENDING))
+                    }
+                }
+                return
+            }
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_RESUME_ALL
             }
@@ -100,11 +152,53 @@ class DownloadForegroundService : Service() {
         }
 
         fun cancelAll(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val helper = DownloadHelper.getActiveInstance(context.applicationContext)
+                helper.liveDownloadsState.value.toList().forEach {
+                    cancelUidtDownload(context, it.id, it.localFilePath)
+                }
+                return
+            }
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
                 action = ACTION_CANCEL_ALL
             }
             sendServiceCommand(context, intent)
         }
+
+        private fun pauseUidtDownload(context: Context, downloadId: String) {
+            val app = context.applicationContext
+            DownloadUidtJobService.cancel(app, downloadId)
+            val helper = DownloadHelper.getActiveInstance(app)
+            val item = helper.getItem(downloadId) ?: return
+            val part = File(item.localFilePath + ".part")
+            val bytes = if (part.exists()) part.length() else item.downloadedBytes
+            val progress = if (item.totalBytes > 0L) ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99) else item.progress
+            val paused = item.copy(
+                status = DownloadStatus.PAUSED,
+                downloadedBytes = bytes,
+                progress = progress,
+                speedBytesPerSec = 0L,
+                etaSeconds = 0L
+            )
+            helper.updateAndPersist(paused)
+            val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(progressNidStatic(downloadId), NotificationUtils.buildPausedNotification(app, paused))
+        }
+
+        private fun cancelUidtDownload(context: Context, downloadId: String, localFilePath: String?) {
+            val app = context.applicationContext
+            DownloadUidtJobService.cancel(app, downloadId)
+            val helper = DownloadHelper.getActiveInstance(app)
+            helper.removeItemFromState(downloadId)
+            val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val nid = progressNidStatic(downloadId)
+            manager.cancel(nid)
+            if (!localFilePath.isNullOrBlank()) {
+                try { File(localFilePath + ".part").delete() } catch (_: Exception) {}
+            }
+        }
+
+        private fun progressNidStatic(id: String): Int = (id.hashCode() and 0x0FFFFFFF) + 1
 
         private fun startForegroundServiceCompat(context: Context, intent: Intent) {
             try {
@@ -116,17 +210,23 @@ class DownloadForegroundService : Service() {
             } catch (_: Exception) {}
         }
 
+        /**
+         * Sends a control command to an already running download service.
+         *
+         * IMPORTANT: pause/cancel/queue are not foreground-service starts. Using
+         * startForegroundService() for these commands can make Android expect
+         * startForeground() within the launch window and kill the service because
+         * those commands intentionally do not enter foreground mode.
+         *
+         * Notification actions are user initiated, so startService() is the
+         * appropriate API for control commands on Android O+.
+         */
         private fun sendServiceCommand(context: Context, intent: Intent) {
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startService(intent)
             } catch (_: Exception) {
-                try {
-                    context.startService(intent)
-                } catch (_: Exception) {}
+                // The caller has already updated persistent state. A later
+                // foreground start/recovery can reconcile the service state.
             }
         }
     }
@@ -182,7 +282,25 @@ class DownloadForegroundService : Service() {
         when (action) {
             DownloadHelper.ACTION_START_DOWNLOAD,
             "com.downloadfree.ACTION_RESUME_DOWNLOAD" -> {
-                val item = downloadId?.let { helper.getItem(it) }
+                var item = downloadId?.let { helper.getItem(it) }
+                if (item == null && downloadId != null) {
+                    val url = intent.getStringExtra("extra_download_url") ?: ""
+                    val path = intent.getStringExtra(EXTRA_FILE_PATH) ?: ""
+                    val title = intent.getStringExtra("extra_title") ?: ""
+                    if (url.isNotBlank() && path.isNotBlank()) {
+                        item = DownloadItem(
+                            id = downloadId,
+                            title = title,
+                            originalVideoUrl = url,
+                            coverUrl = intent.getStringExtra("extra_cover_url") ?: "",
+                            year = intent.getStringExtra("extra_year") ?: "",
+                            type = intent.getStringExtra("extra_type") ?: "pl",
+                            localFilePath = path,
+                            status = DownloadStatus.DOWNLOADING
+                        )
+                        helper.updateAndPersist(item)
+                    }
+                }
                 if (item == null) {
                     if (downloadId != null) {
                         notificationManager.cancel(pausedNid(downloadId))
@@ -262,18 +380,6 @@ class DownloadForegroundService : Service() {
         if (userStopping.contains(item.id)) return@synchronized
         if (downloadJobs[item.id]?.isActive == true) return@synchronized
 
-        if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
-            val paused = item.copy(status = DownloadStatus.PAUSED, speedBytesPerSec = 0L, etaSeconds = 0L)
-            helper.updateAndPersist(paused)
-            notificationManager.notify(
-                pausedNid(item.id),
-                NotificationUtils.buildPausedNotification(applicationContext, paused)
-            )
-            AppToastManager.show("Desactiva la VPN o Proxy para descargar", ToastType.WARNING)
-            stopIfIdle()
-            return@synchronized
-        }
-
         // No contar las descargas que se están pausando/cancelando: ya están liberando su lugar
         val activeRunningJobs = downloadJobs.entries.count {
             it.value.isActive && !userStopping.contains(it.key)
@@ -318,7 +424,9 @@ class DownloadForegroundService : Service() {
     private suspend fun executeDownloadLoop(item: DownloadItem) {
         val myJob = currentCoroutineContext()[Job]
         val destinationFile = File(item.localFilePath)
+        destinationFile.parentFile?.mkdirs()
         val partFile = File(destinationFile.absolutePath + ".part")
+        partFile.parentFile?.mkdirs()
         var downloadedBytes = if (partFile.exists()) partFile.length() else 0L
 
         var connection: HttpURLConnection? = null
@@ -326,24 +434,61 @@ class DownloadForegroundService : Service() {
         var raf: RandomAccessFile? = null
 
         try {
-            val conn = (URL(item.downloadUrl).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15000
-                readTimeout = 20000
-                instanceFollowRedirects = true
-                setRequestProperty("Accept-Encoding", "identity")
-                if (downloadedBytes > 0L) {
-                    setRequestProperty("Range", "bytes=$downloadedBytes-")
-                }
-            }
-            connection = conn
-            connections[item.id] = conn
-            currentCoroutineContext().ensureActive()
+            var currentUrl = item.downloadUrl
+            var redirectCount = 0
+            var conn: HttpURLConnection
+            var code: Int
 
-            val code = conn.responseCode
+            while (true) {
+                conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 15000
+                    readTimeout = 20000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    setRequestProperty("Accept-Encoding", "identity")
+                    if (downloadedBytes > 0L) {
+                        setRequestProperty("Range", "bytes=$downloadedBytes-")
+                    }
+                }
+                connection = conn
+                connections[item.id] = conn
+                currentCoroutineContext().ensureActive()
+
+                code = conn.responseCode
+                // Manejar redirecciones cruzadas entre HTTP y HTTPS que HttpURLConnection no sigue por defecto
+                if (code in listOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, HttpURLConnection.HTTP_SEE_OTHER, 307, 308)) {
+                    val location = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    connections.remove(item.id, conn)
+                    if (!location.isNullOrBlank() && redirectCount < 5) {
+                        currentUrl = if (location.startsWith("http://", ignoreCase = true) || location.startsWith("https://", ignoreCase = true)) {
+                            location
+                        } else {
+                            URL(URL(currentUrl), location).toString()
+                        }
+                        redirectCount++
+                        continue
+                    }
+                }
+                break
+            }
+
             if (code == 416) {
                 // El servidor no acepta ese rango: el .part no sirve, se empieza de cero
                 partFile.delete()
-                throw Exception("No se pudo reanudar. Pulsa reanudar otra vez.")
+                downloadedBytes = 0L
+                conn.disconnect()
+                connections.remove(item.id, conn)
+                conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 15000
+                    readTimeout = 20000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    setRequestProperty("Accept-Encoding", "identity")
+                }
+                connection = conn
+                connections[item.id] = conn
+                code = conn.responseCode
             }
             val isPartial = code == HttpURLConnection.HTTP_PARTIAL
             val isOk = code == HttpURLConnection.HTTP_OK
@@ -400,10 +545,7 @@ class DownloadForegroundService : Service() {
 
                 val now = System.currentTimeMillis()
                 val timeDiff = now - lastTime
-                if (timeDiff >= 1000L) {
-                    if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
-                        throw VpnBlockedException()
-                    }
+                if (timeDiff >= 700L) {
                     // Velocidad medida en esta ventana de ~1 segundo
                     val instantSpeed = (bytesSinceLastUpdate * 1000L) / timeDiff.coerceAtLeast(1L)
                     // Suavizado EMA: 70% valor anterior + 30% medición nueva
@@ -439,12 +581,7 @@ class DownloadForegroundService : Service() {
 
         } catch (e: Exception) {
             if (currentCoroutineContext().isActive) {
-                if (e is VpnBlockedException) {
-                    // VPN/Proxy detectado a mitad de descarga: se pausa (no es un fallo)
-                    pauseBecauseOfVpn(item)
-                } else {
-                    markDownloadFailed(item, e.message ?: "Error de descarga")
-                }
+                markDownloadFailed(item, e.message ?: "Error de descarga")
             }
         } finally {
             connection?.let {
@@ -676,6 +813,27 @@ class DownloadForegroundService : Service() {
 
     private fun pauseDownload(id: Long) = pauseDownload(id.toString())
     private fun cancelDownload(id: Long) = cancelDownload(id.toString())
+
+    /**
+     * Android 15+ limits dataSync foreground services to six hours in a
+     * rolling 24-hour period. Preserve the download state when the OS asks
+     * this service to leave the foreground instead of leaving items stuck
+     * forever as DOWNLOADING.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        serviceScope.launch {
+            try {
+                downloadJobs.values.toList().forEach { it.cancel() }
+                connections.values.forEach {
+                    try { it.disconnect() } catch (_: Exception) {}
+                }
+                helper.pauseDownloadsForServiceTimeout()
+            } finally {
+                try { stopForegroundCompat() } catch (_: Exception) {}
+                stopSelf(startId)
+            }
+        }
+    }
 
     override fun onDestroy() {
         connections.values.forEach {

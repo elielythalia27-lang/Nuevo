@@ -119,7 +119,7 @@ object NotificationUtils {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
         val requestCode = intentAction.hashCode() * 31 + downloadId.hashCode()
-        return if (asForeground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        return if (asForeground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             PendingIntent.getForegroundService(context, requestCode, intent, flags)
         } else {
             PendingIntent.getService(context, requestCode, intent, flags)
@@ -322,7 +322,7 @@ object NotificationUtils {
             .addAction(
                 android.R.drawable.ic_media_play,
                 "Reanudar",
-                serviceActionIntent(context, DownloadHelper.ACTION_START_DOWNLOAD, item.id, asForeground = true)
+                serviceActionIntent(context, DownloadHelper.ACTION_RESUME_DOWNLOAD, item.id, asForeground = true)
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
@@ -364,7 +364,7 @@ object NotificationUtils {
             .addAction(
                 android.R.drawable.ic_media_play,
                 "Reintentar",
-                serviceActionIntent(context, DownloadHelper.ACTION_START_DOWNLOAD, item.id, asForeground = true)
+                serviceActionIntent(context, DownloadHelper.ACTION_RESUME_DOWNLOAD, item.id, asForeground = true)
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
