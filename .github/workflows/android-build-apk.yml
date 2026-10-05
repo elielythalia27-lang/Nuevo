@@ -48,8 +48,9 @@ jobs:
         run: |
           touch .env && touch .env.example
 
-      - name: Configurar Almacén de Claves Release (my-upload-key.jks)
+      - name: Configurar Almacén de Claves Release e Inspección Dinámica de Alias
         run: |
+          # 1. Determinar o generar keystore
           if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
             echo "Decodificando keystore desde GitHub Secrets..."
             echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
@@ -63,7 +64,7 @@ jobs:
             echo "Generando almacén de claves Release automatizado con keytool..."
             keytool -genkeypair -v \
               -keystore my-upload-key.jks \
-              -alias "${{ secrets.KEY_ALIAS || 'uploadKey' }}" \
+              -alias "${{ secrets.KEY_ALIAS || 'upload' }}" \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
@@ -71,22 +72,34 @@ jobs:
               -keypass "${{ secrets.KEY_PASSWORD || 'android' }}" \
               -dname "CN=DownloadFree, OU=Mobile, O=Eliel, L=Havana, ST=Havana, C=CU"
           fi
-          # Asegurar copia en app/ y raíz para redundancia en cualquier contexto de ejecución
+
+          # 2. Asegurar copia redundante en la raíz ($GITHUB_WORKSPACE) y en app/
           cp -f my-upload-key.jks app/my-upload-key.jks || true
           cp -f my-upload-key.jks release.keystore || true
+          cp -f my-upload-key.jks app/release.keystore || true
+
+          # 3. Inspeccionar dinámicamente con keytool el alias del keystore
+          STORE_PASS="${{ secrets.STORE_PASSWORD || 'android' }}"
+          KEY_PASS="${{ secrets.KEY_PASSWORD || 'android' }}"
+          DETECTED_ALIAS=$(keytool -list -v -keystore my-upload-key.jks -storepass "$STORE_PASS" 2>/dev/null | grep -i "Alias name:" | head -n 1 | sed 's/.*Alias name:[[:space:]]*//' | tr -d '\r' | xargs)
+
+          if [ -n "$DETECTED_ALIAS" ]; then
+            echo "Alias detectado dinámicamente en el keystore: $DETECTED_ALIAS"
+            TARGET_ALIAS="$DETECTED_ALIAS"
+          else
+            TARGET_ALIAS="${{ secrets.KEY_ALIAS || 'upload' }}"
+            echo "No se pudo extraer alias dinámicamente, usando alias por defecto: $TARGET_ALIAS"
+          fi
+
+          # 4. Exportar variables de entorno para los pasos de compilación
+          echo "KEY_ALIAS=$TARGET_ALIAS" >> $GITHUB_ENV
+          echo "STORE_PASSWORD=$STORE_PASS" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=$KEY_PASS" >> $GITHUB_ENV
+          echo "KEYSTORE_PATH=${{ github.workspace }}/my-upload-key.jks" >> $GITHUB_ENV
 
       - name: Compilar APK Release
-        env:
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'uploadKey' }}
-          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew :app:assembleRelease --no-daemon -Dkotlin.compiler.execution.strategy=daemon -Dksp.incremental=false -Dksp.incremental.intermodule=false --stacktrace
-          else
-            gradle :app:assembleRelease --no-daemon -Dkotlin.compiler.execution.strategy=daemon -Dksp.incremental=false -Dksp.incremental.intermodule=false --stacktrace
-          fi
+          ./gradlew :app:assembleRelease --no-daemon -Dkotlin.compiler.execution.strategy=daemon -Dksp.incremental=false -Dksp.incremental.intermodule=false --stacktrace
 
       - name: Verificar existencia del archivo APK Release
         run: |
@@ -106,3 +119,4 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+

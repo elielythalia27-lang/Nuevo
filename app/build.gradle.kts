@@ -42,14 +42,14 @@ android {
       }
 
       storeFile = keystoreFile
-      storePassword = System.getenv("RELEASE_STORE_PASSWORD")
-        ?: System.getenv("STORE_PASSWORD")
+      storePassword = System.getenv("STORE_PASSWORD")
+        ?: System.getenv("RELEASE_STORE_PASSWORD")
         ?: "android"
-      keyAlias = System.getenv("RELEASE_KEY_ALIAS")
-        ?: System.getenv("KEY_ALIAS")
-        ?: "uploadKey"
-      keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
-        ?: System.getenv("KEY_PASSWORD")
+      keyAlias = System.getenv("KEY_ALIAS")
+        ?: System.getenv("RELEASE_KEY_ALIAS")
+        ?: if (keystoreFile.name == "release.keystore") "uploadkey" else "upload"
+      keyPassword = System.getenv("KEY_PASSWORD")
+        ?: System.getenv("RELEASE_KEY_PASSWORD")
         ?: "android"
     }
     create("debugConfig") {
