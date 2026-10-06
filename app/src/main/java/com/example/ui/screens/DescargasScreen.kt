@@ -1516,32 +1516,21 @@ fun ActiveDownloadingCard(
                                 else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                             }
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            Text(
+                                text = when {
+                                    isFailed -> "Error"
+                                    isPaused -> "En Pausa"
+                                    else -> "Descargando"
+                                },
+                                color = when {
+                                    isFailed -> Color(0xFFEF4444)
+                                    isPaused -> Color(0xFFF59E0B)
+                                    else -> MaterialTheme.colorScheme.primary
+                                },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                if (!isPaused && !isFailed) {
-                                    SystemDownloadAnimatedIcon(
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                                Text(
-                                    text = when {
-                                        isFailed -> "Error"
-                                        isPaused -> "En Pausa"
-                                        else -> "Descargando"
-                                    },
-                                    color = when {
-                                        isFailed -> Color(0xFFEF4444)
-                                        isPaused -> Color(0xFFF59E0B)
-                                        else -> MaterialTheme.colorScheme.primary
-                                    },
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            )
                         }
                     }
 

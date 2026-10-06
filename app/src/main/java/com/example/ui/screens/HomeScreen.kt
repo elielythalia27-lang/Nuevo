@@ -628,62 +628,81 @@ fun HomeScreen(
                 val isPending = downloadItem?.status == DownloadStatus.PENDING
                 val isPaused = downloadItem?.status == DownloadStatus.PAUSED
 
-                // Primary Play Button: Only shown if NOT already downloaded
-                if (!isDownloaded) {
-                    Button(
-                        onClick = {
-                            if (isVerifyingServerForPlay || isVerifyingServerForDownload) return@Button
-                            val toPlay = selectedPeliculaForSheet ?: return@Button
-                            val isOnline = NetworkUtils.isConnected(context)
-                            if (!isOnline && toPlay.safeVideoUrl.startsWith("http", ignoreCase = true)) {
+                // Primary Play Button
+                Button(
+                    onClick = {
+                        val toPlay = selectedPeliculaForSheet ?: return@Button
+                        if (isDownloaded) {
+                            sheetScope.launch {
+                                sheetState.hide()
+                                selectedPeliculaForSheet = null
+                            }
+                            onPlayPelicula(toPlay, 0L)
+                            return@Button
+                        }
+                        if (isVerifyingServerForPlay || isVerifyingServerForDownload) return@Button
+                        val isOnline = NetworkUtils.isConnected(context)
+                        if (!isOnline && toPlay.safeVideoUrl.startsWith("http", ignoreCase = true)) {
+                            AppToastManager.show(
+                                "Sin conexión a internet. Comprueba tu red.",
+                                ToastType.ERROR
+                            )
+                            return@Button
+                        }
+                        isVerifyingServerForPlay = true
+                        sheetScope.launch {
+                            val reachable = NetworkUtils.isServerReachable(toPlay.safeVideoUrl, timeoutMs = 2500)
+                            isVerifyingServerForPlay = false
+                            if (reachable) {
+                                sheetState.hide()
+                                selectedPeliculaForSheet = null
+                                onPlayPelicula(toPlay, 0L)
+                            } else {
                                 AppToastManager.show(
-                                    "Sin conexión a internet. Comprueba tu red.",
+                                    "No se pudo conectar con el servidor de la película. Verifica tu red.",
                                     ToastType.ERROR
                                 )
-                                return@Button
                             }
-                            selectedPeliculaForSheet = null
-                            onPlayPelicula(toPlay, 0L)
-                        },
-                        enabled = !isVerifyingServerForPlay && !isVerifyingServerForDownload,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
-                        if (isVerifyingServerForPlay) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.2.dp
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Verificando enlace...",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Reproducir",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
                         }
+                    },
+                    enabled = !isVerifyingServerForPlay && !isVerifyingServerForDownload,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    if (isVerifyingServerForPlay) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.2.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Verificando enlace...",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isDownloaded) "Reproducir película descargada" else "Reproducir",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(10.dp))
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Download Status or Action Component
                 when {
@@ -833,31 +852,35 @@ fun HomeScreen(
                     }
 
                     isDownloaded -> {
-                        OutlinedButton(
-                            onClick = {
-                                selectedPeliculaForSheet = null
-                            },
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.12f),
+                            border = BorderStroke(1.2.dp, Color(0xFF10B981).copy(alpha = 0.4f)),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.2.dp, Color(0xFF10B981)),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFF10B981)
-                            )
+                                .height(50.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Color(0xFF10B981),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Disponible en tu biblioteca de Descargas",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF10B981),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Disponible en Descargas (Offline)",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF10B981)
+                                )
+                            }
                         }
                     }
 
@@ -957,13 +980,20 @@ fun HomeScreen(
                                     )
                                     return@OutlinedButton
                                 }
-                                onDownloadPelicula(toDown)
-                                // Close the movie details sheet immediately after the user
-                                // confirms the download. The download itself is owned by the
-                                // ViewModel and continues independently of this UI.
+                                isVerifyingServerForDownload = true
                                 sheetScope.launch {
-                                    sheetState.hide()
-                                    selectedPeliculaForSheet = null
+                                    val reachable = NetworkUtils.isServerReachable(toDown.safeVideoUrl, timeoutMs = 2500)
+                                    isVerifyingServerForDownload = false
+                                    if (reachable) {
+                                        sheetState.hide()
+                                        selectedPeliculaForSheet = null
+                                        onDownloadPelicula(toDown)
+                                    } else {
+                                        AppToastManager.show(
+                                            "No se pudo conectar con el servidor para la descarga.",
+                                            ToastType.ERROR
+                                        )
+                                    }
                                 }
                             },
                             enabled = !isVerifyingServerForPlay && !isVerifyingServerForDownload,
@@ -976,18 +1006,32 @@ fun HomeScreen(
                                 contentColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Descargar",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
-                            )
+                            if (isVerifyingServerForDownload) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.2.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Verificando enlace...",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Descargar",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                            }
                         }
                     }
                 }
