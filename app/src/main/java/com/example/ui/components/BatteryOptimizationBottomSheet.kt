@@ -76,8 +76,8 @@ fun BatteryOptimizationBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val readyCount = listOf(notificationsGranted, storageGranted, batteryExempt, autoStartConfigured).count { it }
-    val allReady = readyCount == 4
+    val readyCount = listOf(notificationsGranted, storageGranted, batteryExempt).count { it }
+    val allReady = readyCount == 3
 
     val sheetBg = if (isDarkTheme) Color(0xFF131D31) else Color.White
     val textPrimary = if (isDarkTheme) Color.White else Color(0xFF0F172A)
@@ -146,7 +146,7 @@ fun BatteryOptimizationBottomSheet(
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            // Contador de estado en cápsula: "X de 3 listos"
+            // Contador de estado en cápsula: "X de 3 permisos listos"
             Surface(
                 shape = RoundedCornerShape(50),
                 color = if (allReady) {
@@ -157,7 +157,7 @@ fun BatteryOptimizationBottomSheet(
                 modifier = Modifier.padding(vertical = 2.dp)
             ) {
                 Text(
-                    text = "$readyCount de 4 listos",
+                    text = "$readyCount de 3 requeridos listos",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (allReady) {
@@ -220,22 +220,22 @@ fun BatteryOptimizationBottomSheet(
                 onClick = { if (!batteryExempt) onRequestBatteryExemption() }
             )
 
-            // 4. Tarjeta: Inicio automático
+            // 4. Tarjeta: Inicio automático (Opcional / Recomendado para Xiaomi)
             PermissionCheckRowCard(
-                title = "Inicio automático",
-                subtitle = "Algunos teléfonos lo piden además.",
+                title = "Inicio automático (Opcional)",
+                subtitle = "Recomendado para Xiaomi, Redmi, Oppo y Realme.",
                 isReady = autoStartConfigured,
                 pendingIcon = Icons.Default.Settings,
                 isDarkTheme = isDarkTheme,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
-                actionLabel = "Configurar",
+                actionLabel = if (autoStartConfigured) "Configurado" else "Configurar",
                 onClick = onOpenAutoStart
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Botón Principal ("Listo" si todo está completo, "Activar pendientes" si faltan)
+            // Botón Principal ("Listo" si los 3 permisos esenciales están completos)
             Button(
                 onClick = {
                     if (allReady) {
@@ -245,7 +245,6 @@ fun BatteryOptimizationBottomSheet(
                             !notificationsGranted -> onRequestNotifications()
                             !storageGranted -> onRequestStorage()
                             !batteryExempt -> onRequestBatteryExemption()
-                            !autoStartConfigured -> onOpenAutoStart()
                             else -> onAllReady()
                         }
                     }

@@ -668,7 +668,7 @@ fun MainAppNavigation(
                     )
 
                     // Hoja inferior interactiva de permisos y ajustes ("Mantén tus descargas activas")
-                    if (showBatteryBottomSheet && (!isBatteryExempt || !hasNotificationsPermission || !hasStoragePermission || !autoStartConfigured)) {
+                    if (showBatteryBottomSheet && (!isBatteryExempt || !hasNotificationsPermission || !hasStoragePermission)) {
                         BatteryOptimizationBottomSheet(
                             isDarkTheme = isDark,
                             notificationsGranted = hasNotificationsPermission,

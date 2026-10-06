@@ -1,7 +1,11 @@
 package com.example.ui.screens
 
+import android.content.Intent
 import android.os.Environment
 import android.os.StatFs
+import com.example.ui.components.AppToastManager
+import com.example.ui.components.ToastType
+import java.io.File
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -66,6 +70,7 @@ import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -385,19 +390,12 @@ fun DescargasScreen(
                                 modifier = Modifier.padding(vertical = 10.dp)
                             ) {
                                 val isDownloading = activeList.any { it.status == DownloadStatus.DOWNLOADING }
-                                if (isDownloading) {
-                                    SystemDownloadAnimatedIcon(
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Speed,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textSecondary
-                                    )
-                                }
+                                Icon(
+                                    imageVector = if (isDownloading) Icons.Default.Download else Icons.Default.Speed,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textSecondary
+                                )
                                 Text(
                                     text = "Activas (${activeList.size})",
                                     fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
@@ -1939,9 +1937,19 @@ fun DownloadedMovieCard(
                     lineHeight = 18.sp
                 )
 
-                // Size info only (Completada badge removed as requested)
+                // Size & folder location info
+                val fileLocationName = remember(item.localFilePath) {
+                    try {
+                        val file = File(item.localFilePath)
+                        val parent = file.parentFile?.name ?: "Descargas"
+                        "$parent • ${item.formattedTotalSize}"
+                    } catch (_: Exception) {
+                        item.formattedTotalSize
+                    }
+                }
+
                 Text(
-                    text = item.formattedTotalSize,
+                    text = fileLocationName,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = textSecondary
@@ -1949,7 +1957,39 @@ fun DownloadedMovieCard(
             }
 
             if (!isSelectionMode) {
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = {
+                        try {
+                            val file = File(item.localFilePath)
+                            if (file.exists()) {
+                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.provider",
+                                    file
+                                )
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "video/mp4"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Compartir o abrir video"))
+                            } else {
+                                AppToastManager.show("Ubicación: ${item.localFilePath}", ToastType.INFO)
+                            }
+                        } catch (e: Exception) {
+                            AppToastManager.show("Ubicación: ${item.localFilePath}", ToastType.INFO)
+                        }
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Compartir video",
+                        tint = textSecondary,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
                 IconButton(
                     onClick = onDelete,
                     modifier = Modifier.size(36.dp)

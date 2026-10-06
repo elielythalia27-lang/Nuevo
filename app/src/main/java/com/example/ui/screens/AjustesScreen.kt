@@ -631,11 +631,22 @@ fun AjustesScreen(
                                             fontWeight = FontWeight.SemiBold,
                                             color = textPrimary
                                         )
+                                        val readablePath = remember(downloadFolderName, downloadFolderPath) {
+                                            if (downloadFolderPath.contains("/Download", ignoreCase = true)) {
+                                                "Descargas > ${downloadFolderName.ifBlank { "Download Free" }}"
+                                            } else if (downloadFolderPath.isNotBlank()) {
+                                                downloadFolderPath.replace("/storage/emulated/0", "Almacenamiento interno")
+                                            } else {
+                                                "Descargas > Download Free"
+                                            }
+                                        }
                                         Text(
-                                            text = downloadFolderName.ifBlank { "Download Free" },
-                                            fontSize = 12.5.sp,
+                                            text = readablePath,
+                                            fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -757,8 +768,8 @@ fun AjustesScreen(
 
             // Section: Descargas sin interrupciones (Optimización de batería y segundo plano)
             item {
-                val readyCount = listOf(notificationsGranted, isBatteryExempt, autoStartConfigured).count { it }
-                val allReady = readyCount == 3
+                val readyCount = listOf(notificationsGranted, isBatteryExempt).count { it }
+                val allReady = readyCount == 2
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
@@ -776,7 +787,7 @@ fun AjustesScreen(
                             }
                         ) {
                             Text(
-                                text = "$readyCount de 3 listos",
+                                text = "$readyCount de 2 esenciales activos",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (allReady) {
@@ -819,7 +830,7 @@ fun AjustesScreen(
                                                 if (notificationsGranted) {
                                                     Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
                                                 } else {
-                                                    MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                                    Color(0xFFEF4444).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
                                                 }
                                             ),
                                         contentAlignment = Alignment.Center
@@ -827,19 +838,36 @@ fun AjustesScreen(
                                         Icon(
                                             imageVector = if (notificationsGranted) Icons.Default.Check else Icons.Default.Notifications,
                                             contentDescription = null,
-                                            tint = if (notificationsGranted) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                            tint = if (notificationsGranted) Color(0xFF10B981) else Color(0xFFEF4444),
                                             modifier = Modifier.size(22.dp)
                                         )
                                     }
                                     Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "Notificaciones",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = textPrimary
+                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = if (notificationsGranted) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFEF4444).copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = if (notificationsGranted) "Activo" else "Inactivo",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (notificationsGranted) Color(0xFF10B981) else Color(0xFFEF4444),
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
                                         Text(
-                                            text = "Notificaciones",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = textPrimary
-                                        )
-                                        Text(
-                                            text = if (notificationsGranted) "Ver el progreso y pausar desde la barra" else "Requerido para control de descargas",
+                                            text = if (notificationsGranted) "Permiso concedido para progreso en segundo plano" else "Inactivo: Requerido para ver y controlar descargas",
                                             fontSize = 12.sp,
                                             color = textSecondary
                                         )
@@ -897,7 +925,7 @@ fun AjustesScreen(
                                                 if (isBatteryExempt) {
                                                      Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
                                                 } else {
-                                                     MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                                     Color(0xFFF59E0B).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
                                                 }
                                             ),
                                         contentAlignment = Alignment.Center
@@ -905,19 +933,36 @@ fun AjustesScreen(
                                         Icon(
                                             imageVector = if (isBatteryExempt) Icons.Default.Check else Icons.Default.BatteryAlert,
                                             contentDescription = null,
-                                            tint = if (isBatteryExempt) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                            tint = if (isBatteryExempt) Color(0xFF10B981) else Color(0xFFF59E0B),
                                             modifier = Modifier.size(22.dp)
                                         )
                                     }
                                     Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "Batería sin restricciones",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = textPrimary
+                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = if (isBatteryExempt) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = if (isBatteryExempt) "Sin restricciones" else "Optimizado",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isBatteryExempt) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
                                         Text(
-                                            text = "Batería sin restricciones",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = textPrimary
-                                        )
-                                        Text(
-                                            text = if (isBatteryExempt) "Tus descargas no se cortarán" else "El sistema puede detener tus descargas",
+                                            text = if (isBatteryExempt) "Activo: Tus descargas no se cortarán con la pantalla apagada" else "Pendiente: El sistema puede pausar la descarga en reposo",
                                             fontSize = 12.sp,
                                             color = if (isBatteryExempt) Color(0xFF10B981) else textSecondary,
                                             fontWeight = if (isBatteryExempt) FontWeight.Medium else FontWeight.Normal
@@ -957,7 +1002,7 @@ fun AjustesScreen(
 
                             HorizontalDivider(color = dividerColor)
 
-                            // 3. Inicio automático y fondo
+                            // 3. Inicio automático (Opcional - Xiaomi / Redmi / HyperOS)
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -993,14 +1038,31 @@ fun AjustesScreen(
                                             )
                                         }
                                         Column(modifier = Modifier.weight(1f, fill = false)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Inicio automático",
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = textPrimary
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = if (autoStartConfigured) Color(0xFF10B981).copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = if (autoStartConfigured) "Revisado" else "Opcional",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (autoStartConfigured) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
                                             Text(
-                                                text = "Inicio automático",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = textPrimary
-                                            )
-                                            Text(
-                                                text = if (autoStartConfigured) "Configurado para segundo plano" else "Algunos teléfonos lo piden además",
+                                                text = if (autoStartConfigured) "Configurado: Segundo plano habilitado" else "Recomendado para Xiaomi, Redmi y HyperOS",
                                                 fontSize = 12.sp,
                                                 color = textSecondary
                                             )
@@ -1020,7 +1082,7 @@ fun AjustesScreen(
                                         )
                                     ) {
                                         Text(
-                                            text = "Ajustes de la app",
+                                            text = if (autoStartConfigured) "Verificar" else "Ajustes",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -1034,7 +1096,7 @@ fun AjustesScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "En Xiaomi, Oppo, Realme y similares, activa también 'Inicio automático' y pon la batería en 'Sin restricciones'.",
+                                        text = "En tu Redmi / Xiaomi (HyperOS / MIUI), asegúrate de permitir 'Inicio automático' y 'Ahorro de batería > Sin restricciones' para que las descargas continúen sin interrupción al bloquear la pantalla.",
                                         fontSize = 11.5.sp,
                                         color = textSecondary,
                                         lineHeight = 16.sp,

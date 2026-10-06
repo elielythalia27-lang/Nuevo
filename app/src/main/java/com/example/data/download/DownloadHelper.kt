@@ -2,8 +2,10 @@ package com.example.data.download
 
 import android.app.NotificationManager
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.os.Environment
 import android.os.Build
+import android.util.Log
 import com.example.data.local.PeliculaPreferences
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
@@ -100,6 +102,12 @@ class DownloadHelper(
     init {
         instance = this
         NotificationUtils.initNotificationChannels(context)
+
+        // Migrar descargas existentes a la carpeta pública para que sean visibles en el Explorador
+        scope.launch(Dispatchers.IO) {
+            delay(1200L)
+            migrateExistingDownloadsToPublicDirectory()
+        }
 
         // Load persisted downloads from DataStore on startup
         scope.launch(Dispatchers.IO) {
@@ -779,23 +787,64 @@ class DownloadHelper(
         return if (baseName.endsWith(".mp4", ignoreCase = true)) baseName else "$baseName.mp4"
     }
 
-    private fun resolveDestinationFile(title: String, secondaryTag: String, savedFolderPath: String): File {
-        val fileName = buildSafeFileName(title, secondaryTag)
-
-        val targetDir = if (savedFolderPath.isNotBlank()) {
+    fun resolveDestinationDirectory(savedFolderPath: String): File {
+        // 1. Si el usuario configuró una carpeta en Ajustes, intentamos usarla directamente
+        if (savedFolderPath.isNotBlank()) {
             try {
                 val customDir = File(savedFolderPath)
-                if (customDir.exists() && customDir.canWrite()) customDir else null
-            } catch (_: Exception) {
-                null
+                if (!customDir.exists()) {
+                    customDir.mkdirs()
+                }
+                if (customDir.exists() && isDirectoryWritable(customDir)) {
+                    return customDir
+                }
+            } catch (e: Exception) {
+                Log.w("DownloadHelper", "No se pudo usar carpeta personalizada: $savedFolderPath", e)
             }
-        } else null
+        }
 
-        val dir = targetDir ?: (
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                ?: File(context.filesDir, "Download Free")
-            )
-        dir.mkdirs()
+        // 2. Carpeta pública estándar de Descargas del teléfono (visible en el Explorador de Xiaomi HyperOS / Redmi)
+        try {
+            val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val publicAppDir = File(publicDownloads, "Download Free")
+            if (!publicAppDir.exists()) {
+                publicAppDir.mkdirs()
+            }
+            if (publicAppDir.exists() && isDirectoryWritable(publicAppDir)) {
+                return publicAppDir
+            }
+            if (publicDownloads.exists() && isDirectoryWritable(publicDownloads)) {
+                return publicDownloads
+            }
+        } catch (e: Exception) {
+            Log.w("DownloadHelper", "No se pudo usar carpeta pública de descargas", e)
+        }
+
+        // 3. Respaldo seguro en almacenamiento específico si el sistema restringe el acceso directo
+        val fallback = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: File(context.filesDir, "Download Free")
+        fallback.mkdirs()
+        return fallback
+    }
+
+    private fun isDirectoryWritable(dir: File): Boolean {
+        return try {
+            if (!dir.exists()) dir.mkdirs()
+            val probe = File(dir, ".probe_${System.currentTimeMillis()}.tmp")
+            if (probe.createNewFile()) {
+                probe.delete()
+                true
+            } else {
+                dir.canWrite()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun resolveDestinationFile(title: String, secondaryTag: String, savedFolderPath: String): File {
+        val fileName = buildSafeFileName(title, secondaryTag)
+        val dir = resolveDestinationDirectory(savedFolderPath)
 
         // Never silently overwrite another completed download with the same title.
         var candidate = File(dir, fileName)
@@ -815,5 +864,73 @@ class DownloadHelper(
             index++
         }
         return File(dir, "$stem (${System.currentTimeMillis()})$ext")
+    }
+
+    suspend fun migrateExistingDownloadsToPublicDirectory() {
+        try {
+            val savedFolderPath = try { preferences.downloadFolderPath.first() } catch (_: Exception) { "" }
+            val targetDir = resolveDestinationDirectory(savedFolderPath)
+
+            val currentList = _liveDownloadsState.value
+            val updatedItems = mutableListOf<DownloadItem>()
+
+            currentList.forEach { item ->
+                if (item.status == DownloadStatus.COMPLETED) {
+                    val currentFile = File(item.localFilePath)
+                    if (currentFile.exists() && currentFile.absolutePath.contains("/Android/data/")) {
+                        val destinationFile = File(targetDir, currentFile.name)
+                        try {
+                            if (!destinationFile.exists() || destinationFile.length() != currentFile.length()) {
+                                currentFile.copyTo(destinationFile, overwrite = true)
+                            }
+                            currentFile.delete()
+                            val updated = item.copy(localFilePath = destinationFile.absolutePath)
+                            updatedItems.add(updated)
+
+                            MediaScannerConnection.scanFile(
+                                context,
+                                arrayOf(destinationFile.absolutePath),
+                                arrayOf("video/mp4")
+                            ) { path, uri ->
+                                Log.d("DownloadHelper", "MediaScanner migrado: $path -> $uri")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("DownloadHelper", "Error migrando archivo ${currentFile.name}", e)
+                        }
+                    }
+                }
+            }
+
+            if (updatedItems.isNotEmpty()) {
+                preferences.updateMultipleDownloads(updatedItems)
+                _liveDownloadsState.update { current ->
+                    current.map { existing ->
+                        updatedItems.find { it.id == existing.id } ?: existing
+                    }
+                }
+            }
+
+            // También migrar archivos huérfanos que hayan quedado en el directorio privado
+            val oldPrivateDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            if (oldPrivateDir != null && oldPrivateDir.exists()) {
+                oldPrivateDir.listFiles { f -> f.extension.equals("mp4", ignoreCase = true) }?.forEach { orphanedFile ->
+                    try {
+                        val destination = File(targetDir, orphanedFile.name)
+                        if (!destination.exists() || destination.length() != orphanedFile.length()) {
+                            orphanedFile.copyTo(destination, overwrite = true)
+                        }
+                        orphanedFile.delete()
+                        MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(destination.absolutePath),
+                            arrayOf("video/mp4"),
+                            null
+                        )
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("DownloadHelper", "Error en migrateExistingDownloadsToPublicDirectory", e)
+        }
     }
 }

@@ -22,6 +22,7 @@ import com.example.ui.theme.AppThemeColor
 import com.example.utils.BatteryOptimizationHelper
 import com.example.utils.NetworkMonitor
 import com.example.utils.NetworkUtils
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -611,6 +612,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playPelicula(pelicula: Pelicula, initialPositionMs: Long = 0L) {
+        // Si la película ya está descargada y el archivo existe en el almacenamiento, reproducir directamente en local (offline)
+        val completedDownload = _uiState.value.downloads.find {
+            (it.id == pelicula.id || it.title.equals(pelicula.safeTitle, ignoreCase = true)) &&
+            it.status == DownloadStatus.COMPLETED &&
+            File(it.localFilePath).exists()
+        }
+        if (completedDownload != null) {
+            playDownload(completedDownload)
+            return
+        }
+
         val isOnline = pelicula.safeVideoUrl.startsWith("http", ignoreCase = true)
         if (isOnline) {
             if (!NetworkUtils.isConnected(getApplication())) {

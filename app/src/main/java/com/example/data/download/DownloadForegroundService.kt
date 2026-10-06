@@ -6,8 +6,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
 import com.example.ui.components.AppToastManager
@@ -703,6 +705,20 @@ class DownloadForegroundService : Service() {
             etaSeconds = 0L
         )
         helper.markCompleted(completedItem)
+
+        // Registrar el archivo de video en el MediaStore del sistema para que aparezca
+        // inmediatamente en el Explorador de archivos (HyperOS/MIUI), Galería y Reproductores
+        try {
+            MediaScannerConnection.scanFile(
+                applicationContext,
+                arrayOf(completedItem.localFilePath),
+                arrayOf("video/mp4")
+            ) { path, uri ->
+                Log.d("DownloadService", "MediaScanner registró archivo descargado: $path -> $uri")
+            }
+        } catch (e: Exception) {
+            Log.e("DownloadService", "Error escaneando archivo con MediaScanner", e)
+        }
 
         val successNotif = NotificationUtils.buildCompletedNotification(applicationContext, completedItem)
         notificationManager.notify(doneNid(item.id), successNotif)
