@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -94,25 +95,56 @@ object PermissionHelper {
     }
 
     /**
-     * Comprueba si los permisos de almacenamiento están concedidos
+     * Comprueba si los permisos de almacenamiento están concedidos.
+     * En Android 11+ (API 30+) como en Redmi Note 14 Pro / Xiaomi HyperOS,
+     * comprueba explícitamente si se tiene acceso a todos los archivos
+     * (MANAGE_EXTERNAL_STORAGE) para escribir en la carpeta seleccionada.
      */
     fun hasStoragePermission(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return true
-        }
-        val readGranted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val readGranted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
 
-        val writeGranted = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
-            ContextCompat.checkSelfPermission(
+            val writeGranted = ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
-        } else true
 
-        return readGranted && writeGranted
+            readGranted && writeGranted
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Solicita los permisos de almacenamiento según la versión de Android.
+     * En Android 11+ abre la pantalla de Acceso a todos los archivos.
+     */
+    fun requestStoragePermission(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                try {
+                    val fallbackIntent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(fallbackIntent)
+                } catch (fallbackEx: Exception) {
+                    openAppSettings(context)
+                }
+            }
+        } else {
+            openAppSettings(context)
+        }
     }
 
     /**

@@ -25,13 +25,13 @@ object BatteryOptimizationHelper {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-                powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+                powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false
             } else {
                 true
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error checking battery optimization status", e)
-            true
+            false
         }
     }
 

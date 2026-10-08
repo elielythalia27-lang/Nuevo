@@ -119,15 +119,15 @@ fun PeliculaCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(10.dp),
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Poster
                 Box(
                     modifier = Modifier
-                        .size(width = 74.dp, height = 108.dp)
-                        .clip(RoundedCornerShape(9.dp))
+                        .size(width = 72.dp, height = 104.dp)
+                        .clip(RoundedCornerShape(10.dp))
                         .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0))
                 ) {
                     SubcomposeAsyncImage(
@@ -145,7 +145,7 @@ fun PeliculaCard(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .shimmerEffect(RoundedCornerShape(9.dp), isDark = isDarkTheme)
+                                    .shimmerEffect(RoundedCornerShape(10.dp), isDark = isDarkTheme)
                             )
                         }
                     )
@@ -154,15 +154,15 @@ fun PeliculaCard(
                 // Metadata Column
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = pelicula.safeTitle,
-                        fontSize = 14.5.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = titleColor,
                         maxLines = 2,
-                        lineHeight = 18.sp,
+                        lineHeight = 19.sp,
                         overflow = TextOverflow.Ellipsis
                     )
 
@@ -180,7 +180,7 @@ fun PeliculaCard(
                                 color = if (pelicula.isVideo) Color.White else MaterialTheme.colorScheme.onPrimary,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                             )
                         }
 
@@ -197,7 +197,7 @@ fun PeliculaCard(
                                     color = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                                 )
                             }
                         } else if (pelicula.safeYear.isNotEmpty()) {
@@ -211,13 +211,13 @@ fun PeliculaCard(
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF0F172A),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                                 )
                             }
                         }
                     }
 
-                    // Download status chip
+                    // Download status chip (clean badge, no action button on the right)
                     if (downloadItem != null) {
                         when (downloadItem.status) {
                             DownloadStatus.COMPLETED -> {
@@ -227,7 +227,7 @@ fun PeliculaCard(
                                     color = Color(0x2210B981)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
@@ -252,7 +252,7 @@ fun PeliculaCard(
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
@@ -280,7 +280,7 @@ fun PeliculaCard(
                                         color = Color(0xFF3B82F6),
                                         fontSize = 10.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                                     )
                                 }
                             }
@@ -294,27 +294,12 @@ fun PeliculaCard(
                                         color = Color(0xFFF59E0B),
                                         fontSize = 10.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                                     )
                                 }
                             }
                             else -> {}
                         }
-                    }
-                }
-
-                // Quick download button in list mode
-                if (downloadItem == null) {
-                    IconButton(
-                        onClick = onDownloadClick,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Descargar ${pelicula.safeTitle}",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
                     }
                 }
             }

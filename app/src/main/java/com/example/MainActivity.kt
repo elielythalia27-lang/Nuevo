@@ -625,6 +625,14 @@ fun MainAppNavigation(
                                     },
                                     autoStartConfigured = autoStartConfigured,
                                     onAutoStartConfiguredChange = { viewModel.setAutoStartConfigured(it) },
+                                    storageGranted = hasStoragePermission,
+                                    onRequestStorage = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            PermissionHelper.requestStoragePermission(context)
+                                        } else {
+                                            storageLauncher.launch(storagePermissions.toTypedArray())
+                                        }
+                                    },
                                     barBehavior = barBehavior,
                                     isCurrentPage = !pagerState.isScrollInProgress && pagerState.settledPage == 2,
                                     onBottomNavVisibilityChange = { if (it) barBehavior.show() }
@@ -679,7 +687,11 @@ fun MainAppNavigation(
                                 permissionLauncher.launch(requiredPermissions.toTypedArray())
                             },
                             onRequestStorage = {
-                                storageLauncher.launch(storagePermissions.toTypedArray())
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    PermissionHelper.requestStoragePermission(context)
+                                } else {
+                                    storageLauncher.launch(storagePermissions.toTypedArray())
+                                }
                             },
                             onRequestBatteryExemption = {
                                 BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)

@@ -53,6 +53,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Security
 import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -167,6 +169,8 @@ fun AjustesScreen(
     onRequestNotifications: () -> Unit = {},
     autoStartConfigured: Boolean = false,
     onAutoStartConfiguredChange: (Boolean) -> Unit = {},
+    storageGranted: Boolean = false,
+    onRequestStorage: () -> Unit = {},
     barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
     isCurrentPage: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {},
@@ -766,39 +770,10 @@ fun AjustesScreen(
                 }
             }
 
-            // Section: Descargas sin interrupciones (Optimización de batería y segundo plano)
+            // Section: Permisos y Estado del Sistema
             item {
-                val readyCount = listOf(notificationsGranted, isBatteryExempt).count { it }
-                val allReady = readyCount == 2
-
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SettingsCategoryHeader(title = "DESCARGAS SIN INTERRUPCIONES", icon = Icons.Default.BatteryAlert)
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = if (allReady) {
-                                if (isDarkTheme) Color(0xFF064E3B).copy(alpha = 0.6f) else Color(0xFFE6F9F0)
-                            } else {
-                                MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
-                            }
-                        ) {
-                            Text(
-                                text = "$readyCount de 2 esenciales activos",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (allReady) {
-                                    if (isDarkTheme) Color(0xFF34D399) else Color(0xFF10B981)
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                },
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
+                    SettingsCategoryHeader(title = "PERMISOS Y ESTADO DEL SISTEMA", icon = Icons.Default.Security)
 
                     Card(
                         shape = RoundedCornerShape(20.dp),
@@ -811,7 +786,7 @@ fun AjustesScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            // 1. Notificaciones
+                            // 1. Acceso al Almacenamiento
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -824,50 +799,114 @@ fun AjustesScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(42.dp)
+                                            .size(40.dp)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(
-                                                if (notificationsGranted) {
-                                                    Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
-                                                } else {
-                                                    Color(0xFFEF4444).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
-                                                }
+                                                if (storageGranted) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (notificationsGranted) Icons.Default.Check else Icons.Default.Notifications,
+                                            imageVector = Icons.Default.Folder,
                                             contentDescription = null,
-                                            tint = if (notificationsGranted) Color(0xFF10B981) else Color(0xFFEF4444),
-                                            modifier = Modifier.size(22.dp)
+                                            tint = if (storageGranted) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                     Column(modifier = Modifier.weight(1f, fill = false)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Text(
-                                                text = "Notificaciones",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = textPrimary
-                                            )
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = if (notificationsGranted) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFEF4444).copy(alpha = 0.15f)
-                                            ) {
-                                                Text(
-                                                    text = if (notificationsGranted) "Activo" else "Inactivo",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (notificationsGranted) Color(0xFF10B981) else Color(0xFFEF4444),
-                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                                )
-                                            }
-                                        }
                                         Text(
-                                            text = if (notificationsGranted) "Permiso concedido para progreso en segundo plano" else "Inactivo: Requerido para ver y controlar descargas",
+                                            text = "Acceso al almacenamiento",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Text(
+                                            text = if (storageGranted) "Concedido: guarda descargas en la carpeta elegida" else "Requerido para guardar películas en el teléfono",
+                                            fontSize = 12.sp,
+                                            color = textSecondary
+                                        )
+                                    }
+                                }
+
+                                if (storageGranted) {
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Concedido",
+                                                tint = Color(0xFF10B981),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(
+                                                text = "Concedido",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF10B981)
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = onRequestStorage,
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        Text("Activar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // 2. Notificaciones
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (notificationsGranted) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Notifications,
+                                            contentDescription = null,
+                                            tint = if (notificationsGranted) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Text(
+                                            text = "Notificaciones",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Text(
+                                            text = if (notificationsGranted) "Activo: ver progreso y control en segundo plano" else "Requerido para control de descargas",
                                             fontSize = 12.sp,
                                             color = textSecondary
                                         )
@@ -875,25 +914,34 @@ fun AjustesScreen(
                                 }
 
                                 if (notificationsGranted) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)),
-                                        contentAlignment = Alignment.Center
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Concedido",
-                                            tint = Color(0xFF10B981),
-                                            modifier = Modifier.size(17.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Activo",
+                                                tint = Color(0xFF10B981),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(
+                                                text = "Activo",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF10B981)
+                                            )
+                                        }
                                     }
                                 } else {
                                     Button(
                                         onClick = onRequestNotifications,
                                         shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.primary,
                                             contentColor = MaterialTheme.colorScheme.onPrimary
@@ -906,7 +954,7 @@ fun AjustesScreen(
 
                             HorizontalDivider(color = dividerColor)
 
-                            // 2. Batería sin restricciones
+                            // 3. Batería sin restricciones
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -919,22 +967,103 @@ fun AjustesScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(42.dp)
+                                            .size(40.dp)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(
-                                                if (isBatteryExempt) {
-                                                     Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
-                                                } else {
-                                                     Color(0xFFF59E0B).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
-                                                }
+                                                if (isBatteryExempt) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (isBatteryExempt) Icons.Default.Check else Icons.Default.BatteryAlert,
+                                            imageVector = Icons.Default.BatteryAlert,
                                             contentDescription = null,
-                                            tint = if (isBatteryExempt) Color(0xFF10B981) else Color(0xFFF59E0B),
-                                            modifier = Modifier.size(22.dp)
+                                            tint = if (isBatteryExempt) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Text(
+                                            text = "Batería sin restricciones",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Text(
+                                            text = if (isBatteryExempt) "Sin restricciones: descargas continuas" else "Optimizado: el sistema puede pausar la descarga",
+                                            fontSize = 12.sp,
+                                            color = textSecondary
+                                        )
+                                    }
+                                }
+
+                                if (isBatteryExempt) {
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Sin restricciones",
+                                                tint = Color(0xFF10B981),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(
+                                                text = "Sin restricciones",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF10B981)
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = onRequestBatteryExemption,
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        Text("Configurar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(color = dividerColor)
+
+                            // 4. Inicio automático (Xiaomi / Redmi / HyperOS)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (autoStartConfigured) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.RocketLaunch,
+                                            contentDescription = null,
+                                            tint = if (autoStartConfigured) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                     Column(modifier = Modifier.weight(1f, fill = false)) {
@@ -943,165 +1072,75 @@ fun AjustesScreen(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             Text(
-                                                text = "Batería sin restricciones",
+                                                text = "Inicio automático",
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = textPrimary
                                             )
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
-                                                color = if (isBatteryExempt) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f)
+                                                color = if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0)
                                             ) {
                                                 Text(
-                                                    text = if (isBatteryExempt) "Sin restricciones" else "Optimizado",
+                                                    text = "Opcional",
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = if (isBatteryExempt) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                                    color = textSecondary,
                                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                                 )
                                             }
                                         }
                                         Text(
-                                            text = if (isBatteryExempt) "Activo: Tus descargas no se cortarán con la pantalla apagada" else "Pendiente: El sistema puede pausar la descarga en reposo",
+                                            text = if (autoStartConfigured) "Configurado en ajustes de tu teléfono" else "Recomendado para Xiaomi, Redmi y HyperOS",
                                             fontSize = 12.sp,
-                                            color = if (isBatteryExempt) Color(0xFF10B981) else textSecondary,
-                                            fontWeight = if (isBatteryExempt) FontWeight.Medium else FontWeight.Normal
+                                            color = textSecondary
                                         )
                                     }
                                 }
 
-                                if (isBatteryExempt) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)),
-                                        contentAlignment = Alignment.Center
+                                if (autoStartConfigured) {
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Sin restricciones",
-                                            tint = Color(0xFF10B981),
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                    }
-                                } else {
-                                    Button(
-                                        onClick = onRequestBatteryExemption,
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    ) {
-                                        Text("Permitir", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-
-                            HorizontalDivider(color = dividerColor)
-
-                            // 3. Inicio automático (Opcional - Xiaomi / Redmi / HyperOS)
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(42.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(
-                                                    if (autoStartConfigured) {
-                                                        Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
-                                                    } else {
-                                                        MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
-                                                    }
-                                                ),
-                                            contentAlignment = Alignment.Center
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = if (autoStartConfigured) Icons.Default.Check else Icons.Default.Settings,
-                                                contentDescription = null,
-                                                tint = if (autoStartConfigured) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(22.dp)
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Configurado",
+                                                tint = Color(0xFF10B981),
+                                                modifier = Modifier.size(14.dp)
                                             )
-                                        }
-                                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Text(
-                                                    text = "Inicio automático",
-                                                    fontSize = 14.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = textPrimary
-                                                )
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = if (autoStartConfigured) Color(0xFF10B981).copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                                ) {
-                                                    Text(
-                                                        text = if (autoStartConfigured) "Revisado" else "Opcional",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (autoStartConfigured) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                                    )
-                                                }
-                                            }
                                             Text(
-                                                text = if (autoStartConfigured) "Configurado: Segundo plano habilitado" else "Recomendado para Xiaomi, Redmi y HyperOS",
-                                                fontSize = 12.sp,
-                                                color = textSecondary
+                                                text = "Listo",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF10B981)
                                             )
                                         }
                                     }
-
+                                } else {
                                     Button(
                                         onClick = {
                                             onAutoStartConfiguredChange(true)
                                             onOpenAutoStartSettings()
                                         },
                                         shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.25f else 0.15f),
                                             contentColor = MaterialTheme.colorScheme.primary
                                         )
                                     ) {
                                         Text(
-                                            text = if (autoStartConfigured) "Verificar" else "Ajustes",
+                                            text = "Ajustes",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (isDarkTheme) Color(0xFF0F172A).copy(alpha = 0.6f) else Color(0xFFF1F5F9),
-                                    border = BorderStroke(1.dp, dividerColor.copy(alpha = 0.7f)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = "En tu Redmi / Xiaomi (HyperOS / MIUI), asegúrate de permitir 'Inicio automático' y 'Ahorro de batería > Sin restricciones' para que las descargas continúen sin interrupción al bloquear la pantalla.",
-                                        fontSize = 11.5.sp,
-                                        color = textSecondary,
-                                        lineHeight = 16.sp,
-                                        modifier = Modifier.padding(12.dp)
-                                    )
                                 }
                             }
                         }
@@ -1203,21 +1242,29 @@ private fun SettingsCategoryHeader(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp, start = 4.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(15.dp)
+            )
+        }
         Text(
             text = title,
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.ExtraBold,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            letterSpacing = 1.1.sp
+            letterSpacing = 0.8.sp
         )
     }
 }

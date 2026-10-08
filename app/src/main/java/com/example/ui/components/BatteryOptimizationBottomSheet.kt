@@ -184,14 +184,14 @@ fun BatteryOptimizationBottomSheet(
                 onClick = { if (!notificationsGranted) onRequestNotifications() }
             )
 
-            // 2. Tarjeta: Almacenamiento / Multimedia
-            val storageTitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                "Acceso a multimedia"
+            // 2. Tarjeta: Almacenamiento
+            val storageTitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                "Acceso al almacenamiento"
             } else {
                 "Almacenamiento"
             }
-            val storageSubtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                "Para guardar y reproducir películas descargadas."
+            val storageSubtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                "Para guardar las películas en Descargas o en tu carpeta elegida."
             } else {
                 "Para guardar las descargas en tu dispositivo."
             }
@@ -210,7 +210,7 @@ fun BatteryOptimizationBottomSheet(
             // 3. Tarjeta: Batería sin restricciones
             PermissionCheckRowCard(
                 title = "Batería sin restricciones",
-                subtitle = "Evita que el sistema detenga la descarga.",
+                subtitle = "Evita que el sistema detenga la descarga al apagar la pantalla.",
                 isReady = batteryExempt,
                 pendingIcon = Icons.Default.BatteryAlert,
                 isDarkTheme = isDarkTheme,
@@ -220,18 +220,81 @@ fun BatteryOptimizationBottomSheet(
                 onClick = { if (!batteryExempt) onRequestBatteryExemption() }
             )
 
-            // 4. Tarjeta: Inicio automático (Opcional / Recomendado para Xiaomi)
-            PermissionCheckRowCard(
-                title = "Inicio automático (Opcional)",
-                subtitle = "Recomendado para Xiaomi, Redmi, Oppo y Realme.",
-                isReady = autoStartConfigured,
-                pendingIcon = Icons.Default.Settings,
-                isDarkTheme = isDarkTheme,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                actionLabel = if (autoStartConfigured) "Configurado" else "Configurar",
-                onClick = onOpenAutoStart
-            )
+            // Sección Opcional separada: Inicio automático (Xiaomi, Redmi, HyperOS)
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (isDarkTheme) Color(0xFF1E293B).copy(alpha = 0.5f) else Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.16f else 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.RocketLaunch,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Inicio automático",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textPrimary
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0)
+                            ) {
+                                Text(
+                                    text = "Opcional",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textSecondary,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Recomendado en Xiaomi/Redmi para descargas de fondo.",
+                            fontSize = 11.5.sp,
+                            color = textSecondary
+                        )
+                    }
+
+                    TextButton(
+                        onClick = onOpenAutoStart,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (autoStartConfigured) "Listo" else "Ajustes",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(4.dp))
 
