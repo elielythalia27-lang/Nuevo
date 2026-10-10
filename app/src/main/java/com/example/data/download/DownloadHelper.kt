@@ -555,7 +555,9 @@ class DownloadHelper(
     fun cancelDownload(item: DownloadItem) {
         clearLiveProgress(item.id)
         removeItemFromState(item.id)
-        DownloadForegroundService.cancelDownload(context, item.id)
+        // Se pasa la ruta explícitamente: el item ya no está en la lista, así que el servicio
+        // no podría averiguarla y el archivo .part quedaría huérfano ocupando espacio.
+        DownloadForegroundService.cancelDownload(context, item.id, item.localFilePath)
     }
 
     fun forceStartPending(item: DownloadItem) {

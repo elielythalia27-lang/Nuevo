@@ -175,6 +175,41 @@ object NotificationUtils {
         }
     }
 
+    /** "1h 05m", "4m 12s", "35s" */
+    fun formatEta(seconds: Long): String {
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val sec = seconds % 60
+        return when {
+            h > 0 -> "${h}h ${m.toString().padStart(2, '0')}m"
+            m > 0 -> "${m}m ${sec.toString().padStart(2, '0')}s"
+            else -> "${sec}s"
+        }
+    }
+
+    /**
+     * Al tocar la notificación de una descarga terminada se abre el vídeo directamente
+     * (como hace IDM). Si el archivo ya no existe o no se puede compartir con FileProvider,
+     * se abre la pestaña Descargas de la app.
+     */
+    private fun openFilePendingIntent(context: Context, item: DownloadItem): PendingIntent {
+        val file = java.io.File(item.localFilePath)
+        if (!file.exists()) return createOpenDownloadsPendingIntent(context)
+        return try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context, "${context.packageName}.provider", file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "video/*")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.getActivity(context, "open:${item.id}".hashCode(), intent, flags)
+        } catch (_: Exception) {
+            createOpenDownloadsPendingIntent(context)
+        }
+    }
+
     fun formatSpeed(speed: Long): String {
         return when {
             speed <= 0L -> "Conectando..."
@@ -204,7 +239,13 @@ object NotificationUtils {
             1 -> "Descargando 1 archivo"
             else -> "Descargando $count archivos"
         }
-        val text = if (indeterminate) formatSpeed(totalSpeed) else "$overall% • ${formatSpeed(totalSpeed)}"
+        val remainingAll = (sumTotal - sumDone).coerceAtLeast(0L)
+        val etaAll = if (totalSpeed > 2048L && remainingAll > 0L) remainingAll / totalSpeed else 0L
+        val text = when {
+            indeterminate -> formatSpeed(totalSpeed)
+            etaAll > 0L -> "$overall% • ${formatSpeed(totalSpeed)} • ${formatEta(etaAll)}"
+            else -> "$overall% • ${formatSpeed(totalSpeed)}"
+        }
 
         val inbox = NotificationCompat.InboxStyle()
             .setBigContentTitle(title)
@@ -261,52 +302,48 @@ object NotificationUtils {
         initNotificationChannels(context)
 
         val title = displayTitle(item)
+        val isIndeterminate = item.totalBytes <= 0L
 
-        val sizeStr = if (item.totalBytes > 0L) {
-            "${formatByteSize(item.downloadedBytes)} / ${formatByteSize(item.totalBytes)}"
+        val sizeStr = if (!isIndeterminate) {
+            "${formatByteSize(item.downloadedBytes)} de ${formatByteSize(item.totalBytes)}"
         } else {
             formatByteSize(item.downloadedBytes)
         }
-
         val speedStr = formatSpeed(speed)
-
-        val etaStr = if (eta > 0L) {
-            val hours = eta / 3600
-            val minutes = (eta % 3600) / 60
-            val seconds = eta % 60
-            when {
-                hours > 0 -> "${hours}h ${minutes}m restantes"
-                minutes > 0 -> "${minutes}m ${seconds}s restantes"
-                else -> "${seconds}s restantes"
-            }
-        } else if (item.totalBytes > 0L) {
-            "Calculando tiempo..."
-        } else {
-            "Iniciando..."
+        val etaStr = when {
+            eta > 0L -> formatEta(eta)
+            speed <= 0L -> "Conectando…"
+            else -> "Calculando…"
         }
 
-        val isIndeterminate = item.totalBytes <= 0L
-        val subtitle = if (isIndeterminate) {
-            "$sizeStr • $speedStr"
-        } else {
-            "$progress% • $sizeStr • $speedStr • $etaStr"
+        // Línea compacta (estilo IDM): "42% • 12.4 MB/s • 1m 20s"
+        val compact = if (isIndeterminate) "$sizeStr • $speedStr" else "$progress% • $speedStr • $etaStr"
+        // Vista expandida: una línea por dato
+        val expanded = buildString {
+            append(sizeStr)
+            if (!isIndeterminate) append("  ($progress%)")
+            append("\nVelocidad: ").append(speedStr)
+            if (!isIndeterminate) append("\nTiempo restante: ").append(etaStr)
         }
 
         return NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVibrate(longArrayOf(0L))
             .setSound(null)
-            .setContentTitle("Descargando: $title")
-            .setContentText(subtitle)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
+            .setContentTitle(title)
+            .setContentText(compact)
+            .setSubText("Descargando")
+            .setStyle(NotificationCompat.BigTextStyle().setBigContentTitle(title).bigText(expanded))
             .setSmallIcon(R.drawable.ic_notification_download)
             .setColor(0xFF00897B.toInt())
-            .setProgress(100, if (isIndeterminate) 0 else progress, isIndeterminate)
+            .setProgress(100, if (isIndeterminate) 0 else progress.coerceIn(0, 100), isIndeterminate)
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
             .setWhen(0L)
+            .setLocalOnly(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setSortKey("download_${item.id}")
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
@@ -344,8 +381,9 @@ object NotificationUtils {
 
         return NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setContentTitle("En pausa: $title")
+            .setContentTitle(title)
             .setContentText(subtitle)
+            .setSubText("En pausa")
             .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
             .setSmallIcon(R.drawable.ic_notification_pause)
             .setColor(0xFFF59E0B.toInt())
@@ -386,12 +424,13 @@ object NotificationUtils {
         } else {
             formatByteSize(item.downloadedBytes)
         }
-        val detail = "Se interrumpió la descarga • $sizeInfo. Reintenta para continuar donde quedó."
+        val detail = "Se interrumpió • $sizeInfo. Reintenta para continuar donde quedó."
 
         return NotificationCompat.Builder(context, CHANNEL_ERROR_ID)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentTitle("Descarga fallida: $title")
+            .setContentTitle(title)
             .setContentText(detail)
+            .setSubText("Descarga fallida")
             .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
             .setSmallIcon(android.R.drawable.stat_notify_error)
             .setColor(0xFFEF4444.toInt())
@@ -424,20 +463,37 @@ object NotificationUtils {
 
         val title = displayTitle(item)
         val sizeStr = formatByteSize(item.totalBytes.coerceAtLeast(item.downloadedBytes))
-        val detail = "$sizeStr • Descarga completada. Lista para ver sin conexión."
+        val detail = "Descarga completa • $sizeStr"
 
         return NotificationCompat.Builder(context, CHANNEL_SUCCESS_ID)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentTitle("Descarga completada")
-            .setContentText("$title • $sizeStr")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$title\n$detail"))
+            .setContentTitle(title)
+            .setContentText(detail)
+            .setSubText("Completada")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .setBigContentTitle(title)
+                    .bigText("$detail\nToca para reproducir")
+            )
             .setSmallIcon(R.drawable.ic_notification_done)
             .setColor(0xFF10B981.toInt())
-            .setContentIntent(createOpenDownloadsPendingIntent(context))
+            .setContentIntent(openFilePendingIntent(context, item))
             .setAutoCancel(true)
             .setShowWhen(true)
             .setWhen(System.currentTimeMillis())
             .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setSortKey("download_${item.id}")
+            .addAction(
+                android.R.drawable.ic_media_play,
+                "Abrir",
+                openFilePendingIntent(context, item)
+            )
+            .addAction(
+                android.R.drawable.ic_menu_agenda,
+                "Descargas",
+                createOpenDownloadsPendingIntent(context)
+            )
             .build()
     }
 

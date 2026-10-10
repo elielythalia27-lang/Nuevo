@@ -58,7 +58,8 @@ class DownloadUidtJobService : JobService() {
                 executeDownload(item, helper, notificationManager)
                 jobFinished(params, false)
             } catch (_: CancellationException) {
-                jobFinished(params, true)
+                // onStopJob ya fue invocado por el sistema o por el usuario: llamar a
+                // jobFinished después de onStopJob no es válido.
             } catch (_: Exception) {
                 jobFinished(params, true)
             } finally {
@@ -78,7 +79,7 @@ class DownloadUidtJobService : JobService() {
             val helper = DownloadHelper.getActiveInstance(applicationContext)
             helper.markStoppedForUidt(itemId)
             val paused = helper.getItem(itemId)
-            if (paused != null) {
+            if (paused != null && paused.status == DownloadStatus.PAUSED) {
                 val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 manager.notify(
                     notificationId(itemId),
@@ -89,11 +90,44 @@ class DownloadUidtJobService : JobService() {
         return true
     }
 
+    /**
+     * Descarga con reintentos automáticos (como IDM): un corte de red o un 5xx se reanuda desde
+     * el .part con HTTP Range tras una espera corta, sin intervención del usuario.
+     */
     private suspend fun executeDownload(
         item: DownloadItem,
         helper: DownloadHelper,
         notificationManager: android.app.NotificationManager
     ) {
+        var attempt = 0
+        while (true) {
+            val shouldRetry = downloadOnce(item, helper, notificationManager)
+            if (!shouldRetry) return
+            if (attempt >= DownloadForegroundService.RETRY_DELAYS_MS.size) {
+                val live = helper.getItem(item.id) ?: return
+                if (live.status == DownloadStatus.DOWNLOADING) {
+                    val failed = live.copy(status = DownloadStatus.FAILED, speedBytesPerSec = 0L, etaSeconds = 0L)
+                    helper.updateAndPersist(failed)
+                    notificationManager.notify(
+                        notificationId(item.id),
+                        NotificationUtils.buildFailedNotification(applicationContext, failed)
+                    )
+                }
+                return
+            }
+            delay(DownloadForegroundService.RETRY_DELAYS_MS[attempt])
+            attempt++
+            val live = helper.getItem(item.id)
+            if (live == null || live.status != DownloadStatus.DOWNLOADING) return
+        }
+    }
+
+    /** @return true si el fallo es transitorio y conviene reintentar. */
+    private suspend fun downloadOnce(
+        item: DownloadItem,
+        helper: DownloadHelper,
+        notificationManager: android.app.NotificationManager
+    ): Boolean {
         val destination = File(item.localFilePath)
         destination.parentFile?.mkdirs()
         val part = File(destination.absolutePath + ".part")
@@ -156,7 +190,10 @@ class DownloadUidtJobService : JobService() {
 
             val partial = code == HttpURLConnection.HTTP_PARTIAL
             val ok = code == HttpURLConnection.HTTP_OK
-            if (!partial && !ok) error("Error de respuesta HTTP: $code")
+            if (!partial && !ok) {
+                if (code >= 500 || code == 429) throw java.io.IOException("Error de respuesta HTTP: $code")
+                error("Error de respuesta HTTP: $code")
+            }
 
             val contentLength = conn.contentLengthLong
             val rangeTotal = if (partial) parseContentRangeTotal(conn.getHeaderField("Content-Range")) else null
@@ -198,7 +235,7 @@ class DownloadUidtJobService : JobService() {
             currentCoroutineContext().ensureActive()
             raf.close()
             input.close()
-            if (total > 0 && downloaded < total) error("Conexión interrumpida")
+            if (total > 0 && downloaded < total) throw java.io.IOException("Conexión interrumpida")
             if (destination.exists()) destination.delete()
             if (!part.renameTo(destination)) error("No se pudo finalizar el archivo")
 
@@ -218,6 +255,10 @@ class DownloadUidtJobService : JobService() {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (e is java.io.IOException) {
+                val current = helper.getItem(item.id)
+                if (current != null && current.status == DownloadStatus.DOWNLOADING) return true
+            }
             val live = helper.getItem(item.id) ?: item
             if (live.status != DownloadStatus.PAUSED) {
                 val failed = live.copy(status = DownloadStatus.FAILED, speedBytesPerSec = 0L, etaSeconds = 0L)
@@ -232,6 +273,7 @@ class DownloadUidtJobService : JobService() {
             try { input?.close() } catch (_: Exception) {}
             try { raf?.close() } catch (_: Exception) {}
         }
+        return false
     }
 
     private fun publish(

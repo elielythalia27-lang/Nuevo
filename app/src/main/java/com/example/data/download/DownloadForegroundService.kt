@@ -48,6 +48,8 @@ class DownloadForegroundService : Service() {
         const val EXTRA_DOWNLOAD_ID = "extra_download_id"
         const val EXTRA_FILE_PATH = "extra_file_path"
         private const val SUMMARY_NID = 0x7FFF0000
+        /** Esperas entre reintentos automáticos ante cortes de red (≈ 1,5 min en total). */
+        internal val RETRY_DELAYS_MS = longArrayOf(2_000L, 5_000L, 10_000L, 20_000L, 30_000L)
 
         fun startDownload(context: Context, item: DownloadItem) {
             // Android 14+: long user-initiated downloads use UIDT instead of
@@ -177,10 +179,13 @@ class DownloadForegroundService : Service() {
                 ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99)
             } else item.progress
 
-            // Mark paused before cancelling the job. The downloader checks this state
-            // and will no longer publish a "downloading" notification after the tap.
+            // Mark paused (or keep queued) before cancelling the job. The downloader checks
+            // this state and will no longer publish a "downloading" notification after the tap.
+            // Un item en cola (PENDING) debe seguir en cola: si se marcara como PAUSED, al
+            // cambiar el límite de descargas o el modo "Solo Wi-Fi" nunca se reanudaría solo.
+            val queued = item.status == DownloadStatus.PENDING
             val paused = item.copy(
-                status = DownloadStatus.PAUSED,
+                status = if (queued) DownloadStatus.PENDING else DownloadStatus.PAUSED,
                 downloadedBytes = bytes,
                 progress = progress,
                 speedBytesPerSec = 0L,
@@ -194,10 +199,14 @@ class DownloadForegroundService : Service() {
             // Re-post after the JobScheduler cancellation so the UIDT notification cannot
             // win a race and remove the user's paused notification.
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                manager.notify(
-                    progressNidStatic(downloadId),
-                    NotificationUtils.buildPausedNotification(app, paused)
-                )
+                if (queued) {
+                    manager.cancel(progressNidStatic(downloadId))
+                } else {
+                    manager.notify(
+                        progressNidStatic(downloadId),
+                        NotificationUtils.buildPausedNotification(app, paused)
+                    )
+                }
             }, 180L)
         }
 
@@ -439,8 +448,44 @@ class DownloadForegroundService : Service() {
         refreshSummary(force = true)
     }
 
+    /**
+     * Ejecuta la descarga con reintentos automáticos (como IDM): ante un corte de red o un
+     * error 5xx espera un poco y continúa desde el archivo .part con HTTP Range, sin que el
+     * usuario tenga que pulsar nada. Solo si se agotan los reintentos pasa a "Fallida".
+     */
     private suspend fun executeDownloadLoop(item: DownloadItem) {
         val myJob = currentCoroutineContext()[Job]
+        try {
+            var attempt = 0
+            while (true) {
+                val shouldRetry = downloadAttempt(item)
+                if (!shouldRetry) break
+                if (attempt >= RETRY_DELAYS_MS.size) {
+                    markDownloadFailed(item, "Sin conexión estable")
+                    break
+                }
+                delay(RETRY_DELAYS_MS[attempt])
+                attempt++
+                // Si mientras esperaba el usuario la pausó o canceló, no reintentar.
+                val live = helper.getItem(item.id)
+                if (live == null || live.status != DownloadStatus.DOWNLOADING) break
+            }
+        } finally {
+            myJob?.let { downloadJobs.remove(item.id, it) }
+            // Si la descarga quedó en pausa (por el usuario o por la VPN), NO se cancela la
+            // notificación: se queda como "En pausa" en su mismo lugar.
+            val keepNotification = userStopping.contains(item.id) ||
+                helper.getItem(item.id)?.status == DownloadStatus.PAUSED
+            if (!keepNotification) {
+                try { notificationManager.cancel(progressNid(item.id)) } catch (_: Exception) {}
+            }
+            refreshSummary(force = true)
+            stopIfIdle()
+        }
+    }
+
+    /** @return true si el fallo es transitorio y conviene reintentar. */
+    private suspend fun downloadAttempt(item: DownloadItem): Boolean {
         val destinationFile = File(item.localFilePath)
         destinationFile.parentFile?.mkdirs()
         val partFile = File(destinationFile.absolutePath + ".part")
@@ -511,6 +556,8 @@ class DownloadForegroundService : Service() {
             val isPartial = code == HttpURLConnection.HTTP_PARTIAL
             val isOk = code == HttpURLConnection.HTTP_OK
             if (!isPartial && !isOk) {
+                // 5xx y 429 son transitorios (se reintenta); 403/404/etc. no tienen arreglo.
+                if (code >= 500 || code == 429) throw java.io.IOException("Error de respuesta HTTP: $code")
                 throw Exception("Error de respuesta HTTP: $code")
             }
 
@@ -590,7 +637,7 @@ class DownloadForegroundService : Service() {
                 stream.close()
                 // Conexión cortada antes de tiempo: no marcar como completa
                 if (totalFromServer && totalBytes > 0L && downloadedBytes < totalBytes) {
-                    throw Exception("Conexión interrumpida")
+                    throw java.io.IOException("Conexión interrumpida")
                 }
                 if (destinationFile.exists()) destinationFile.delete()
                 partFile.renameTo(destinationFile)
@@ -599,6 +646,7 @@ class DownloadForegroundService : Service() {
 
         } catch (e: Exception) {
             if (currentCoroutineContext().isActive) {
+                if (e is java.io.IOException) return true
                 markDownloadFailed(item, e.message ?: "Error de descarga")
             }
         } finally {
@@ -608,18 +656,8 @@ class DownloadForegroundService : Service() {
             }
             try { raf?.close() } catch (_: Exception) {}
             try { input?.close() } catch (_: Exception) {}
-
-            myJob?.let { downloadJobs.remove(item.id, it) }
-            // Si la descarga quedó en pausa (por el usuario o por la VPN), NO se cancela la
-            // notificación: se queda como "En pausa" en su mismo lugar.
-            val keepNotification = userStopping.contains(item.id) ||
-                helper.getItem(item.id)?.status == DownloadStatus.PAUSED
-            if (!keepNotification) {
-                try { notificationManager.cancel(progressNid(item.id)) } catch (_: Exception) {}
-            }
-            refreshSummary(force = true)
-            stopIfIdle()
         }
+        return false
     }
 
     private fun publishProgress(
