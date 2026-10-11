@@ -29,20 +29,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.FitScreen
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PictureInPictureAlt
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.ScreenRotation
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.ClosedCaption
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.FitScreen
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -124,7 +123,7 @@ fun NextPlayerTopBar(
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Volver",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
@@ -152,9 +151,9 @@ fun NextPlayerTopBar(
                 IconButton(onClick = onCycleResizeMode, modifier = Modifier.size(38.dp)) {
                     Icon(
                         imageVector = when (resizeMode) {
-                            NextPlayerResizeMode.FIT -> Icons.Default.FitScreen
-                            NextPlayerResizeMode.ZOOM -> Icons.Default.AspectRatio
-                            NextPlayerResizeMode.STRETCH -> Icons.Default.AspectRatio
+                            NextPlayerResizeMode.FIT -> Icons.Rounded.FitScreen
+                            NextPlayerResizeMode.ZOOM -> Icons.Rounded.AspectRatio
+                            NextPlayerResizeMode.STRETCH -> Icons.Rounded.AspectRatio
                         },
                         contentDescription = "Modo de pantalla: ${resizeMode.displayName}",
                         tint = MaterialTheme.colorScheme.primary,
@@ -165,7 +164,7 @@ fun NextPlayerTopBar(
                 // Audio Tracks button
                 IconButton(onClick = onShowAudioTracks, modifier = Modifier.size(38.dp)) {
                     Icon(
-                        imageVector = Icons.Default.Audiotrack,
+                        imageVector = Icons.Rounded.Audiotrack,
                         contentDescription = "Pistas de audio",
                         tint = if (hasAudioTracks) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
                         modifier = Modifier.size(20.dp)
@@ -175,7 +174,7 @@ fun NextPlayerTopBar(
                 // Subtitle Tracks button
                 IconButton(onClick = onShowSubtitles, modifier = Modifier.size(38.dp)) {
                     Icon(
-                        imageVector = Icons.Default.ClosedCaption,
+                        imageVector = Icons.Rounded.ClosedCaption,
                         contentDescription = "Subtítulos",
                         tint = if (hasSubtitleTracks) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f),
                         modifier = Modifier.size(20.dp)
@@ -211,7 +210,7 @@ fun NextPlayerTopBar(
                 // Screen Lock button
                 IconButton(onClick = onToggleLock, modifier = Modifier.size(38.dp)) {
                     Icon(
-                        imageVector = Icons.Default.LockOpen,
+                        imageVector = Icons.Rounded.LockOpen,
                         contentDescription = "Bloquear pantalla",
                         tint = Color.White.copy(alpha = 0.85f),
                         modifier = Modifier.size(20.dp)
@@ -250,7 +249,7 @@ fun NextPlayerCenterControls(
         ) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Default.FastRewind,
+                    imageVector = Icons.Rounded.FastRewind,
                     contentDescription = "Retroceder 10 segundos",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -269,7 +268,7 @@ fun NextPlayerCenterControls(
         ) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (isPlaying) "Pausar" else "Reproducir",
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(34.dp)
@@ -288,7 +287,7 @@ fun NextPlayerCenterControls(
         ) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Default.FastForward,
+                    imageVector = Icons.Rounded.FastForward,
                     contentDescription = "Adelantar 10 segundos",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -406,7 +405,7 @@ fun NextPlayerBottomBar(
                     if (isPiPSupported) {
                         IconButton(onClick = onEnterPiP, modifier = Modifier.size(34.dp)) {
                             Icon(
-                                imageVector = Icons.Default.PictureInPictureAlt,
+                                imageVector = Icons.Rounded.PictureInPictureAlt,
                                 contentDescription = "Modo PiP",
                                 tint = Color.White.copy(alpha = 0.85f),
                                 modifier = Modifier.size(19.dp)
@@ -416,7 +415,7 @@ fun NextPlayerBottomBar(
 
                     IconButton(onClick = onToggleOrientation, modifier = Modifier.size(34.dp)) {
                         Icon(
-                            imageVector = Icons.Default.ScreenRotation,
+                            imageVector = Icons.Rounded.ScreenRotation,
                             contentDescription = if (isLandscape) "Cambiar a vertical" else "Cambiar a horizontal",
                             tint = Color.White.copy(alpha = 0.85f),
                             modifier = Modifier.size(19.dp)
@@ -453,7 +452,7 @@ fun NextPlayerLockOverlay(
         ) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Default.Lock,
+                    imageVector = Icons.Rounded.Lock,
                     contentDescription = "Desbloquear pantalla",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(26.dp)
@@ -497,7 +496,7 @@ fun NextPlayerInitialLoadingOverlay(
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Volver",
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)

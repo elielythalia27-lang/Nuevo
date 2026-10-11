@@ -35,12 +35,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -152,11 +152,11 @@ fun CustomToastHost(
             toastData?.let { data ->
                 val primaryTheme = MaterialTheme.colorScheme.primary
                 val (icon: ImageVector, accentColor: Color) = when (data.type) {
-                    ToastType.SUCCESS -> Icons.Default.CheckCircle to Color(0xFF10B981)
-                    ToastType.DOWNLOAD -> Icons.Default.Download to primaryTheme
-                    ToastType.WARNING -> Icons.Default.WarningAmber to Color(0xFFF59E0B)
-                    ToastType.ERROR -> Icons.Default.ErrorOutline to Color(0xFFEF4444)
-                    ToastType.INFO -> Icons.Default.Info to primaryTheme
+                    ToastType.SUCCESS -> Icons.Rounded.CheckCircle to Color(0xFF10B981)
+                    ToastType.DOWNLOAD -> Icons.Rounded.Download to primaryTheme
+                    ToastType.WARNING -> Icons.Rounded.WarningAmber to Color(0xFFF59E0B)
+                    ToastType.ERROR -> Icons.Rounded.ErrorOutline to Color(0xFFEF4444)
+                    ToastType.INFO -> Icons.Rounded.Info to primaryTheme
                 }
 
                 // Architectural glass colors with subtle gradient
@@ -253,7 +253,7 @@ fun CustomToastHost(
 
                             // Quick dismiss icon
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                imageVector = Icons.Rounded.Close,
                                 contentDescription = "Cerrar",
                                 tint = if (isDarkTheme) Color(0xFF64748B) else Color(0xFF94A3B8),
                                 modifier = Modifier

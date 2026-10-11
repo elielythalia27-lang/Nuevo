@@ -1,86 +1,72 @@
-# Download Free — Rediseño UI/UX completo (v1.1, versionCode 2)
+# Download Free — Rediseño visual v1.2 (versionCode 3)
 
-> Fase 2 sobre la versión ya corregida (ver `CORRECCIONES_APLICADAS.md` para los 4 fixes funcionales).
-> Este documento describe las **6 mejoras** de UI/UX/animaciones implementadas a petición del usuario
-> ("Implementa todo, quiero una aplicación 100% con una UI y animaciones de otro nivel, algo único").
+> Segunda fase de rediseño, a partir del paquete v1.1. Se eliminaron el carrusel hero y la UI de
+> favoritos (a petición del usuario) y se aplicó una pasada completa de identidad visual:
+> barra de navegación de diseño propio, iconos de otro estilo, animaciones visibles y launcher nuevo.
 
 ---
 
-## 1. Favoritos: interfaz completa ❤️
+## 1. Barra de navegación única (diseño propio) 🚀
 
-El backend de favoritos ya existía en `HomeViewModel` (`toggleFavorite`, `favoriteIds`, filtro
-`onlyFavorites` en `applyFilter`); esta fase cableó toda la interfaz:
+`AppBottomNav` reescrito por completo (`ui/components/AppBottomNav.kt`):
 
-| Superficie | Qué se añadió |
+- **Dock flotante de vidrio**: cápsula redondeada (24 dp) despegada de los bordes, translúcida en
+  oscuro/claro, con borde luminoso y glow del color primario por debajo.
+- **Pestaña activa = píldora morfeante**: pasa de círculo compacto (46 dp) a cápsula ancha (96 dp)
+  con degradado del color primario; la etiqueta ("Catálogo", "Descargas", "Ajustes") se expande con
+  `expandHorizontally` dentro de la píldora, estilo pill de apps premium.
+- **Muesca luminosa viajera**: barra degradada de 3.5 dp en el borde superior que se desliza con
+  muelle hasta la pestaña activa.
+- **Icono con rebote elástico** (`Animatable` + `DampingRatioMediumBouncy`) al ganar la selección y
+  **respiración sutil** mientras está activa.
+- **Badge de descargas activas** con onda expansiva + pulso; el icono de la pestaña se convierte en
+  la **flecha de descarga animada estilo sistema** (`SystemDownloadAnimatedIcon`, conservada).
+- **Nueva función**: re-tocar la pestaña ya activa devuelve el catálogo al inicio
+  (`scrollToTopTick` en `MainActivity` → `HomeScreen`).
+- El cambio de página usa **muelle suave** en el pager (en vez del tween plano).
+- La barra **nunca desaparece** (decisión previa del usuario, se mantiene).
+
+## 2. Animaciones que se notan ✨
+
+| Animación | Dónde |
 |---|---|
-| `PeliculaCard` (póster) | Corazón flotante arriba-izquierda: círculo de vidrio 30 dp, icono `Favorite`/`FavoriteBorder`, **pop de escala con spring** al alternar, doble tick háptico. |
-| `FilterBar` (chips) | Nuevo chip **Favoritos** (rosa `#EC4899`) entre "YouTube" y el contador, con animación de color y tick háptico. |
-| `HomeScreen` (estado vacío) | Estado vacío dedicado cuando no hay favoritos: corazón rosa, título "Aún no tienes favoritos" y botón "Explorar catálogo". |
-| Ficha (bottom sheet) | Botón circular 42 dp a la derecha de la cabecera (junto al póster/metadatos), relleno rosa translúcido + borde rosa cuando está activo. |
-| Botón masivo | El filtro de favoritos se activa/desactiva con `onToggleOnlyFavorites` del ViewModel (ya cableado en `MainActivity`). |
+| **Entrada escalonada** (`StaggeredAppear`, fade + subida + escala, cascada por oleadas) | Todas las tarjetas del catálogo, en ambos modos de grilla (masonry 2 col y compacta/lista). |
+| **Press-scale** (`Modifier.pressScale`, se hunde con el dedo y vuelve con muelle) | 3 tarjetas de Descargas (activa, en cola, descargada), fila "Ubicación de descargas" en Ajustes. |
+| Confeti al completar descarga | Se mantiene de la fase anterior. |
+| Hápticas en acciones | Se mantienen (chips, Play/Descargar de la ficha, nav, pausa/reanudar/cancelar/reintentar, gestos del player). |
 
-## 2. Sistema háptico completo 📳
+Componente nuevo: `ui/components/Interactions.kt` (`pressScale` + `StaggeredAppear`), sin
+dependencias nuevas (solo Compose).
 
-Nuevo componente `ui/components/Haptics.kt` con `AppHaptics` + `rememberHaptics()`:
+## 3. Iconos con estilo propio 🔷
 
-- `tick()` — toque sutil (chips, tabs, pausar/reanudar/long-press).
-- `confirm()` — acción importante confirmada (Play, Descargar, Reintentar todo, activar bloqueo).
-- `doubleTick()` — doble pulso de celebración (favorito, descarga completada, reanudar/reintentar tarjeta).
-- `reject()` — pulso de advertencia (cancelar descarga, cancelar todo).
-- `gestureTick()` — para gestos rápidos del reproductor.
+- **Migración global a `Icons.Rounded`** (set bold de esquinas redondeadas, estética tipo Cubacel
+  con trazos gruesos): ~70 usos en 15 archivos — catálogo, descargas, ajustes, player, diálogos,
+  toasts, VPN screen, banners y la barra de navegación.
+- Verificado: cada icono usado tiene su import del paquete `rounded`/`automirrored.rounded`, y la
+  dependencia `material-icons-extended` ya está en el build.
+- **Contenedores duotone en Ajustes**: los cuadros con tinte plano ahora son **círculos con color
+  semántico** — carpeta verde `#10B981`, descargas azul `#2A7DE1`, notificaciones cian `#06B6D4`,
+  batería ámbar `#F59E0B`, auto-inicio violeta `#8B5CF6` (los que indican estado activo conservan
+  su verde condicional).
+- Limpieza: 17 imports de iconos muertos eliminados.
 
-Dónde se aplicó: chips del `FilterBar`, corazón de tarjeta y de ficha, botones Play/Descargar de la
-ficha, navegación inferior (`AppBottomNav`), Pausar/Reanudar/Cancelar/Reintentar todo en Descargas,
-botones de pausa/reanudar/reintentar/cancelar de cada tarjeta de descarga, long-press de selección en
-"Descargadas", doble-tap ±10 s y seek horizontal del reproductor, bloqueo/desbloqueo de pantalla, y
-selector de modo de tema en Ajustes.
+## 4. Launcher y splash nuevos 📱
 
-## 3. Hero carrusel en Home 🎬
+- **Diseño**: badge circular azul degradado (`#2A7DE1 → #1B59A7`) con glifo blanco de descarga de
+  trazo grueso y extremos redondeados, sobre fondo **navy de la marca** (`#0B1120`) — coherente con
+  la paleta real de la app (el anterior era teal 3D sobre blanco).
+- `ic_launcher_foreground.xml` (vector adaptive, con `monochrome` para iconos temáticos Android 13+).
+- `ic_launcher_background.xml` navy, idéntico en modo día/noche.
+- **PNGs regenerados en las 5 densidades** (mdpi→xxxhdpi, square + round) con supermuestreo ×4.
+- **Splash** (`ic_splash_icon_light/dark.xml`) con el mismo badge, a juego.
 
-Nuevo composable `FeaturedHeroCarousel` (privado en `HomeScreen.kt`):
+## 5. Eliminado en esta fase (petición explícita) 🗑️
 
-- Aparece solo en la vista completa (sin búsqueda, sin filtro de tipo, sin favoritos activos).
-- `HorizontalPager` con hasta **5 títulos destacados** (prioriza películas), esquinas 24 dp, alto 216 dp.
-- **Efecto Ken Burns**: zoom lento continuo (1.0→1.08, 14 s, reversa) sobre el póster vía `graphicsLayer`.
-- Degradado cinematográfico vertical para legibilidad + chip **"DESTACADO"** con estrella ámbar.
-- Acciones circulares: **Play** (relleno con color primario) y **Descargar** (vidrio oscuro con borde).
-- **Auto-avance cada 5 s** (solo si el carrusel está quieto) + puntos indicadores animados.
-- Indicador de corazón rosa si el título está en favoritos.
-- Imágenes con Coil (`SubcomposeAsyncImage` + crossfade + shimmer de carga), mismas claves de caché que las tarjetas.
-
-## 4. Cuadrícula escalonada (masonry) 🧱
-
-- `PeliculaCard` ahora acepta `posterAspectRatio` (por defecto `0.78f`, el valor original) y lo aplica con `Modifier.aspectRatio()`.
-- En el modo de layout **"Cuadrícula (2 col)"** (`catalogLayoutMode == "GRID_2"`), `HomeScreen` renderiza
-  un `LazyVerticalStaggeredGrid` (2 columnas, espaciado 14/16 dp) en lugar del grid uniforme: cada tarjeta
-  toma su altura de un aspecto **estable por id** (`posterAspectFor`: hash → 0.72 / 0.82 / 0.77), logrando
-  el efecto masonry sin recortes.
-- Scroll independiente por pestaña: 4 `LazyStaggeredGridState` con `rememberSaveable` + `LazyStaggeredGridState.Saver`.
-- Los efectos de auto-ocultar la barra inferior (`barBehavior`) funcionan igual en ambos modos
-  (los `snapshotFlow` de canScrollForward/backward consultan el estado activo según el modo).
-- Los modos "Compacto (3 col)" y "Lista" conservan el aspecto original (0.78) para mantener uniformidad.
-
-## 5. Confeti al completar descargas 🎉
-
-Nuevo componente `ui/components/ConfettiOverlay.kt`:
-
-- `ConfettiOverlay(trigger: Int, originFraction: Offset = Offset(0.5f, 0.35f), modifier)` — dibujado 100 % en Canvas
-  (sin librerías externas): **64 partículas** con física balística simulada (velocidad radial, gravedad,
-  rotación, fade con easing `CubicBezierEasing(0.12f, 0f, 0.08f, 1f)`), 2 400 ms, paleta teal/ámbar/
-  esmeralda/cielo/rosa/violeta. **No bloquea el tacto** y solo dibuja mientras `trigger > 0`.
-- En `DescargasScreen`: un `LaunchedEffect(downloads)` compara el conjunto de ítems `COMPLETED` con el
-  anterior; si aparece uno nuevo **con la pantalla visible**, incrementa `confettiTrigger` (monta el
-  overlay) y dispara `doubleTick()`. Al abrir la pantalla no se celebra lo ya completado (sin falso
-  disparo inicial).
-
-## 6. "Reintentar todo" para descargas fallidas 🔁
-
-- `DownloadHelper.retryAllFailed()`: toma todas las descargas `FAILED`, respeta VPN/Solo Wi-Fi/límite
-  concurrente y las devuelve a `PENDING` para que el scheduler las relance en orden.
-- `HomeViewModel.retryAllFailedDownloads()`: envoltorio seguro (corutina en viewModelScope, error a log).
-- UI en `DescargasScreen` → pestaña "Activas": botón rojo translúcido **"Reintentar las N fallidas"**
-  (o singular), visible solo si hay fallidas, con `confirm()` háptico y `testTag("btn_retry_all_failed")`.
-- Cableado completo: `DescargasScreen(onRetryAllFailed)` → `MainActivity` → `viewModel.retryAllFailedDownloads()`.
+- **Carrusel hero** (`FeaturedHeroCarousel`) y su helper — quitados de `HomeScreen.kt` e imports.
+- **UI de favoritos**: corazón en póster y ficha, chip "Favoritos" del `FilterBar`, estado vacío de
+  favoritos, wiring en `MainActivity`. *El backend del ViewModel (`toggleFavorite`, `favoriteIds`,
+  `onlyFavorites`) permanece intacto pero sin uso — no afecta.*
 
 ---
 
@@ -88,40 +74,32 @@ Nuevo componente `ui/components/ConfettiOverlay.kt`:
 
 | Archivo | Cambio |
 |---|---|
-| `ui/components/Haptics.kt` | **NUEVO** — sistema háptico. |
-| `ui/components/ConfettiOverlay.kt` | **NUEVO** — confeti en Canvas. |
-| `ui/components/FilterBar.kt` | Chip Favoritos + firma ampliada + hápticas. |
-| `ui/components/PeliculaCard.kt` | Corazón con pop + `posterAspectRatio`. |
-| `ui/components/AppBottomNav.kt` | Tick al cambiar de tab. |
-| `ui/screens/HomeScreen.kt` | Hero carrusel, staggered grid, favoritos en ficha, estado vacío de favoritos, hápticas. |
-| `ui/screens/DescargasScreen.kt` | Confeti, botón Reintentar todo, hápticas en acciones. |
-| `ui/screens/PlayerScreen.kt` | Hápticas de gestos y bloqueo. |
-| `ui/screens/AjustesScreen.kt` | Háptica en selector de tema (+ import). |
-| `data/download/DownloadHelper.kt` | `retryAllFailed()`. |
-| `viewmodel/HomeViewModel.kt` | `retryAllFailedDownloads()`. |
-| `MainActivity.kt` | Cableo de `onToggleFavorite`, `onToggleFavorites`, `onRetryAllFailed`. |
-| `app/build.gradle.kts` | `versionCode = 2`, `versionName = "1.1"`. |
+| `ui/components/AppBottomNav.kt` | **Reescrito** — dock de vidrio con píldora morfeante, muesca, rebotes. |
+| `ui/components/Interactions.kt` | **NUEVO** — `pressScale` + `StaggeredAppear`. |
+| `ui/screens/HomeScreen.kt` | Sin carrusel/favoritos; entrada escalonada; volver-arriba. |
+| `ui/screens/DescargasScreen.kt` | Press-scale en 3 tarjetas; iconos rounded. |
+| `ui/screens/AjustesScreen.kt` | Círculos duotone; press-scale en carpeta; iconos rounded. |
+| `ui/components/FilterBar.kt` | Sin chip de favoritos; iconos rounded. |
+| `ui/components/PeliculaCard.kt` | Sin corazón; iconos rounded; limpieza. |
+| `ui/player/*.kt`, `VpnBlockedScreen`, `CustomToast`, `BatteryOptimization*`, `PermissionRequestDialog`, `ContinueWatchingBanner` | Iconos rounded. |
+| `MainActivity.kt` | Scroll-arriba al re-tocar tab; muelle en pager; sin favoritos. |
+| `res/drawable*` + `res/mipmap-*` | Launcher/splash nuevos + PNGs 5 densidades. |
+| `app/build.gradle.kts` | `versionCode = 3`, `versionName = "1.2"`. |
 
-## Compatibilidad y verificaciones (sin compilar, según lo acordado)
+## Verificaciones (sin compilar, según lo acordado)
 
-- **Todas las firmas nuevas usan valores por defecto**: el código llamante existente compila aunque no
-  se cablee un callback nuevo (retro-compatible).
-- Verificado programáticamente sobre los ~50 archivos `.kt`:
-  - Balance de llaves/paréntesis/corchetes en **todos** los `.kt` de `app/src` ✔
-  - Imports requeridos presentes en cada archivo que usa los símbolos nuevos
-    (`rememberHaptics`, `ConfettiOverlay`, alias `staggeredItemsIndexed`, `delay`, `border`, etc.) ✔
-  - Nombres de API del ViewModel verificados contra su declaración
-    (`toggleFavorite`, `onToggleOnlyFavorites`, `favoriteIds`, `onlyFavorites`, `retryAllFailedDownloads`) ✔
-  - `LazyStaggeredGridState.Saver` y `verticalItemSpacing` son API públicas de foundation (mismas que
-    usa `rememberLazyStaggeredGridState` internamente) ✔
-- El confeti y el hero **no añaden dependencias** (solo Compose/Coil ya presentes).
+- Balance de llaves/paréntesis/corchetes en **todos** los `.kt` ✔
+- Cada icono `Icons.Rounded.*` usado tiene su import; cero imports de iconos muertos ✔
+- Sin restos de carrusel/favoritos en la UI; `haptics` sin instancias huérfanas ✔
+- `ScreenRoute.entries` (Kotlin 2.2.10) y `material-icons-extended` confirmados ✔
+- Firmas nuevas con valores por defecto (`scrollToTopTick`, `pressScale`, `StaggeredAppear`) ✔
 
 ## Cómo probar
 
-1. **Home**: carrusel destacado arriba (se mueve solo); chips → "Favoritos" filtra; corazón en un póster
-   con vibración y pop; modo "Cuadrícula (2 col)" en Ajustes → alturas variadas.
-2. **Ficha**: corazón junto a los metadatos; Play/Descargar vibran al confirmar.
-3. **Descargas**: descarga algo y mira el confeti al completar; fuerza un fallo (VPN activa) → botón
-   rojo "Reintentar…" devuelve todo a cola.
-4. **Navegación inferior**: tick al cambiar de pestaña.
-5. **Reproductor**: doble-tap a los lados (retrocede/avanza con pulso), arrastre horizontal (pulso al soltar), botón de bloqueo (confirmación).
+1. **Abre la app**: launcher y splash nuevos (badge azul, glifo bold).
+2. **Catálogo**: las tarjetas entran en cascada; desliza entre pestañas con muelle.
+3. **Barra inferior**: toca cada pestaña (píldora que crece, muesca que viaja, rebote del icono);
+   re-toca la activa → vuelve al inicio; inicia una descarga y mira la flecha animada + badge.
+4. **Descargas**: pulsa y mantén/mantén el dedo sobre una tarjeta → se hunde con muelle.
+5. **Ajustes**: círculos de colores por sección; toca "Ubicación de descargas" → presión elástica.
+6. Completa una descarga → confeti + doble vibración (de la fase anterior).

@@ -20,8 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BatteryAlert
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -97,7 +97,7 @@ fun BatteryOptimizationNoticeBanner(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.BatteryAlert,
+                        imageVector = Icons.Rounded.BatteryAlert,
                         contentDescription = null,
                         tint = Color(0xFFF59E0B),
                         modifier = Modifier.size(22.dp)
@@ -149,7 +149,7 @@ fun BatteryOptimizationNoticeBanner(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = Icons.Rounded.Close,
                         contentDescription = "Cerrar",
                         tint = textSecondary,
                         modifier = Modifier.size(18.dp)

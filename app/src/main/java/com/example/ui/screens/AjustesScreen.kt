@@ -8,6 +8,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
+import com.example.ui.components.pressScale
 import com.example.ui.components.rememberHaptics
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -39,28 +40,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BatteryAlert
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.RocketLaunch
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.BrightnessAuto
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.RocketLaunch
+import androidx.compose.material.icons.rounded.Security
 import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.filled.Colorize
-import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.mutableFloatStateOf
@@ -80,16 +77,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.io.File
 import com.example.utils.StoragePathUtils
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PlayCircleOutline
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material.icons.filled.ViewModule
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.ViewAgenda
+import androidx.compose.material.icons.rounded.ViewModule
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -254,7 +248,7 @@ fun AjustesScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Settings,
+                                imageVector = Icons.Rounded.Settings,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -286,7 +280,7 @@ fun AjustesScreen(
             // Section 1: Apariencia y Personalización
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "APARIENCIA Y TEMA", icon = Icons.Default.Palette)
+                    SettingsCategoryHeader(title = "APARIENCIA Y TEMA", icon = Icons.Rounded.Palette)
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -305,9 +299,9 @@ fun AjustesScreen(
                                 )
 
                                 val modes = listOf(
-                                    Triple(ThemeMode.SYSTEM, "Sistema", Icons.Default.BrightnessAuto),
-                                    Triple(ThemeMode.DARK, "Oscuro", Icons.Default.DarkMode),
-                                    Triple(ThemeMode.LIGHT, "Claro", Icons.Default.LightMode)
+                                    Triple(ThemeMode.SYSTEM, "Sistema", Icons.Rounded.BrightnessAuto),
+                                    Triple(ThemeMode.DARK, "Oscuro", Icons.Rounded.DarkMode),
+                                    Triple(ThemeMode.LIGHT, "Claro", Icons.Rounded.LightMode)
                                 )
 
                                 Row(
@@ -411,7 +405,7 @@ fun AjustesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Check,
+                                            imageVector = Icons.Rounded.Check,
                                             contentDescription = null,
                                             tint = onPrimaryColor,
                                             modifier = Modifier.size(18.dp)
@@ -452,7 +446,7 @@ fun AjustesScreen(
                                     )
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Palette,
+                                        imageVector = Icons.Rounded.Palette,
                                         contentDescription = null,
                                         modifier = Modifier.size(15.dp)
                                     )
@@ -477,9 +471,9 @@ fun AjustesScreen(
                                 )
 
                                 val layoutOptions = listOf(
-                                    Triple("GRID_2", "Cuadrícula (2)", Icons.Default.GridView),
-                                    Triple("GRID_3", "Compacta (3)", Icons.Default.ViewModule),
-                                    Triple("LIST", "Lista", Icons.Default.ViewAgenda)
+                                    Triple("GRID_2", "Cuadrícula (2)", Icons.Rounded.GridView),
+                                    Triple("GRID_3", "Compacta (3)", Icons.Rounded.ViewModule),
+                                    Triple("LIST", "Lista", Icons.Rounded.ViewAgenda)
                                 )
 
                                 Row(
@@ -527,7 +521,7 @@ fun AjustesScreen(
             // Section 2: Criterio de Ordenación
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "ORDENAR CATÁLOGO", icon = Icons.Default.Sort)
+                    SettingsCategoryHeader(title = "ORDENAR CATÁLOGO", icon = Icons.Rounded.Sort)
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -576,7 +570,7 @@ fun AjustesScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                imageVector = Icons.Rounded.Check,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.onPrimary,
                                                 modifier = Modifier.size(14.dp)
@@ -593,7 +587,7 @@ fun AjustesScreen(
             // Section 3: Gestor de Descargas y Almacenamiento
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "DESCARGAS Y ALMACENAMIENTO", icon = Icons.Default.Download)
+                    SettingsCategoryHeader(title = "DESCARGAS Y ALMACENAMIENTO", icon = Icons.Rounded.Download)
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -608,6 +602,7 @@ fun AjustesScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable { showFolderDialog = true }
+                                    .pressScale(0.98f)
                                     .padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -620,12 +615,12 @@ fun AjustesScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)),
                                         contentAlignment = Alignment.Center
-                                    ) {
+                                        ) {
                                         Icon(
-                                            imageVector = Icons.Default.Folder,
+                                            imageVector = Icons.Rounded.Folder,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
@@ -689,12 +684,12 @@ fun AjustesScreen(
                                         Box(
                                             modifier = Modifier
                                                 .size(40.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF2A7DE1).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)),
                                             contentAlignment = Alignment.Center
-                                        ) {
+                                            ) {
                                             Icon(
-                                                imageVector = Icons.Default.Download,
+                                                imageVector = Icons.Rounded.Download,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(20.dp)
@@ -759,7 +754,7 @@ fun AjustesScreen(
 
                             // Descargar solo con Wi-Fi
                             SettingsSwitchRow(
-                                icon = Icons.Default.Wifi,
+                                icon = Icons.Rounded.Wifi,
                                 title = "Descargar solo con Wi-Fi",
                                 subtitle = if (wifiOnly) "Activado: pausa descargas en datos móviles" else "Permitir descargas con datos móviles",
                                 checked = wifiOnly,
@@ -776,7 +771,7 @@ fun AjustesScreen(
             // Section: Permisos y Estado del Sistema
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "PERMISOS Y ESTADO DEL SISTEMA", icon = Icons.Default.Security)
+                    SettingsCategoryHeader(title = "PERMISOS Y ESTADO DEL SISTEMA", icon = Icons.Rounded.Security)
 
                     Card(
                         shape = RoundedCornerShape(20.dp),
@@ -803,7 +798,7 @@ fun AjustesScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(CircleShape)
                                             .background(
                                                 if (storageGranted) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
                                                 else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
@@ -811,7 +806,7 @@ fun AjustesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Folder,
+                                            imageVector = Icons.Rounded.Folder,
                                             contentDescription = null,
                                             tint = if (storageGranted) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
@@ -843,7 +838,7 @@ fun AjustesScreen(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                imageVector = Icons.Rounded.Check,
                                                 contentDescription = "Concedido",
                                                 tint = Color(0xFF10B981),
                                                 modifier = Modifier.size(14.dp)
@@ -887,7 +882,7 @@ fun AjustesScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(CircleShape)
                                             .background(
                                                 if (notificationsGranted) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
                                                 else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
@@ -895,7 +890,7 @@ fun AjustesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Notifications,
+                                            imageVector = Icons.Rounded.Notifications,
                                             contentDescription = null,
                                             tint = if (notificationsGranted) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
@@ -927,7 +922,7 @@ fun AjustesScreen(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                imageVector = Icons.Rounded.Check,
                                                 contentDescription = "Activo",
                                                 tint = Color(0xFF10B981),
                                                 modifier = Modifier.size(14.dp)
@@ -971,7 +966,7 @@ fun AjustesScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(CircleShape)
                                             .background(
                                                 if (isBatteryExempt) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
                                                 else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
@@ -979,7 +974,7 @@ fun AjustesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.BatteryAlert,
+                                            imageVector = Icons.Rounded.BatteryAlert,
                                             contentDescription = null,
                                             tint = if (isBatteryExempt) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
@@ -1011,7 +1006,7 @@ fun AjustesScreen(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                imageVector = Icons.Rounded.Check,
                                                 contentDescription = "Sin restricciones",
                                                 tint = Color(0xFF10B981),
                                                 modifier = Modifier.size(14.dp)
@@ -1055,7 +1050,7 @@ fun AjustesScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(CircleShape)
                                             .background(
                                                 if (autoStartConfigured) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
                                                 else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
@@ -1063,7 +1058,7 @@ fun AjustesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.RocketLaunch,
+                                            imageVector = Icons.Rounded.RocketLaunch,
                                             contentDescription = null,
                                             tint = if (autoStartConfigured) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
@@ -1112,7 +1107,7 @@ fun AjustesScreen(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                imageVector = Icons.Rounded.Check,
                                                 contentDescription = "Configurado",
                                                 tint = Color(0xFF10B981),
                                                 modifier = Modifier.size(14.dp)
@@ -1154,7 +1149,7 @@ fun AjustesScreen(
             // Section 4: Comunidad y Soporte
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsCategoryHeader(title = "COMUNIDAD Y SOPORTE", icon = Icons.Default.Info)
+                    SettingsCategoryHeader(title = "COMUNIDAD Y SOPORTE", icon = Icons.Rounded.Info)
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -1198,7 +1193,7 @@ fun AjustesScreen(
                                     )
                                 }
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
@@ -1291,8 +1286,8 @@ private fun SettingsSwitchRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.20f else 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1332,7 +1327,7 @@ private fun SettingsSwitchRow(
             thumbContent = if (checked) {
                 {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = Icons.Rounded.Check,
                         contentDescription = null,
                         modifier = Modifier.size(SwitchDefaults.IconSize),
                         tint = if (isBrightAccent) Color.White else MaterialTheme.colorScheme.primary
@@ -1387,7 +1382,7 @@ private fun DownloadFolderDialog(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Folder,
+                    imageVector = Icons.Rounded.Folder,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -1486,7 +1481,7 @@ private fun DownloadFolderDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.FolderOpen,
+                                imageVector = Icons.Rounded.FolderOpen,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -1500,7 +1495,7 @@ private fun DownloadFolderDialog(
                             modifier = Modifier.weight(1f)
                         )
                         Icon(
-                            imageVector = Icons.Default.ChevronRight,
+                            imageVector = Icons.Rounded.ChevronRight,
                             contentDescription = null,
                             tint = textSecondary,
                             modifier = Modifier.size(20.dp)
@@ -1633,7 +1628,7 @@ private fun ThemeColorPickerDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Palette,
+                                imageVector = Icons.Rounded.Palette,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -1660,7 +1655,7 @@ private fun ThemeColorPickerDialog(
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = Icons.Rounded.Close,
                             contentDescription = "Cerrar",
                             tint = textSecondary,
                             modifier = Modifier.size(20.dp)
@@ -1762,7 +1757,7 @@ private fun ThemeColorPickerDialog(
                                 ) {
                                     if (isSelected) {
                                         Icon(
-                                            imageVector = Icons.Default.Check,
+                                            imageVector = Icons.Rounded.Check,
                                             contentDescription = null,
                                             tint = presetOnColor,
                                             modifier = Modifier.size(20.dp)

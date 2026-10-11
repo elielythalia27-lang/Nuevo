@@ -51,26 +51,22 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PauseCircle
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -138,6 +134,7 @@ import com.example.data.model.formatDownloadSpeed
 import com.example.ui.components.ConfettiOverlay
 import com.example.ui.components.SleekLinearProgressBar
 import com.example.ui.components.SystemDownloadAnimatedIcon
+import com.example.ui.components.pressScale
 import com.example.ui.components.rememberHaptics
 import com.example.ui.components.shimmerEffect
 import com.example.utils.PermissionHelper
@@ -285,7 +282,7 @@ fun DescargasScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Download,
+                                imageVector = Icons.Rounded.Download,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -338,7 +335,7 @@ fun DescargasScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Notifications,
+                                imageVector = Icons.Rounded.Notifications,
                                 contentDescription = null,
                                 tint = Color(0xFFE53935),
                                 modifier = Modifier.size(20.dp)
@@ -414,7 +411,7 @@ fun DescargasScreen(
                             ) {
                                 val isDownloading = activeList.any { it.status == DownloadStatus.DOWNLOADING }
                                 Icon(
-                                    imageVector = if (isDownloading) Icons.Default.Download else Icons.Default.Speed,
+                                    imageVector = if (isDownloading) Icons.Rounded.Download else Icons.Rounded.Speed,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                     tint = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textSecondary
@@ -441,7 +438,7 @@ fun DescargasScreen(
                                 modifier = Modifier.padding(vertical = 10.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CheckCircle,
+                                    imageVector = Icons.Rounded.CheckCircle,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                     tint = if (selectedTab == 1) Color(0xFF10B981) else textSecondary
@@ -776,7 +773,7 @@ private fun AnimatedEmptyStateCard(
                 .graphicsLayer(scaleX = btnScale, scaleY = btnScale)
                 .height(46.dp)
         ) {
-            Icon(imageVector = Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(imageVector = Icons.Rounded.Movie, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(buttonText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
@@ -848,7 +845,7 @@ private fun ActiveDownloadsTab(
             contentAlignment = Alignment.Center
         ) {
             AnimatedEmptyStateCard(
-                icon = Icons.Default.CloudDownload,
+                icon = Icons.Rounded.CloudDownload,
                 iconTint = MaterialTheme.colorScheme.primary,
                 title = "Sin transferencias activas",
                 subtitle = "Las descargas que inicies se mostrarán aquí con velocidad en tiempo real y controles de gestión.",
@@ -896,7 +893,7 @@ private fun ActiveDownloadsTab(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Speed,
+                                    imageVector = Icons.Rounded.Speed,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
@@ -971,7 +968,7 @@ private fun ActiveDownloadsTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Pause,
+                                imageVector = Icons.Rounded.Pause,
                                 contentDescription = "Pausar todo",
                                 tint = if (hasActiveDownloads) Color(0xFFF59E0B) else textSecondary.copy(alpha = 0.4f),
                                 modifier = Modifier.size(16.dp)
@@ -1013,7 +1010,7 @@ private fun ActiveDownloadsTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
+                                imageVector = Icons.Rounded.PlayArrow,
                                 contentDescription = "Reanudar todo",
                                 tint = if (hasPausedOrPending) MaterialTheme.colorScheme.primary else textSecondary.copy(alpha = 0.4f),
                                 modifier = Modifier.size(16.dp)
@@ -1055,7 +1052,7 @@ private fun ActiveDownloadsTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                imageVector = Icons.Rounded.Close,
                                 contentDescription = "Cancelar todo",
                                 tint = if (activeList.isNotEmpty()) Color(0xFFEF4444) else textSecondary.copy(alpha = 0.4f),
                                 modifier = Modifier.size(16.dp)
@@ -1093,7 +1090,7 @@ private fun ActiveDownloadsTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Refresh,
+                                imageVector = Icons.Rounded.Refresh,
                                 contentDescription = null,
                                 tint = Color(0xFFEF4444),
                                 modifier = Modifier.size(16.dp)
@@ -1137,7 +1134,7 @@ private fun ActiveDownloadsTab(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.HourglassTop,
+                            imageVector = Icons.Rounded.HourglassTop,
                             contentDescription = null,
                             tint = Color(0xFFF59E0B),
                             modifier = Modifier.size(14.dp)
@@ -1177,7 +1174,7 @@ private fun ActiveDownloadsTab(
                         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ErrorOutline,
+                            imageVector = Icons.Rounded.ErrorOutline,
                             contentDescription = null,
                             tint = Color(0xFFEF4444),
                             modifier = Modifier.size(16.dp)
@@ -1263,7 +1260,7 @@ private fun DownloadedTab(
             contentAlignment = Alignment.Center
         ) {
             AnimatedEmptyStateCard(
-                icon = Icons.Default.CheckCircle,
+                icon = Icons.Rounded.CheckCircle,
                 iconTint = Color(0xFF10B981),
                 title = "Biblioteca sin contenido",
                 subtitle = "Los títulos que descargues se conservarán aquí para su reproducción sin conexión en cualquier momento.",
@@ -1315,7 +1312,7 @@ private fun DownloadedTab(
                                 .padding(4.dp)
                         ) {
                             Icon(
-                                imageVector = if (allSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                imageVector = if (allSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                                 contentDescription = if (allSelected) "Deseleccionar todo" else "Seleccionar todo",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(22.dp)
@@ -1344,7 +1341,7 @@ private fun DownloadedTab(
                                 modifier = Modifier.height(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Delete,
+                                    imageVector = Icons.Rounded.Delete,
                                     contentDescription = null,
                                     modifier = Modifier.size(15.dp),
                                     tint = Color.White
@@ -1404,7 +1401,7 @@ private fun DownloadedTab(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Checklist,
+                                        imageVector = Icons.Rounded.Checklist,
                                         contentDescription = "Seleccionar",
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(16.dp)
@@ -1527,7 +1524,8 @@ fun ActiveDownloadingCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(RoundedCornerShape(16.dp))
+            .pressScale(0.98f),
         border = BorderStroke(
             1.dp,
             when {
@@ -1707,7 +1705,7 @@ fun ActiveDownloadingCard(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Refresh,
+                                    imageVector = Icons.Rounded.Refresh,
                                     contentDescription = "Reintentar descarga",
                                     tint = Color(0xFFEF4444),
                                     modifier = Modifier.size(22.dp)
@@ -1725,7 +1723,7 @@ fun ActiveDownloadingCard(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.PlayArrow,
+                                    imageVector = Icons.Rounded.PlayArrow,
                                     contentDescription = "Reanudar descarga",
                                     tint = Color(0xFF10B981),
                                     modifier = Modifier.size(22.dp)
@@ -1743,7 +1741,7 @@ fun ActiveDownloadingCard(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Pause,
+                                    imageVector = Icons.Rounded.Pause,
                                     contentDescription = "Pausar descarga",
                                     tint = Color(0xFFF59E0B),
                                     modifier = Modifier.size(22.dp)
@@ -1762,7 +1760,7 @@ fun ActiveDownloadingCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = Icons.Rounded.Delete,
                             contentDescription = "Cancelar descarga",
                             tint = Color(0xFFEF4444),
                             modifier = Modifier.size(19.dp)
@@ -1793,7 +1791,8 @@ fun PendingQueueCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(RoundedCornerShape(16.dp))
+            .pressScale(0.98f),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, cardBorder),
         colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -1880,7 +1879,7 @@ fun PendingQueueCard(
                     modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = Icons.Rounded.Delete,
                         contentDescription = "Cancelar",
                         tint = Color(0xFFEF4444),
                         modifier = Modifier.size(18.dp)
@@ -1923,6 +1922,7 @@ fun DownloadedMovieCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
+            .pressScale(0.98f)
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) onToggleSelect() else onPlay()
@@ -1957,7 +1957,7 @@ fun DownloadedMovieCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                        imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                         contentDescription = if (isSelected) "Seleccionada" else "No seleccionada",
                         tint = if (isSelected) MaterialTheme.colorScheme.primary else textSecondary.copy(alpha = 0.5f),
                         modifier = Modifier.size(24.dp)
@@ -2058,7 +2058,7 @@ fun DownloadedMovieCard(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Share,
+                        imageVector = Icons.Rounded.Share,
                         contentDescription = "Compartir video",
                         tint = textSecondary,
                         modifier = Modifier.size(19.dp)
@@ -2069,7 +2069,7 @@ fun DownloadedMovieCard(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = Icons.Rounded.Delete,
                         contentDescription = "Eliminar",
                         tint = Color(0xFFEF4444).copy(alpha = 0.85f),
                         modifier = Modifier.size(20.dp)

@@ -21,13 +21,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrightnessLow
-import androidx.compose.material.icons.filled.BrightnessMedium
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.rounded.BrightnessLow
+import androidx.compose.material.icons.rounded.BrightnessMedium
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material.icons.rounded.VolumeMute
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -78,7 +78,7 @@ fun NextPlayerBrightnessHud(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Icon(
-                    imageVector = if (brightness > 0.5f) Icons.Default.BrightnessMedium else Icons.Default.BrightnessLow,
+                    imageVector = if (brightness > 0.5f) Icons.Rounded.BrightnessMedium else Icons.Rounded.BrightnessLow,
                     contentDescription = "Brillo",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
@@ -159,9 +159,9 @@ fun NextPlayerVolumeHud(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 val icon = when {
-                    volume <= 0 -> Icons.Default.VolumeMute
-                    fraction < 0.5f -> Icons.Default.VolumeDown
-                    else -> Icons.Default.VolumeUp
+                    volume <= 0 -> Icons.Rounded.VolumeMute
+                    fraction < 0.5f -> Icons.Rounded.VolumeDown
+                    else -> Icons.Rounded.VolumeUp
                 }
 
                 Icon(
@@ -298,7 +298,7 @@ fun NextPlayerDoubleTapBadge(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    imageVector = if (isForward) Icons.Default.FastForward else Icons.Default.FastRewind,
+                    imageVector = if (isForward) Icons.Rounded.FastForward else Icons.Rounded.FastRewind,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -349,7 +349,7 @@ fun NextPlayerSpeedBoostBadge(
                     fontFamily = FontFamily.Monospace
                 )
                 Icon(
-                    imageVector = Icons.Default.FastForward,
+                    imageVector = Icons.Rounded.FastForward,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp)

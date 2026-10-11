@@ -24,13 +24,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -63,8 +61,6 @@ fun FilterBar(
     filteredCount: Int,
     onClearFilters: () -> Unit,
     isDarkTheme: Boolean = true,
-    onlyFavorites: Boolean = false,
-    onToggleFavorites: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -115,7 +111,7 @@ fun FilterBar(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Search,
+                        imageVector = Icons.Rounded.Search,
                         contentDescription = "Buscar",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
@@ -169,7 +165,7 @@ fun FilterBar(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = Icons.Rounded.Close,
                             contentDescription = "Limpiar búsqueda",
                             tint = hintColor,
                             modifier = Modifier.size(18.dp)
@@ -200,7 +196,7 @@ fun FilterBar(
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.Apps,
+                        imageVector = Icons.Rounded.Apps,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = if (selectedType == "ALL") onPrimary else chipText
@@ -226,7 +222,7 @@ fun FilterBar(
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.Movie,
+                        imageVector = Icons.Rounded.Movie,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = if (selectedType == "MOVIE") onPrimary else chipText
@@ -255,7 +251,7 @@ fun FilterBar(
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.PlayCircle,
+                        imageVector = Icons.Rounded.PlayCircle,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = if (isYouTubeSelected) Color.White else youtubeRed
@@ -292,42 +288,6 @@ fun FilterBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val favoritePink = Color(0xFFEC4899)
-            val onPrimary = MaterialTheme.colorScheme.onPrimary
-
-            FilterChip(
-                selected = onlyFavorites,
-                onClick = {
-                    haptics.doubleTick()
-                    onToggleFavorites(!onlyFavorites)
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (onlyFavorites) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = if (onlyFavorites) Color.White else favoritePink
-                    )
-                },
-                label = {
-                    Text(
-                        text = "Favoritos",
-                        fontSize = 12.sp,
-                        fontWeight = if (onlyFavorites) FontWeight.Bold else FontWeight.SemiBold
-                    )
-                },
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(
-                    1.dp,
-                    if (onlyFavorites) Color.Transparent else favoritePink.copy(alpha = 0.45f)
-                ),
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = favoritePink,
-                    selectedLabelColor = Color.White,
-                    containerColor = chipBg,
-                    labelColor = chipText
-                )
-            )
         }
     }
 }

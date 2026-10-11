@@ -24,11 +24,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -182,7 +181,7 @@ fun VpnBlockedScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Shield,
+                                imageVector = Icons.Rounded.Shield,
                                 contentDescription = "Seguridad",
                                 tint = Color(0xFFEF4444),
                                 modifier = Modifier
@@ -227,7 +226,7 @@ fun VpnBlockedScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.VpnKey,
+                            imageVector = Icons.Rounded.VpnKey,
                             contentDescription = null,
                             tint = Color(0xFFEF4444),
                             modifier = Modifier.size(18.dp)
@@ -257,7 +256,7 @@ fun VpnBlockedScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = Icons.Rounded.Refresh,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -292,7 +291,7 @@ fun VpnBlockedScreen(
                     border = BorderStroke(1.dp, secondaryBtnBorder)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Settings,
+                        imageVector = Icons.Rounded.Settings,
                         contentDescription = null,
                         tint = secondaryBtnText,
                         modifier = Modifier.size(16.dp)

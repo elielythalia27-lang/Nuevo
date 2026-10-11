@@ -20,13 +20,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BatteryAlert
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.RocketLaunch
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -120,7 +119,7 @@ fun BatteryOptimizationBottomSheet(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Download,
+                    imageVector = Icons.Rounded.Download,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(32.dp)
@@ -176,7 +175,7 @@ fun BatteryOptimizationBottomSheet(
                 title = "Notificaciones",
                 subtitle = "Ver el progreso y pausar desde la barra.",
                 isReady = notificationsGranted,
-                pendingIcon = Icons.Default.Notifications,
+                pendingIcon = Icons.Rounded.Notifications,
                 isDarkTheme = isDarkTheme,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
@@ -199,7 +198,7 @@ fun BatteryOptimizationBottomSheet(
                 title = storageTitle,
                 subtitle = storageSubtitle,
                 isReady = storageGranted,
-                pendingIcon = Icons.Default.Folder,
+                pendingIcon = Icons.Rounded.Folder,
                 isDarkTheme = isDarkTheme,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
@@ -212,7 +211,7 @@ fun BatteryOptimizationBottomSheet(
                 title = "Batería sin restricciones",
                 subtitle = "Evita que el sistema detenga la descarga al apagar la pantalla.",
                 isReady = batteryExempt,
-                pendingIcon = Icons.Default.BatteryAlert,
+                pendingIcon = Icons.Rounded.BatteryAlert,
                 isDarkTheme = isDarkTheme,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
@@ -244,7 +243,7 @@ fun BatteryOptimizationBottomSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.RocketLaunch,
+                            imageVector = Icons.Rounded.RocketLaunch,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
@@ -406,7 +405,7 @@ fun PermissionCheckRowCard(
             ) {
                 if (isReady) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = Icons.Rounded.Check,
                         contentDescription = "Listo",
                         tint = if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669),
                         modifier = Modifier.size(22.dp)
@@ -452,7 +451,7 @@ fun PermissionCheckRowCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = Icons.Rounded.Check,
                         contentDescription = "Completado",
                         tint = if (isDarkTheme) Color(0xFF34D399) else Color(0xFF059669),
                         modifier = Modifier.size(18.dp)

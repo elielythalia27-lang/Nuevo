@@ -18,6 +18,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -470,6 +471,7 @@ fun MainAppNavigation(
                 )
                 var showExitAppDialog by remember { mutableStateOf(false) }
                 var lastSettledPage by remember { mutableIntStateOf(pagerState.settledPage) }
+                var scrollToTopTick by remember { mutableIntStateOf(0) }
 
                 val density = LocalDensity.current
                 val barBehavior = remember { BottomBarScrollBehavior(with(density) { 24.dp.toPx() }) }
@@ -552,8 +554,7 @@ fun MainAppNavigation(
                                     onPauseDownload = { viewModel.pauseDownload(it) },
                                     onResumeDownload = { viewModel.resumeDownload(it) },
                                     onCancelDownload = { viewModel.cancelDownload(it) },
-                                    onToggleFavorite = { viewModel.toggleFavorite(it) },
-                                    onToggleFavorites = { viewModel.onToggleOnlyFavorites(it) }
+                                    scrollToTopTick = scrollToTopTick
                                 )
                             }
 
@@ -661,10 +662,17 @@ fun MainAppNavigation(
                         currentPage = pagerState.targetPage,
                         onNavigate = { targetPage ->
                             barBehavior.show()
+                            // Re-tocar la pestaña ya activa regresa el contenido al inicio
+                            if (targetPage == pagerState.targetPage) {
+                                scrollToTopTick++
+                            }
                             coroutineScope.launch {
                                 pagerState.animateScrollToPage(
                                     page = targetPage,
-                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                    animationSpec = spring(
+                                        dampingRatio = 0.86f,
+                                        stiffness = 380f
+                                    )
                                 )
                             }
                         },
