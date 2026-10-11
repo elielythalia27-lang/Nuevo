@@ -862,6 +862,66 @@ class DownloadHelper(
         }
     }
 
+    /**
+     * Reintenta todas las descargas fallidas de una vez: las que quepan en el límite
+     * arrancan ya y el resto quedan en cola. Respeta VPN/proxy y "Solo Wi-Fi".
+     */
+    fun retryAllFailed() {
+        if (VpnProxyDetector.isVpnOrProxyActive(context)) {
+            AppToastManager.show("Desactiva la VPN o Proxy para reintentar descargas", ToastType.WARNING)
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            queueMutex.withLock {
+                val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
+                if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
+                    AppToastManager.show("Solo Wi-Fi activado. Conéctate a Wi-Fi para reintentar.", ToastType.ERROR)
+                    return@launch
+                }
+
+                val limit = preferences.maxConcurrentDownloads.first().coerceIn(1, 5)
+                val currentList = _liveDownloadsState.value
+                val failed = currentList.filter { it.status == DownloadStatus.FAILED }
+                if (failed.isEmpty()) return@launch
+
+                var activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING }
+                var started = 0
+                var queued = 0
+                for (item in failed) {
+                    if (activeCount < limit) {
+                        val retrying = item.copy(
+                            status = DownloadStatus.DOWNLOADING,
+                            pausedByVpn = false,
+                            failedByNetwork = false,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        updateItemState(retrying)
+                        preferences.addOrUpdateDownload(retrying)
+                        DownloadForegroundService.startDownload(context, retrying)
+                        activeCount++
+                        started++
+                    } else {
+                        val queuedItem = item.copy(
+                            status = DownloadStatus.PENDING,
+                            pausedByVpn = false,
+                            failedByNetwork = false,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L
+                        )
+                        updateItemState(queuedItem)
+                        preferences.addOrUpdateDownload(queuedItem)
+                        queued++
+                    }
+                }
+                AppToastManager.show(
+                    if (queued > 0) "Reintentando $started, $queued en cola" else "Reintentando $started descargas",
+                    ToastType.INFO
+                )
+            }
+        }
+    }
+
     fun cancelAllDownloads() {
         scope.launch(Dispatchers.IO) {
             // Solo las activas, en cola, en pausa o fallidas: «Cancelar todo» nunca borra lo ya descargado.

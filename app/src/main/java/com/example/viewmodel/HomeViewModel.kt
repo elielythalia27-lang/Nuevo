@@ -525,6 +525,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         downloadHelper.resumeAllDownloads()
     }
 
+    fun retryAllFailedDownloads() {
+        downloadHelper.retryAllFailed()
+    }
+
     fun cancelAllDownloads() {
         _uiState.update { state ->
             val updated = state.downloads.filter { it.status == DownloadStatus.COMPLETED }

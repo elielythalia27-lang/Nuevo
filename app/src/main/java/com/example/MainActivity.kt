@@ -551,7 +551,9 @@ fun MainAppNavigation(
                                     onBottomNavVisibilityChange = { if (it) barBehavior.show() },
                                     onPauseDownload = { viewModel.pauseDownload(it) },
                                     onResumeDownload = { viewModel.resumeDownload(it) },
-                                    onCancelDownload = { viewModel.cancelDownload(it) }
+                                    onCancelDownload = { viewModel.cancelDownload(it) },
+                                    onToggleFavorite = { viewModel.toggleFavorite(it) },
+                                    onToggleFavorites = { viewModel.onToggleOnlyFavorites(it) }
                                 )
                             }
 
@@ -581,6 +583,7 @@ fun MainAppNavigation(
                                     onForceStartPending = { download ->
                                         viewModel.forceStartPendingDownload(download)
                                     },
+                                    onRetryAllFailed = { viewModel.retryAllFailedDownloads() },
                                     onExploreClick = {
                                         coroutineScope.launch {
                                             pagerState.animateScrollToPage(

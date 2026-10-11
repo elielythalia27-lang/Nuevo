@@ -8,6 +8,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import com.example.ui.components.AppToastManager
 import com.example.ui.components.ToastType
+import com.example.ui.components.rememberHaptics
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -177,6 +178,7 @@ fun AjustesScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberHaptics()
 
     val openFolderLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -336,6 +338,7 @@ fun AjustesScreen(
                                                 .background(activeBg)
                                                 .clickable {
                                                     if (themeMode != mode) {
+                                                        haptics.tick()
                                                         onThemeModeChange(mode)
                                                     }
                                                 }

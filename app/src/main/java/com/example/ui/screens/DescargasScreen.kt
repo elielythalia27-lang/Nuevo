@@ -135,8 +135,10 @@ import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
 import com.example.data.model.formatByteSize
 import com.example.data.model.formatDownloadSpeed
+import com.example.ui.components.ConfettiOverlay
 import com.example.ui.components.SleekLinearProgressBar
 import com.example.ui.components.SystemDownloadAnimatedIcon
+import com.example.ui.components.rememberHaptics
 import com.example.ui.components.shimmerEffect
 import com.example.utils.PermissionHelper
 
@@ -154,6 +156,7 @@ fun DescargasScreen(
     onResumeAll: () -> Unit = {},
     onCancelAll: () -> Unit = {},
     onForceStartPending: (DownloadItem) -> Unit = {},
+    onRetryAllFailed: () -> Unit = {},
     onExploreClick: () -> Unit,
     isDarkTheme: Boolean = true,
     onRequestPermissions: () -> Unit = {},
@@ -200,6 +203,25 @@ fun DescargasScreen(
     var itemToDelete by remember { mutableStateOf<DownloadItem?>(null) }
     var showCancelAllConfirm by remember { mutableStateOf(false) }
 
+    val haptics = rememberHaptics()
+
+    // Confeti celebratorio: se dispara cuando un ítem pasa a COMPLETADA con la pantalla visible
+    var confettiTrigger by remember { mutableIntStateOf(0) }
+    val seenCompletedIds = remember { mutableStateOf(setOf<String>()) }
+    var confettiInitialized by remember { mutableStateOf(false) }
+    LaunchedEffect(downloads) {
+        val nowCompleted = downloads.filter { it.status == DownloadStatus.COMPLETED }.map { it.id }.toSet()
+        if (confettiInitialized) {
+            val newlyCompleted = nowCompleted - seenCompletedIds.value
+            if (newlyCompleted.isNotEmpty()) {
+                confettiTrigger++
+                haptics.doubleTick()
+            }
+        }
+        seenCompletedIds.value = nowCompleted
+        confettiInitialized = true
+    }
+
     val screenBg = MaterialTheme.colorScheme.background
     val cardBg = MaterialTheme.colorScheme.surface
     val cardBorder = MaterialTheme.colorScheme.surfaceVariant
@@ -244,8 +266,9 @@ fun DescargasScreen(
         label = "tab_pulse_scale"
     )
 
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         containerColor = screenBg,
         topBar = {
             TopAppBar(
@@ -466,6 +489,7 @@ fun DescargasScreen(
                             onResumeAll = onResumeAll,
                             onCancelAll = { showCancelAllConfirm = true },
                             onForceStart = onForceStartPending,
+                            onRetryAllFailed = onRetryAllFailed,
                             onExploreClick = onExploreClick,
                             isDarkTheme = isDarkTheme,
                             cardBg = cardBg,
@@ -603,6 +627,13 @@ fun DescargasScreen(
                 }
             )
         }
+        }
+
+        // Confeti celebratorio al completarse una descarga (no bloquea el tacto)
+        ConfettiOverlay(
+            trigger = confettiTrigger,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -764,6 +795,7 @@ private fun ActiveDownloadsTab(
     onResumeAll: () -> Unit = {},
     onCancelAll: () -> Unit = {},
     onForceStart: (DownloadItem) -> Unit,
+    onRetryAllFailed: () -> Unit = {},
     onExploreClick: () -> Unit,
     isDarkTheme: Boolean,
     cardBg: Color,
@@ -774,6 +806,8 @@ private fun ActiveDownloadsTab(
     isCurrentTabActive: Boolean = true,
     onBottomNavVisibilityChange: (Boolean) -> Unit = {}
 ) {
+    val haptics = rememberHaptics()
+
     val downloadingOrPaused = activeList.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PAUSED }
     val pendingItems = activeList.filter { it.status == DownloadStatus.PENDING }
     val failedItems = activeList.filter { it.status == DownloadStatus.FAILED }
@@ -915,7 +949,7 @@ private fun ActiveDownloadsTab(
                 ) {
                     // Pausar todo
                     Surface(
-                        onClick = onPauseAll,
+                        onClick = { haptics.tick(); onPauseAll() },
                         enabled = hasActiveDownloads,
                         shape = RoundedCornerShape(12.dp),
                         color = if (hasActiveDownloads) {
@@ -957,7 +991,7 @@ private fun ActiveDownloadsTab(
 
                     // Reanudar todo
                     Surface(
-                        onClick = onResumeAll,
+                        onClick = { haptics.tick(); onResumeAll() },
                         enabled = hasPausedOrPending,
                         shape = RoundedCornerShape(12.dp),
                         color = if (hasPausedOrPending) {
@@ -999,7 +1033,7 @@ private fun ActiveDownloadsTab(
 
                     // Cancelar todo
                     Surface(
-                        onClick = onCancelAll,
+                        onClick = { haptics.reject(); onCancelAll() },
                         enabled = activeList.isNotEmpty(),
                         shape = RoundedCornerShape(12.dp),
                         color = if (activeList.isNotEmpty()) {
@@ -1035,6 +1069,42 @@ private fun ActiveDownloadsTab(
                                     if (isDarkTheme) Color.White else Color(0xFFB91C1C)
                                 } else textSecondary.copy(alpha = 0.4f),
                                 maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Reintentar todas las fallidas de una vez
+            if (failedItems.isNotEmpty()) {
+                item {
+                    Surface(
+                        onClick = { haptics.confirm(); onRetryAllFailed() },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFEF4444).copy(alpha = if (isDarkTheme) 0.14f else 0.10f),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.45f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("btn_retry_all_failed")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (failedItems.size == 1) "Reintentar descarga fallida"
+                                else "Reintentar las ${failedItems.size} fallidas",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isDarkTheme) Color.White else Color(0xFFB91C1C)
                             )
                         }
                     }
@@ -1445,6 +1515,7 @@ fun ActiveDownloadingCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberHaptics()
     val isPaused = item.status == DownloadStatus.PAUSED
     val isFailed = item.status == DownloadStatus.FAILED
     val animatedProgress by animateFloatAsState(
@@ -1631,7 +1702,7 @@ fun ActiveDownloadingCard(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .clickable(onClick = onResume)
+                                    .clickable { haptics.doubleTick(); onResume() }
                                     .testTag("retry_download_button"),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1649,7 +1720,7 @@ fun ActiveDownloadingCard(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .clickable(onClick = onResume)
+                                    .clickable { haptics.doubleTick(); onResume() }
                                     .testTag("resume_download_button"),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1667,7 +1738,7 @@ fun ActiveDownloadingCard(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .clickable(onClick = onPause)
+                                    .clickable { haptics.tick(); onPause() }
                                     .testTag("pause_download_button"),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1686,7 +1757,7 @@ fun ActiveDownloadingCard(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .clickable(onClick = onCancel)
+                            .clickable { haptics.reject(); onCancel() }
                             .testTag("cancel_download_button"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1717,6 +1788,7 @@ fun PendingQueueCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberHaptics()
 
     Card(
         modifier = modifier
@@ -1804,7 +1876,7 @@ fun PendingQueueCard(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = onCancel,
+                    onClick = { haptics.reject(); onCancel() },
                     modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
@@ -1837,6 +1909,7 @@ fun DownloadedMovieCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberHaptics()
     val displayTitle = remember(item.title, item.year) {
         val y = item.year.trim()
         if (y.isNotEmpty() && !item.title.contains("($y)")) {
@@ -1855,6 +1928,7 @@ fun DownloadedMovieCard(
                     if (isSelectionMode) onToggleSelect() else onPlay()
                 },
                 onLongClick = {
+                    haptics.tick()
                     onLongPress()
                 }
             ),

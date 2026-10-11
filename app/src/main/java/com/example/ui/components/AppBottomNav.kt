@@ -216,6 +216,7 @@ fun AppBottomNav(
     isVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val haptics = rememberHaptics()
     val activeColor = MaterialTheme.colorScheme.primary
     val navAnimSpec = tween<Color>(durationMillis = 350, easing = FastOutSlowInEasing)
     val motionAnimSpec = tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
@@ -378,6 +379,7 @@ fun AppBottomNav(
                                 interactionSource = interactionSource,
                                 indication = null
                             ) {
+                                haptics.tick()
                                 onNavigate(screen.pageIndex)
                             }
                             .testTag("nav_item_${screen.route}"),

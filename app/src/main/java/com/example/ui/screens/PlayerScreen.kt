@@ -75,6 +75,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.example.MainActivity
+import com.example.ui.components.rememberHaptics
 import com.example.ui.player.NextPlayerAudioTrack
 import com.example.ui.player.NextPlayerAudioTrackDialog
 import com.example.ui.player.NextPlayerBottomBar
@@ -116,6 +117,7 @@ fun PlayerScreen(
     val mainActivity = context as? MainActivity
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val coroutineScope = rememberCoroutineScope()
+    val haptics = rememberHaptics()
 
     // Title display: clean, single title showing channel or year in parentheses
     val displayTitle = remember(title, year) {
@@ -578,6 +580,7 @@ fun PlayerScreen(
                                 when {
                                     xFrac < 0.35f -> {
                                         // Left 1/3: Rewind 10s
+                                        haptics.gestureTick()
                                         val newPos = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
                                         exoPlayer.seekTo(newPos)
                                         currentPositionMs = newPos
@@ -589,6 +592,7 @@ fun PlayerScreen(
                                     }
                                     xFrac > 0.65f -> {
                                         // Right 1/3: Forward 10s
+                                        haptics.gestureTick()
                                         // Con duración desconocida (0) no se limita, o saltaría al inicio
                                         val newPos = (exoPlayer.currentPosition + 10_000L)
                                             .coerceAtMost(if (durationMs > 0L) durationMs else Long.MAX_VALUE)
@@ -602,6 +606,7 @@ fun PlayerScreen(
                                     }
                                     else -> {
                                         // Center: Toggle Play / Pause
+                                        haptics.tick()
                                         if (exoPlayer.isPlaying) {
                                             exoPlayer.pause()
                                             isPlaying = false
@@ -710,6 +715,7 @@ fun PlayerScreen(
                                     exoPlayer.seekTo(horizontalSeekTargetMs)
                                     currentPositionMs = horizontalSeekTargetMs
                                     isSeekingHorizontal = false
+                                    haptics.gestureTick()
                                 }
                                 showVolumeHud = false
                                 showBrightnessHud = false
@@ -916,6 +922,7 @@ fun PlayerScreen(
                             lastInteractionTime = System.currentTimeMillis()
                         },
                         onToggleLock = {
+                            haptics.confirm()
                             isScreenLocked = true
                             areControlsVisible = false
                             showUnlockButton = true
@@ -1010,6 +1017,7 @@ fun PlayerScreen(
             NextPlayerLockOverlay(
                 visible = isScreenLocked && showUnlockButton,
                 onUnlock = {
+                    haptics.tick()
                     isScreenLocked = false
                     areControlsVisible = true
                     showUnlockButton = false

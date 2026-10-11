@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,13 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed as staggeredItemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -49,10 +57,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -79,8 +90,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import com.example.utils.NetworkUtils
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,6 +131,7 @@ import com.example.ui.components.PeliculaCard
 import com.example.ui.components.PeliculaGridSkeleton
 import com.example.ui.components.PeliculaListSkeleton
 import com.example.ui.components.SleekDeterminateCircularProgress
+import com.example.ui.components.rememberHaptics
 import com.example.ui.components.shimmerEffect
 import com.example.viewmodel.HomeUiState
 
@@ -141,9 +155,12 @@ fun HomeScreen(
     onPauseDownload: ((com.example.data.model.DownloadItem) -> Unit)? = null,
     onResumeDownload: ((com.example.data.model.DownloadItem) -> Unit)? = null,
     onCancelDownload: ((com.example.data.model.DownloadItem) -> Unit)? = null,
+    onToggleFavorite: (Pelicula) -> Unit = {},
+    onToggleFavorites: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberHaptics()
     var selectedPeliculaForSheet by remember { mutableStateOf<Pelicula?>(null) }
     var showTelegramDialog by remember { mutableStateOf(false) }
 
@@ -158,6 +175,14 @@ fun HomeScreen(
     val gridStateVideos = rememberSaveable(saver = LazyGridState.Saver, key = "grid_state_videos") { LazyGridState() }
     val gridStateSearch = rememberSaveable(saver = LazyGridState.Saver, key = "grid_state_search") { LazyGridState() }
 
+    // Estados del grid escalonado (modo "Cuadrícula (2 col)"), uno por filtro para conservar posición
+    val staggeredStateAll = rememberSaveable(saver = LazyStaggeredGridState.Saver, key = "stag_state_all") { LazyStaggeredGridState() }
+    val staggeredStateMovies = rememberSaveable(saver = LazyStaggeredGridState.Saver, key = "stag_state_movies") { LazyStaggeredGridState() }
+    val staggeredStateVideos = rememberSaveable(saver = LazyStaggeredGridState.Saver, key = "stag_state_videos") { LazyStaggeredGridState() }
+    val staggeredStateSearch = rememberSaveable(saver = LazyStaggeredGridState.Saver, key = "stag_state_search") { LazyStaggeredGridState() }
+
+    val isStaggeredMode = uiState.catalogLayoutMode == "GRID_2"
+
     val activeGridState = if (uiState.searchQuery.isNotEmpty()) {
         gridStateSearch
     } else {
@@ -168,10 +193,22 @@ fun HomeScreen(
         }
     }
 
+    val activeStaggeredState = if (uiState.searchQuery.isNotEmpty()) {
+        staggeredStateSearch
+    } else {
+        when (uiState.selectedType.uppercase()) {
+            "MOVIE" -> staggeredStateMovies
+            "VIDEO" -> staggeredStateVideos
+            else -> staggeredStateAll
+        }
+    }
+
     // Point 4: Llegar al final de la lista -> barBehavior.atEnd = alFinal; if (alFinal) barBehavior.show()
-    LaunchedEffect(activeGridState, isCurrentPage) {
+    LaunchedEffect(activeGridState, activeStaggeredState, isStaggeredMode, isCurrentPage) {
         if (isCurrentPage && barBehavior != null) {
-            snapshotFlow { !activeGridState.canScrollForward }
+            snapshotFlow {
+                if (isStaggeredMode) !activeStaggeredState.canScrollForward else !activeGridState.canScrollForward
+            }
                 .distinctUntilChanged()
                 .collect { alFinal ->
                     barBehavior.atEnd = alFinal
@@ -181,9 +218,11 @@ fun HomeScreen(
     }
 
     // Point 5(d): En la parte superior (posición 0) o sin contenido suficiente para desplazarse
-    LaunchedEffect(activeGridState, isCurrentPage) {
+    LaunchedEffect(activeGridState, activeStaggeredState, isStaggeredMode, isCurrentPage) {
         if (isCurrentPage && barBehavior != null) {
-            snapshotFlow { !activeGridState.canScrollBackward }
+            snapshotFlow {
+                if (isStaggeredMode) !activeStaggeredState.canScrollBackward else !activeGridState.canScrollBackward
+            }
                 .distinctUntilChanged()
                 .collect { atTop ->
                     if (atTop) barBehavior.show()
@@ -311,7 +350,9 @@ fun HomeScreen(
                 totalCount = uiState.allPeliculas.size,
                 filteredCount = uiState.filteredPeliculas.size,
                 onClearFilters = onClearFilters,
-                isDarkTheme = isDark
+                isDarkTheme = isDark,
+                onlyFavorites = uiState.onlyFavorites,
+                onToggleFavorites = onToggleFavorites
             )
 
             // Continue Watching Banner (if user has an in-progress video)
@@ -338,6 +379,21 @@ fun HomeScreen(
                         onDismissClick = onDismissContinueWatching
                     )
                 }
+            }
+
+            // Hero destacado: carrusel con auto-avance y efecto Ken Burns (solo en vista completa)
+            if (uiState.searchQuery.isEmpty() &&
+                !uiState.onlyFavorites &&
+                uiState.selectedType == "ALL" &&
+                uiState.allPeliculas.isNotEmpty()
+            ) {
+                FeaturedHeroCarousel(
+                    peliculas = uiState.allPeliculas,
+                    isDarkTheme = isDark,
+                    favoriteIds = uiState.favoriteIds,
+                    onPlay = { haptics.confirm(); onPlayPelicula(it, 0L) },
+                    onDownload = { haptics.confirm(); onDownloadPelicula(it) }
+                )
             }
 
             // Main feed with pull-to-refresh (active only when items exist so it doesn't float over initial skeletons)
@@ -392,16 +448,29 @@ fun HomeScreen(
 
                     uiState.filteredPeliculas.isEmpty() -> {
                         val isFilterActive = uiState.selectedType != "ALL" || uiState.onlyFavorites || uiState.searchQuery.isNotBlank()
+                        val showingFavoritesOnly = uiState.onlyFavorites && uiState.selectedType == "ALL" && uiState.searchQuery.isBlank()
                         AnimatedCatalogEmptyState(
-                            icon = if (isFilterActive) Icons.Default.FilterListOff else Icons.Default.CloudOff,
-                            iconTint = MaterialTheme.colorScheme.primary,
-                            title = if (isFilterActive) "Sin coincidencias" else "Catálogo no disponible",
-                            subtitle = if (isFilterActive) {
-                                "No se encontraron títulos que coincidan con la búsqueda o filtros aplicados."
-                            } else {
-                                "No se pudieron cargar títulos del catálogo. Revisa tu conexión a internet o intenta actualizar."
+                            icon = when {
+                                showingFavoritesOnly -> Icons.Default.FavoriteBorder
+                                isFilterActive -> Icons.Default.FilterListOff
+                                else -> Icons.Default.CloudOff
                             },
-                            buttonText = if (isFilterActive) "Restablecer filtros" else "Actualizar catálogo",
+                            iconTint = if (showingFavoritesOnly) Color(0xFFEC4899) else MaterialTheme.colorScheme.primary,
+                            title = when {
+                                showingFavoritesOnly -> "Aún no tienes favoritos"
+                                isFilterActive -> "Sin coincidencias"
+                                else -> "Catálogo no disponible"
+                            },
+                            subtitle = when {
+                                showingFavoritesOnly -> "Toca el corazón en cualquier póster para guardar tus títulos aquí."
+                                isFilterActive -> "No se encontraron títulos que coincidan con la búsqueda o filtros aplicados."
+                                else -> "No se pudieron cargar títulos del catálogo. Revisa tu conexión a internet o intenta actualizar."
+                            },
+                            buttonText = when {
+                                showingFavoritesOnly -> "Explorar catálogo"
+                                isFilterActive -> "Restablecer filtros"
+                                else -> "Actualizar catálogo"
+                            },
                             buttonIcon = Icons.Default.Refresh,
                             onButtonClick = {
                                 if (isFilterActive) onClearFilters() else onRefresh()
@@ -425,36 +494,75 @@ fun HomeScreen(
                             else -> GridCells.Fixed(2)
                         }
 
-                        // Responsive catalog grid supporting 2-col, 3-col, and detailed list with independent scroll per tab
+                        // Responsive catalog: masonry escalonada (2 col), compacta (3 col) y lista detallada,
+                        // con scroll independiente por pestaña
                         androidx.compose.runtime.key(if (uiState.searchQuery.isNotEmpty()) "search" else uiState.selectedType) {
-                            LazyVerticalGrid(
-                                columns = columns,
-                                state = activeGridState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .testTag("movies_grid"),
-                                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
-                                horizontalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else 14.dp),
-                                verticalArrangement = Arrangement.spacedBy(if (isListMode) 12.dp else 16.dp)
-                            ) {
-                                items(
-                                    items = uiState.filteredPeliculas,
-                                    key = { it.id },
-                                    contentType = { "pelicula_card" }
-                                ) { pelicula ->
-                                    val downloadItem = downloadsMap[pelicula.id]
-                                    PeliculaCard(
-                                        pelicula = pelicula,
-                                        downloadItem = downloadItem,
-                                        isDarkTheme = isDark,
-                                        isListMode = isListMode,
-                                        onCardClick = {
-                                            selectedPeliculaForSheet = pelicula
-                                        },
-                                        onDownloadClick = {
-                                            onDownloadPelicula(pelicula)
-                                        }
-                                    )
+                            if (isStaggeredMode) {
+                                LazyVerticalStaggeredGrid(
+                                    columns = StaggeredGridCells.Fixed(2),
+                                    state = activeStaggeredState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .testTag("movies_grid"),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalItemSpacing = 16.dp
+                                ) {
+                                    staggeredItemsIndexed(
+                                        items = uiState.filteredPeliculas,
+                                        key = { _, pelicula -> pelicula.id },
+                                        contentType = { _, _ -> "pelicula_card" }
+                                    ) { _, pelicula ->
+                                        val downloadItem = downloadsMap[pelicula.id]
+                                        PeliculaCard(
+                                            pelicula = pelicula,
+                                            downloadItem = downloadItem,
+                                            isDarkTheme = isDark,
+                                            isListMode = false,
+                                            isFavorite = uiState.favoriteIds.contains(pelicula.id),
+                                            onFavoriteClick = { onToggleFavorite(pelicula) },
+                                            posterAspectRatio = posterAspectFor(pelicula.id),
+                                            onCardClick = {
+                                                selectedPeliculaForSheet = pelicula
+                                            },
+                                            onDownloadClick = {
+                                                onDownloadPelicula(pelicula)
+                                            }
+                                        )
+                                    }
+                                }
+                            } else {
+                                LazyVerticalGrid(
+                                    columns = columns,
+                                    state = activeGridState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .testTag("movies_grid"),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else 14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(if (isListMode) 12.dp else 16.dp)
+                                ) {
+                                    items(
+                                        items = uiState.filteredPeliculas,
+                                        key = { it.id },
+                                        contentType = { "pelicula_card" }
+                                    ) { pelicula ->
+                                        val downloadItem = downloadsMap[pelicula.id]
+                                        PeliculaCard(
+                                            pelicula = pelicula,
+                                            downloadItem = downloadItem,
+                                            isDarkTheme = isDark,
+                                            isListMode = isListMode,
+                                            isFavorite = uiState.favoriteIds.contains(pelicula.id),
+                                            onFavoriteClick = if (!isListMode) ({ onToggleFavorite(pelicula) }) else null,
+                                            onCardClick = {
+                                                selectedPeliculaForSheet = pelicula
+                                            },
+                                            onDownloadClick = {
+                                                onDownloadPelicula(pelicula)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -619,6 +727,43 @@ fun HomeScreen(
                             }
                         }
                     }
+
+                    // Favorito en la ficha: corazón con acento rosa y doble tick háptico
+                    val sheetIsFavorite = uiState.favoriteIds.contains(pelicula.id)
+                    Surface(
+                        onClick = {
+                            haptics.doubleTick()
+                            onToggleFavorite(pelicula)
+                        },
+                        shape = CircleShape,
+                        color = if (sheetIsFavorite) {
+                            Color(0xFFEC4899).copy(alpha = 0.18f)
+                        } else {
+                            if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (sheetIsFavorite) {
+                                Color(0xFFEC4899).copy(alpha = 0.5f)
+                            } else {
+                                if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                            }
+                        ),
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = if (sheetIsFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (sheetIsFavorite) "Quitar de favoritos" else "Añadir a favoritos",
+                                tint = if (sheetIsFavorite) {
+                                    Color(0xFFEC4899)
+                                } else {
+                                    if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                },
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(22.dp))
@@ -645,6 +790,7 @@ fun HomeScreen(
                             return@Button
                         }
                         if (isVerifyingServerForPlay || isVerifyingServerForDownload) return@Button
+                        haptics.confirm()
                         val isOnline = NetworkUtils.isConnected(context)
                         if (!isOnline && toPlay.safeVideoUrl.startsWith("http", ignoreCase = true)) {
                             AppToastManager.show(
@@ -977,6 +1123,7 @@ fun HomeScreen(
                         OutlinedButton(
                             onClick = {
                                 if (isVerifyingServerForPlay || isVerifyingServerForDownload) return@OutlinedButton
+                                haptics.confirm()
                                 val toDown = selectedPeliculaForSheet ?: return@OutlinedButton
                                 val isOnline = NetworkUtils.isConnected(context)
                                 if (!isOnline && toDown.safeVideoUrl.startsWith("http", ignoreCase = true)) {
@@ -1277,3 +1424,243 @@ private fun AnimatedCatalogEmptyState(
     }
 }
 
+
+/** Aspecto de póster escalonado y estable por id: 3 variantes dan altura variada al masonry. */
+private fun posterAspectFor(id: String): Float {
+    val variants = floatArrayOf(0.72f, 0.82f, 0.77f)
+    return variants[abs(id.hashCode()) % variants.size]
+}
+
+/**
+ * Carrusel destacado del catálogo: póster grande con efecto Ken Burns, degradado
+ * cinematográfico, chip "DESTACADO", acciones de Reproducir/Descargar y auto-avance
+ * cada 5 segundos. Usa hasta 5 títulos (prioriza películas).
+ */
+@Composable
+private fun FeaturedHeroCarousel(
+    peliculas: List<Pelicula>,
+    isDarkTheme: Boolean,
+    favoriteIds: Set<String>,
+    onPlay: (Pelicula) -> Unit,
+    onDownload: (Pelicula) -> Unit
+) {
+    val pages = remember(peliculas) {
+        val pool = peliculas.filter { it.isMovie }.ifEmpty { peliculas }
+        pool.take(5)
+    }
+    if (pages.isEmpty()) return
+
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+
+    // Auto-avance suave cada 5 s (solo si el carrusel está quieto)
+    LaunchedEffect(pagerState.settledPage, pages.size) {
+        if (pages.size > 1) {
+            delay(5000L)
+            if (!pagerState.isScrollInProgress) {
+                val next = (pagerState.settledPage + 1) % pages.size
+                runCatching { pagerState.animateScrollToPage(next) }
+            }
+        }
+    }
+
+    HorizontalPager(
+        state = pagerState,
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        pageSpacing = 12.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+    ) { page ->
+        val pelicula = pages[page]
+
+        // Efecto Ken Burns: zoom lento y continuo del póster
+        val kenBurns = rememberInfiniteTransition(label = "hero_ken_burns")
+        val kbScale by kenBurns.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(14000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "hero_kb_scale"
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(216.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(if (isDarkTheme) Color(0xFF131D33) else Color(0xFFE2E8F0))
+        ) {
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(pelicula.safeCoverUrl)
+                    .memoryCacheKey(pelicula.safeCoverUrl)
+                    .diskCacheKey(pelicula.safeCoverUrl)
+                    .crossfade(250)
+                    .build(),
+                contentDescription = pelicula.safeTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = kbScale
+                        scaleY = kbScale
+                    },
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .shimmerEffect(RoundedCornerShape(24.dp), isDark = isDarkTheme)
+                    )
+                }
+            )
+
+            // Degradado cinematográfico para legibilidad del texto
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.45f to Color.Black.copy(alpha = 0.10f),
+                            1f to Color.Black.copy(alpha = 0.82f)
+                        )
+                    )
+            )
+
+            // Chip DESTACADO
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0x66000000)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = Color(0xFFFBBF24),
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "DESTACADO",
+                        color = Color.White,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+
+            // Indicador de favorito
+            if (favoriteIds.contains(pelicula.id)) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = "Favorito",
+                    tint = Color(0xFFEC4899),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(18.dp)
+                )
+            }
+
+            // Título + acciones
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = pelicula.safeTitle,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val tag = pelicula.secondaryTag
+                    if (tag.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = if (pelicula.isVideo) tag else pelicula.safeYear.ifBlank { tag },
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onPlay(pelicula) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Reproducir",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x66000000))
+                        .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                        .clickable { onDownload(pelicula) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Descargar",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    // Puntos indicadores del carrusel
+    if (pages.size > 1) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(pages.size) { i ->
+                val selected = pagerState.currentPage == i
+                val dotSize = if (selected) 7.dp else 5.dp
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 3.dp)
+                        .size(dotSize, dotSize)
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                )
+            }
+        }
+    }
+}

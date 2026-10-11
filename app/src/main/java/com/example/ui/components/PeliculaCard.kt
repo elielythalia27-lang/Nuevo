@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -10,7 +11,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -28,10 +32,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -78,13 +85,34 @@ fun PeliculaCard(
     onDownloadClick: () -> Unit,
     isDarkTheme: Boolean = true,
     isListMode: Boolean = false,
+    isFavorite: Boolean = false,
+    onFavoriteClick: (() -> Unit)? = null,
+    posterAspectRatio: Float = 0.78f,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberHaptics()
     val cardBg = if (isDarkTheme) Color(0xFF0F172A) else Color.White
     val cardBorder = if (isDarkTheme) Color(0xFF26354D) else Color(0xFFA0AEC0)
     val titleColor = if (isDarkTheme) Color.White else Color(0xFF0F172A)
     val subtitleColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF334155)
+
+    // Pop elástico del corazón al alternar favorito
+    val heartScale = remember { Animatable(1f) }
+    var lastFavoriteState by remember { mutableStateOf(isFavorite) }
+    LaunchedEffect(isFavorite) {
+        if (lastFavoriteState != isFavorite) {
+            lastFavoriteState = isFavorite
+            heartScale.snapTo(0.55f)
+            heartScale.animateTo(
+                1f,
+                spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+    }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -311,9 +339,38 @@ fun PeliculaCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(0.78f)
+                        .aspectRatio(posterAspectRatio)
                         .background(if (isDarkTheme) Color(0xFF161F33) else Color(0xFFE2E8F0))
                 ) {
+                    // Favorito: esquina superior-izquierda, con círculo de vidrio y pop elástico
+                    if (onFavoriteClick != null) {
+                        Box(
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .align(Alignment.TopStart)
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x99000000))
+                                .clickable {
+                                    haptics.doubleTick()
+                                    onFavoriteClick()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (isFavorite) "Quitar de favoritos" else "Añadir a favoritos",
+                                tint = if (isFavorite) Color(0xFFEC4899) else Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .graphicsLayer {
+                                        scaleX = heartScale.value
+                                        scaleY = heartScale.value
+                                    }
+                            )
+                        }
+                    }
+
                     // SubcomposeAsyncImage with smooth shimmering loading placeholder
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(context)

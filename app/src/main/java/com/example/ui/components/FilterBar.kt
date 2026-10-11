@@ -26,6 +26,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
@@ -61,10 +63,13 @@ fun FilterBar(
     filteredCount: Int,
     onClearFilters: () -> Unit,
     isDarkTheme: Boolean = true,
+    onlyFavorites: Boolean = false,
+    onToggleFavorites: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val haptics = rememberHaptics()
     val hasActiveFilters = searchQuery.isNotEmpty() || selectedType != "ALL"
     val searchBg = if (isDarkTheme) Color(0xFF131C30) else Color.White
     val searchBorder = if (searchQuery.isNotEmpty()) {
@@ -189,7 +194,10 @@ fun FilterBar(
             // Chip: Todos
             FilterChip(
                 selected = selectedType == "ALL",
-                onClick = { onTypeSelected("ALL") },
+                onClick = {
+                    haptics.tick()
+                    onTypeSelected("ALL")
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Apps,
@@ -212,7 +220,10 @@ fun FilterBar(
             // Chip: Películas
             FilterChip(
                 selected = selectedType == "MOVIE",
-                onClick = { onTypeSelected("MOVIE") },
+                onClick = {
+                    haptics.tick()
+                    onTypeSelected("MOVIE")
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Movie,
@@ -238,7 +249,10 @@ fun FilterBar(
             // Chip: YouTube - Dynamic styling matching YouTube branding (Red icon when unselected, full pure Red #FF0000 pill when selected)
             FilterChip(
                 selected = isYouTubeSelected,
-                onClick = { onTypeSelected("VIDEO") },
+                onClick = {
+                    haptics.tick()
+                    onTypeSelected("VIDEO")
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.PlayCircle,
@@ -261,6 +275,54 @@ fun FilterBar(
                 ),
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = youtubeRed,
+                    selectedLabelColor = Color.White,
+                    containerColor = chipBg,
+                    labelColor = chipText
+                )
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Chip: Favoritos (rosa, con corazón) — filtra el catálogo a los marcados con ❤
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val favoritePink = Color(0xFFEC4899)
+            val onPrimary = MaterialTheme.colorScheme.onPrimary
+
+            FilterChip(
+                selected = onlyFavorites,
+                onClick = {
+                    haptics.doubleTick()
+                    onToggleFavorites(!onlyFavorites)
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (onlyFavorites) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (onlyFavorites) Color.White else favoritePink
+                    )
+                },
+                label = {
+                    Text(
+                        text = "Favoritos",
+                        fontSize = 12.sp,
+                        fontWeight = if (onlyFavorites) FontWeight.Bold else FontWeight.SemiBold
+                    )
+                },
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(
+                    1.dp,
+                    if (onlyFavorites) Color.Transparent else favoritePink.copy(alpha = 0.45f)
+                ),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = favoritePink,
                     selectedLabelColor = Color.White,
                     containerColor = chipBg,
                     labelColor = chipText
