@@ -35,6 +35,9 @@ import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
+/** Se lanza dentro del bucle de descarga cuando se detecta VPN o Proxy: pausa, no es un fallo. */
+internal class VpnBlockedException : Exception("VPN o Proxy detectado")
+
 data class LiveProgressUpdate(
     val downloadId: String,
     val downloadedBytes: Long,
@@ -62,6 +65,12 @@ class DownloadHelper(
     @Volatile
     private var cachedMaxLimit: Int = 3
 
+    /** Estado de VPN/proxy actualizado en tiempo real. Los motores de descarga lo consultan en cada ciclo. */
+    @Volatile
+    private var vpnBlocked: Boolean = false
+
+    fun isVpnBlocked(): Boolean = vpnBlocked
+
     // In-memory Single Source of Truth for 0ms latency UI updates
     private val _liveDownloadsState = MutableStateFlow<List<DownloadItem>>(emptyList())
     val liveDownloadsState: StateFlow<List<DownloadItem>> = _liveDownloadsState.asStateFlow()
@@ -87,6 +96,32 @@ class DownloadHelper(
 
         @Volatile
         private var instance: DownloadHelper? = null
+
+        /**
+         * Convierte el .part en el archivo final SIN perder nunca el vídeo: si renameTo falla
+         * (ocurre en almacenamiento público/SD), copia y verifica el tamaño antes de borrar el .part.
+         * @return true solo si el archivo final existe y tiene el tamaño completo.
+         */
+        fun finalizePartFile(part: File, dest: File): Boolean {
+            if (!part.exists()) return false
+            val expected = part.length()
+            if (expected <= 0L) return false
+            try { if (dest.exists()) dest.delete() } catch (_: Exception) {}
+            if (part.renameTo(dest) && dest.exists() && dest.length() == expected) return true
+            return try {
+                part.copyTo(dest, overwrite = true)
+                if (dest.length() == expected) {
+                    part.delete()
+                    true
+                } else {
+                    dest.delete()
+                    false
+                }
+            } catch (_: Exception) {
+                try { dest.delete() } catch (_: Exception) {}
+                false
+            }
+        }
 
         fun getActiveInstance(context: Context): DownloadHelper {
             return instance ?: synchronized(this) {
@@ -193,6 +228,48 @@ class DownloadHelper(
             }
         }
 
+        // Android 14+: las descargas corren como jobs UIDT y cada una publica su propia notificación,
+        // pero nadie publicaba la notificación RESUMEN del grupo (en Android < 14 la publica el servicio
+        // en primer plano). Sin resumen, Android no las agrupa en un solo bloque desplegable.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            scope.launch(Dispatchers.Default) {
+                var posted = false
+                var lastPost = 0L
+                _liveDownloadsState.collect { list ->
+                    val active = list.filter { it.status == DownloadStatus.DOWNLOADING }
+                    val now = System.currentTimeMillis()
+                    try {
+                        if (active.isEmpty()) {
+                            if (posted) {
+                                notificationManager.cancel(NotificationUtils.SUMMARY_NOTIFICATION_ID)
+                                posted = false
+                            }
+                        } else if (!posted || now - lastPost >= 1500L) {
+                            notificationManager.notify(
+                                NotificationUtils.SUMMARY_NOTIFICATION_ID,
+                                NotificationUtils.buildSummaryNotification(context, active)
+                            )
+                            posted = true
+                            lastPost = now
+                        }
+                    } catch (_: Exception) {
+                        // Sin permiso de notificaciones o sistema ocupado: se reintenta en la siguiente emisión.
+                    }
+                }
+            }
+        }
+
+        // VPN / Proxy: una VPN que se activa con descargas en curso las PAUSA (conserva el .part),
+        // no las marca como fallidas. Al desactivarla, se reanudan solas. Así el servidor nunca
+        // recibe tráfico desde una VPN/proxy y el usuario no pierde progreso.
+        vpnBlocked = VpnProxyDetector.isVpnOrProxyActive(context)
+        scope.launch(Dispatchers.IO) {
+            VpnProxyDetector.observeVpnAndProxy(context).collect { status ->
+                vpnBlocked = status.isBlocked
+                if (status.isBlocked) pauseAllForVpn() else resumeAfterVpn()
+            }
+        }
+
         // Observe max concurrency settings changes
         scope.launch(Dispatchers.IO) {
             preferences.maxConcurrentDownloads.collect { limit ->
@@ -213,6 +290,7 @@ class DownloadHelper(
         scope.launch(Dispatchers.IO) {
             networkMonitor.isOnline.collect { isOnline ->
                 if (isOnline) {
+                    requeueNetworkFailures()
                     val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
                     if (isWifiOnlyPref) {
                         if (NetworkUtils.isWifiOrEthernet(context)) {
@@ -242,6 +320,11 @@ class DownloadHelper(
             return
         }
         scope.launch(Dispatchers.IO) {
+            vpnBlocked = VpnProxyDetector.isVpnOrProxyActive(context)
+            if (vpnBlocked) {
+                pauseAllForVpn()
+                return@launch
+            }
             queueMutex.withLock {
                 val interrupted = _liveDownloadsState.value.filter {
                     it.status == DownloadStatus.DOWNLOADING && liveProgressMap[it.id] == null
@@ -252,7 +335,91 @@ class DownloadHelper(
                     DownloadForegroundService.startDownload(context, item)
                 }
             }
+            // Las que quedaron en cola (p. ej. reanudadas tras quitar la VPN con la app cerrada)
+            syncConcurrentDownloadsLimit()
         }
+    }
+
+    /**
+     * Pausa una descarga por VPN/proxy y conserva lo descargado. No toca notificaciones
+     * ni el motor: quien la llama detiene el trabajo y publica la notificación.
+     */
+    fun markPausedByVpn(id: String): DownloadItem? {
+        val live = getItem(id) ?: return null
+        if (live.status == DownloadStatus.COMPLETED) return null
+        val part = File(live.localFilePath + ".part")
+        val bytes = if (part.exists()) part.length() else live.downloadedBytes
+        val progress = if (live.totalBytes > 0L) {
+            ((bytes * 100L) / live.totalBytes).toInt().coerceIn(0, 99)
+        } else live.progress
+        clearLiveProgress(id)
+        val paused = live.copy(
+            status = DownloadStatus.PAUSED,
+            pausedByVpn = true,
+            downloadedBytes = bytes,
+            progress = progress,
+            speedBytesPerSec = 0L,
+            etaSeconds = 0L
+        )
+        updateAndPersist(paused)
+        return paused
+    }
+
+    /** Al volver la conexión, las descargas que fallaron por cortes de red se reintentan solas. */
+    private suspend fun requeueNetworkFailures() {
+        awaitLoaded()
+        if (_liveDownloadsState.value.none { it.status == DownloadStatus.FAILED && it.failedByNetwork }) return
+        val requeued = queueMutex.withLock {
+            _liveDownloadsState.value
+                .filter { it.status == DownloadStatus.FAILED && it.failedByNetwork }
+                .map { item ->
+                    val queued = item.copy(status = DownloadStatus.PENDING, failedByNetwork = false)
+                    updateItemState(queued)
+                    preferences.addOrUpdateDownload(queued)
+                    queued
+                }
+        }
+        requeued.forEach {
+            try { notificationManager.cancel((it.id.hashCode() and 0x0FFFFFFF) + 1 + 0x30000000) } catch (_: Exception) {}
+        }
+        syncConcurrentDownloadsLimit()
+    }
+
+    private suspend fun pauseAllForVpn() {
+        awaitLoaded()
+        val targets = queueMutex.withLock {
+            _liveDownloadsState.value
+                .filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING }
+                .mapNotNull { markPausedByVpn(it.id) }
+        }
+        if (targets.isEmpty()) return
+        // Detiene los motores (el estado ya es PAUSED con pausedByVpn = true)
+        targets.forEach { DownloadForegroundService.pauseDownload(context, it.id) }
+        AppToastManager.show("Descargas en pausa: desactiva la VPN o el proxy", ToastType.WARNING)
+    }
+
+    private suspend fun resumeAfterVpn() {
+        awaitLoaded()
+        if (_liveDownloadsState.value.none { it.status == DownloadStatus.PAUSED && it.pausedByVpn }) return
+        delay(1500L) // dejar que la red termine de cambiar
+        if (vpnBlocked || VpnProxyDetector.isVpnOrProxyActive(context)) return
+        val resumed = queueMutex.withLock {
+            _liveDownloadsState.value
+                .filter { it.status == DownloadStatus.PAUSED && it.pausedByVpn }
+                .map { item ->
+                    val queued = item.copy(status = DownloadStatus.PENDING, pausedByVpn = false)
+                    updateItemState(queued)
+                    preferences.addOrUpdateDownload(queued)
+                    queued
+                }
+        }
+        if (resumed.isEmpty()) return
+        resumed.forEach {
+            // La notificación "En pausa por VPN" ya no aplica; si la descarga arranca se vuelve a publicar.
+            try { notificationManager.cancel((it.id.hashCode() and 0x0FFFFFFF) + 1) } catch (_: Exception) {}
+        }
+        syncConcurrentDownloadsLimit()
+        AppToastManager.show("VPN desactivada: reanudando descargas", ToastType.INFO)
     }
 
     fun isPaused(id: String): Boolean {
@@ -353,7 +520,9 @@ class DownloadHelper(
                             progress = progress,
                             speedBytesPerSec = speedBytesPerSec,
                             etaSeconds = etaSeconds,
-                            status = DownloadStatus.DOWNLOADING
+                            status = DownloadStatus.DOWNLOADING,
+                            pausedByVpn = false,
+                            failedByNetwork = false
                         )
                     }
                 } else item
@@ -390,6 +559,11 @@ class DownloadHelper(
         val videoUrl = chosenQualityUrl ?: pelicula.safeVideoUrl
         if (videoUrl.isBlank()) {
             AppToastManager.show("URL de video no disponible", ToastType.ERROR)
+            return
+        }
+
+        if (VpnProxyDetector.isVpnOrProxyActive(context)) {
+            AppToastManager.show("Desactiva la VPN o Proxy para descargar", ToastType.WARNING)
             return
         }
 
@@ -499,6 +673,7 @@ class DownloadHelper(
 
         val pausedItem = item.copy(
             status = DownloadStatus.PAUSED,
+            pausedByVpn = false,
             downloadedBytes = currentDownloaded,
             totalBytes = total,
             progress = progress,
@@ -538,12 +713,12 @@ class DownloadHelper(
                 val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING && it.id != item.id }
 
                 if (activeCount >= maxLimit) {
-                    val pendingItem = item.copy(status = DownloadStatus.PENDING)
+                    val pendingItem = item.copy(status = DownloadStatus.PENDING, pausedByVpn = false)
                     updateItemState(pendingItem)
                     preferences.addOrUpdateDownload(pendingItem)
                     AppToastManager.show("En cola: máximo $maxLimit descargas activas", ToastType.INFO)
                 } else {
-                    val resumingItem = item.copy(status = DownloadStatus.DOWNLOADING)
+                    val resumingItem = item.copy(status = DownloadStatus.DOWNLOADING, pausedByVpn = false)
                     updateItemState(resumingItem)
                     preferences.addOrUpdateDownload(resumingItem)
                     DownloadForegroundService.resumeDownload(context, item.id)
@@ -553,6 +728,16 @@ class DownloadHelper(
     }
 
     fun cancelDownload(item: DownloadItem) {
+        // «Eliminar» sobre una descarga completada debe borrar el vídeo del almacenamiento
+        // (antes solo se quitaba de la lista y el archivo seguía ocupando espacio).
+        val wasCompleted = (getItem(item.id)?.status ?: item.status) == DownloadStatus.COMPLETED
+        if (wasCompleted) {
+            val path = item.localFilePath
+            scope.launch(Dispatchers.IO) {
+                try { File(path).delete() } catch (_: Exception) {}
+                try { MediaScannerConnection.scanFile(context, arrayOf(path), null, null) } catch (_: Exception) {}
+            }
+        }
         clearLiveProgress(item.id)
         removeItemFromState(item.id)
         // Se pasa la ruta explícitamente: el item ya no está en la lista, así que el servicio
@@ -627,7 +812,7 @@ class DownloadHelper(
                     AppToastManager.show("Límite de $limit descargas alcanzado. Espera a que termine una descarga.", ToastType.WARNING)
                     return@launch
                 }
-                val resuming = download.copy(status = DownloadStatus.DOWNLOADING)
+                val resuming = download.copy(status = DownloadStatus.DOWNLOADING, pausedByVpn = false)
                 updateItemState(resuming)
                 preferences.addOrUpdateDownload(resuming)
                 DownloadForegroundService.startDownload(context, resuming)
@@ -659,13 +844,13 @@ class DownloadHelper(
 
                 for (item in pausedOrPending) {
                     if (activeCount < limit) {
-                        val resuming = item.copy(status = DownloadStatus.DOWNLOADING)
+                        val resuming = item.copy(status = DownloadStatus.DOWNLOADING, pausedByVpn = false)
                         updateItemState(resuming)
                         preferences.addOrUpdateDownload(resuming)
                         DownloadForegroundService.startDownload(context, resuming)
                         activeCount++
                     } else {
-                        val pending = item.copy(status = DownloadStatus.PENDING)
+                        val pending = item.copy(status = DownloadStatus.PENDING, pausedByVpn = false)
                         updateItemState(pending)
                         preferences.addOrUpdateDownload(pending)
                     }
@@ -676,7 +861,8 @@ class DownloadHelper(
 
     fun cancelAllDownloads() {
         scope.launch(Dispatchers.IO) {
-            val list = _liveDownloadsState.value
+            // Solo las activas, en cola, en pausa o fallidas: «Cancelar todo» nunca borra lo ya descargado.
+            val list = _liveDownloadsState.value.filter { it.status != DownloadStatus.COMPLETED }
             list.forEach { item ->
                 cancelDownload(item)
             }
@@ -904,7 +1090,7 @@ class DownloadHelper(
             }
 
             if (updatedItems.isNotEmpty()) {
-                preferences.updateMultipleDownloads(updatedItems)
+                preferences.updateMultipleDownloads(updatedItems, onlyIfDownloading = false)
                 _liveDownloadsState.update { current ->
                     current.map { existing ->
                         updatedItems.find { it.id == existing.id } ?: existing

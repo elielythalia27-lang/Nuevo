@@ -106,6 +106,14 @@ class MainActivity : ComponentActivity() {
     val notificationResumeActions = _notificationResumeActions.asSharedFlow()
     private var pendingNotificationResumeId: String? = null
 
+    /** Se incrementa en cada onResume para volver a comprobar VPN/proxy al volver a la app. */
+    val resumeTick = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    override fun onResume() {
+        super.onResume()
+        resumeTick.value = resumeTick.value + 1
+    }
+
     private var isPlayerActive: Boolean = false
     private var onPlayerVolumeKey: ((Int) -> Unit)? = null
 
@@ -394,10 +402,14 @@ fun MainAppNavigation(
     }
 
     var retryKey by remember { mutableStateOf(0) }
+    // Al volver a la app desde segundo plano se vuelve a comprobar VPN/proxy al instante
+    val resumeCount by ((context as? MainActivity)?.resumeTick
+        ?: remember { kotlinx.coroutines.flow.MutableStateFlow(0) }).collectAsStateWithLifecycle()
     val vpnStatus by produceState(
         initialValue = remember { VpnProxyDetector.checkStatus(context) },
         context,
-        retryKey
+        retryKey,
+        resumeCount
     ) {
         value = VpnProxyDetector.checkStatus(context)
         VpnProxyDetector.observeVpnAndProxy(context).collect {

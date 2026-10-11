@@ -106,7 +106,12 @@ class DownloadUidtJobService : JobService() {
             if (attempt >= DownloadForegroundService.RETRY_DELAYS_MS.size) {
                 val live = helper.getItem(item.id) ?: return
                 if (live.status == DownloadStatus.DOWNLOADING) {
-                    val failed = live.copy(status = DownloadStatus.FAILED, speedBytesPerSec = 0L, etaSeconds = 0L)
+                    val failed = live.copy(
+                        status = DownloadStatus.FAILED,
+                        failedByNetwork = true,
+                        speedBytesPerSec = 0L,
+                        etaSeconds = 0L
+                    )
                     helper.updateAndPersist(failed)
                     notificationManager.notify(
                         notificationId(item.id),
@@ -132,6 +137,11 @@ class DownloadUidtJobService : JobService() {
         destination.parentFile?.mkdirs()
         val part = File(destination.absolutePath + ".part")
         part.parentFile?.mkdirs()
+        // Nunca abrir una conexión con VPN/proxy activo: queda en pausa y se reanuda sola al quitarla.
+        if (com.example.utils.VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
+            pauseForVpn(item.id, helper, notificationManager)
+            return false
+        }
         var downloaded = if (part.exists()) part.length() else item.downloadedBytes
         var connection: HttpURLConnection? = null
         var input: InputStream? = null
@@ -226,6 +236,7 @@ class DownloadUidtJobService : JobService() {
                     speed = if (speed == 0L) instant else ((speed * 0.70) + (instant * 0.30)).toLong()
                     val remaining = (total - downloaded).coerceAtLeast(0L)
                     val eta = if (speed > 2048L && remaining > 0) remaining / speed else 0L
+                    if (helper.isVpnBlocked()) throw VpnBlockedException()
                     publish(item, helper, notificationManager, downloaded, total, speed, eta)
                     windowBytes = 0L
                     last = now
@@ -236,8 +247,7 @@ class DownloadUidtJobService : JobService() {
             raf.close()
             input.close()
             if (total > 0 && downloaded < total) throw java.io.IOException("Conexión interrumpida")
-            if (destination.exists()) destination.delete()
-            if (!part.renameTo(destination)) error("No se pudo finalizar el archivo")
+            if (!DownloadHelper.finalizePartFile(part, destination)) error("No se pudo finalizar el archivo")
 
             val completed = (helper.getItem(item.id) ?: item).copy(
                 status = DownloadStatus.COMPLETED,
@@ -255,7 +265,16 @@ class DownloadUidtJobService : JobService() {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (e is VpnBlockedException) {
+                pauseForVpn(item.id, helper, notificationManager)
+                return false
+            }
             if (e is java.io.IOException) {
+                // Un corte de red causado por activar una VPN no es un fallo: es una pausa.
+                if (helper.isVpnBlocked() || com.example.utils.VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
+                    pauseForVpn(item.id, helper, notificationManager)
+                    return false
+                }
                 val current = helper.getItem(item.id)
                 if (current != null && current.status == DownloadStatus.DOWNLOADING) return true
             }
@@ -274,6 +293,16 @@ class DownloadUidtJobService : JobService() {
             try { raf?.close() } catch (_: Exception) {}
         }
         return false
+    }
+
+    private fun pauseForVpn(
+        id: String,
+        helper: DownloadHelper,
+        manager: android.app.NotificationManager
+    ) {
+        val paused = helper.markPausedByVpn(id) ?: return
+        manager.notify(notificationId(id), NotificationUtils.buildPausedNotification(applicationContext, paused))
+        AppToastManager.show("Descarga en pausa: desactiva la VPN o Proxy", ToastType.WARNING)
     }
 
     private fun publish(

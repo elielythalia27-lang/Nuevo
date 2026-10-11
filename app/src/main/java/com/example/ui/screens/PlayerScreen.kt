@@ -275,6 +275,19 @@ fun PlayerScreen(
         }
     }
 
+    // Pausa el vídeo al salir de la app (botón Inicio, pantalla apagada). En PiP la actividad
+    // sigue visible y no pasa por ON_STOP, así que la reproducción en PiP no se ve afectada.
+    DisposableEffect(activity, exoPlayer) {
+        val lifecycle = (activity as? androidx.lifecycle.LifecycleOwner)?.lifecycle
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                try { exoPlayer.pause() } catch (_: Exception) {}
+            }
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
+
     // Auto-hide volume HUD
     LaunchedEffect(volumeHudCounter) {
         if (volumeHudCounter > 0) {
@@ -576,7 +589,9 @@ fun PlayerScreen(
                                     }
                                     xFrac > 0.65f -> {
                                         // Right 1/3: Forward 10s
-                                        val newPos = (exoPlayer.currentPosition + 10_000L).coerceAtMost(durationMs)
+                                        // Con duración desconocida (0) no se limita, o saltaría al inicio
+                                        val newPos = (exoPlayer.currentPosition + 10_000L)
+                                            .coerceAtMost(if (durationMs > 0L) durationMs else Long.MAX_VALUE)
                                         exoPlayer.seekTo(newPos)
                                         currentPositionMs = newPos
                                         doubleTapFeedback = true to 10
@@ -659,7 +674,7 @@ fun PlayerScreen(
                                         isSeekingHorizontal = true
                                         totalDeltaX += dragAmount.x
                                         val deltaMs = (totalDeltaX / 8f).toLong() * 1000L
-                                        val targetMs = (currentPositionMs + deltaMs).coerceIn(0L, durationMs.coerceAtLeast(1L))
+                                        val targetMs = (currentPositionMs + deltaMs).coerceIn(0L, if (durationMs > 0L) durationMs else Long.MAX_VALUE)
                                         horizontalSeekDeltaMs = deltaMs
                                         horizontalSeekTargetMs = targetMs
 
@@ -798,7 +813,8 @@ fun PlayerScreen(
                                     onClick = {
                                         playbackError = null
                                         isBuffering = true
-                                        exoPlayer.setMediaItem(mediaItem)
+                                        // Reintentar conserva la posición (antes volvía al minuto 0)
+                                        exoPlayer.setMediaItem(mediaItem, exoPlayer.currentPosition.coerceAtLeast(0L))
                                         exoPlayer.prepare()
                                         exoPlayer.play()
                                     },
@@ -931,7 +947,8 @@ fun PlayerScreen(
                             lastInteractionTime = System.currentTimeMillis()
                         },
                         onForward10 = {
-                            val newPos = (exoPlayer.currentPosition + 10_000L).coerceAtMost(durationMs)
+                            val newPos = (exoPlayer.currentPosition + 10_000L)
+                                .coerceAtMost(if (durationMs > 0L) durationMs else Long.MAX_VALUE)
                             exoPlayer.seekTo(newPos)
                             currentPositionMs = newPos
                             lastInteractionTime = System.currentTimeMillis()

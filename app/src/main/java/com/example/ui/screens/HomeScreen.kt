@@ -374,8 +374,12 @@ fun HomeScreen(
                         AnimatedCatalogEmptyState(
                             icon = Icons.Default.WifiOff,
                             iconTint = MaterialTheme.colorScheme.primary,
-                            title = "Sin conexión con el catálogo",
-                            subtitle = "No fue posible actualizar el catálogo. Comprueba tu conexión a la red e inténtalo de nuevo.",
+                            title = if (uiState.isNetworkOnline) "No se pudo cargar el catálogo" else "Sin conexión con el catálogo",
+                            subtitle = if (uiState.isNetworkOnline) {
+                                uiState.errorMessage ?: "El servidor no devolvió contenido. Inténtalo de nuevo en unos minutos."
+                            } else {
+                                "No fue posible actualizar el catálogo. Comprueba tu conexión a la red e inténtalo de nuevo."
+                            },
                             buttonText = "Reintentar",
                             buttonIcon = Icons.Default.Refresh,
                             onButtonClick = onRefresh,
@@ -695,7 +699,9 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isDownloaded) "Reproducir película descargada" else "Reproducir",
+                            text = if (isDownloaded) {
+                                if (selectedPeliculaForSheet?.isVideo == true) "Reproducir vídeo descargado" else "Reproducir película descargada"
+                            } else "Reproducir",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -763,7 +769,7 @@ fun HomeScreen(
                                                 fontSize = 14.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            val speedText = if (!downloadItem?.formattedSpeed.isNullOrBlank() && downloadItem?.formattedSpeed != "0 B") {
+                                            val speedText = if ((downloadItem?.speedBytesPerSec ?: 0L) > 0L) {
                                                 "${downloadItem?.formattedSpeed} • ${downloadItem?.formattedEta}"
                                             } else {
                                                 "Iniciando descarga..."

@@ -292,7 +292,12 @@ class PeliculaPreferences(private val context: Context) {
         }
     }
 
-    suspend fun updateMultipleDownloads(items: List<DownloadItem>) {
+    /**
+     * @param onlyIfDownloading true (ticker de progreso): solo actualiza items que siguen DOWNLOADING.
+     * false: actualiza cualquier item existente (p. ej. migración de rutas de archivos completados).
+     * Nunca vuelve a insertar un item que ya no existe (así una descarga cancelada no "resucita").
+     */
+    suspend fun updateMultipleDownloads(items: List<DownloadItem>, onlyIfDownloading: Boolean = true) {
         if (items.isEmpty()) return
         context.dataStore.edit { preferences ->
             val json = preferences[DOWNLOADS_KEY]
@@ -309,12 +314,10 @@ class PeliculaPreferences(private val context: Context) {
                 val index = currentList.indexOfFirst { it.id == updatedItem.id }
                 if (index >= 0) {
                     // Safety check: ticker updates must only apply to items currently DOWNLOADING, never overwrite PAUSED, PENDING or FAILED
-                    if (currentList[index].status != DownloadStatus.DOWNLOADING) {
+                    if (onlyIfDownloading && currentList[index].status != DownloadStatus.DOWNLOADING) {
                         return@forEach
                     }
                     currentList[index] = updatedItem
-                } else {
-                    currentList.add(updatedItem)
                 }
             }
             preferences[DOWNLOADS_KEY] = gson.toJson(currentList)

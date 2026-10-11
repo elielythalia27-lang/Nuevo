@@ -31,9 +31,6 @@ private fun DownloadHelper.removeItem(id: String) = this.removeItemFromState(id)
 private fun DownloadHelper.removeItem(id: Long) = this.removeItemFromState(id.toString())
 private fun DownloadHelper.getItem(id: Long): DownloadItem? = this.getItem(id.toString())
 
-/** Se lanza dentro del bucle de descarga cuando se detecta VPN o Proxy: pausa, no es un fallo. */
-private class VpnBlockedException : Exception("VPN o Proxy detectado")
-
 class DownloadForegroundService : Service() {
 
     companion object {
@@ -51,7 +48,25 @@ class DownloadForegroundService : Service() {
         /** Esperas entre reintentos automáticos ante cortes de red (≈ 1,5 min en total). */
         internal val RETRY_DELAYS_MS = longArrayOf(2_000L, 5_000L, 10_000L, 20_000L, 30_000L)
 
+        /**
+         * Si hay VPN/proxy activo, la descarga no arranca: queda en pausa (con su progreso) y se
+         * reanuda sola cuando se desactive. Devuelve true si se bloqueó.
+         */
+        private fun blockedByVpn(context: Context, id: String): Boolean {
+            val app = context.applicationContext
+            if (!VpnProxyDetector.isVpnOrProxyActive(app)) return false
+            val paused = DownloadHelper.getActiveInstance(app).markPausedByVpn(id)
+            if (paused != null) {
+                try {
+                    (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                        .notify(progressNidStatic(id), NotificationUtils.buildPausedNotification(app, paused))
+                } catch (_: Exception) {}
+            }
+            return true
+        }
+
         fun startDownload(context: Context, item: DownloadItem) {
+            if (blockedByVpn(context, item.id)) return
             // Android 14+: long user-initiated downloads use UIDT instead of
             // a dataSync foreground service, avoiding Android 15's 6-hour quota.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -93,6 +108,10 @@ class DownloadForegroundService : Service() {
         }
 
         fun resumeDownload(context: Context, downloadId: String) {
+            if (blockedByVpn(context, downloadId)) {
+                AppToastManager.show("Desactiva la VPN o Proxy para reanudar la descarga", ToastType.WARNING)
+                return
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 val helper = DownloadHelper.getActiveInstance(context.applicationContext)
                 val item = helper.getItem(downloadId) ?: return
@@ -158,7 +177,7 @@ class DownloadForegroundService : Service() {
         fun cancelAll(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 val helper = DownloadHelper.getActiveInstance(context.applicationContext)
-                helper.liveDownloadsState.value.toList().forEach {
+                helper.liveDownloadsState.value.filter { it.status != DownloadStatus.COMPLETED }.forEach {
                     cancelUidtDownload(context, it.id, it.localFilePath)
                 }
                 return
@@ -461,7 +480,7 @@ class DownloadForegroundService : Service() {
                 val shouldRetry = downloadAttempt(item)
                 if (!shouldRetry) break
                 if (attempt >= RETRY_DELAYS_MS.size) {
-                    markDownloadFailed(item, "Sin conexión estable")
+                    markDownloadFailed(item, "Sin conexión estable", byNetwork = true)
                     break
                 }
                 delay(RETRY_DELAYS_MS[attempt])
@@ -497,6 +516,9 @@ class DownloadForegroundService : Service() {
         var raf: RandomAccessFile? = null
 
         try {
+            // Nunca abrir una conexión con VPN/proxy activo
+            if (VpnProxyDetector.isVpnOrProxyActive(applicationContext)) throw VpnBlockedException()
+
             var currentUrl = item.downloadUrl
             var redirectCount = 0
             var conn: HttpURLConnection
@@ -625,6 +647,9 @@ class DownloadForegroundService : Service() {
                     val remaining = (totalBytes - downloadedBytes).coerceAtLeast(0L)
                     val eta = if (speed > 2048 && remaining > 0L) remaining / speed else 0L
 
+                    // Una VPN/proxy activada a mitad de descarga la pausa (conserva el .part)
+                    if (helper.isVpnBlocked()) throw VpnBlockedException()
+
                     publishProgress(item, downloadedBytes, totalBytes, speed, eta)
 
                     bytesSinceLastUpdate = 0L
@@ -639,14 +664,28 @@ class DownloadForegroundService : Service() {
                 if (totalFromServer && totalBytes > 0L && downloadedBytes < totalBytes) {
                     throw java.io.IOException("Conexión interrumpida")
                 }
-                if (destinationFile.exists()) destinationFile.delete()
-                partFile.renameTo(destinationFile)
+                // Si no se puede dejar el archivo final, NO se marca como completada (antes quedaba
+                // "completada" con el vídeo ausente y el .part sin renombrar).
+                if (!DownloadHelper.finalizePartFile(partFile, destinationFile)) {
+                    throw Exception("No se pudo guardar el archivo final")
+                }
                 markDownloadSuccess(item, destinationFile.length())
             }
 
         } catch (e: Exception) {
             if (currentCoroutineContext().isActive) {
-                if (e is java.io.IOException) return true
+                if (e is VpnBlockedException) {
+                    pauseBecauseOfVpn(item)
+                    return false
+                }
+                if (e is java.io.IOException) {
+                    // Un corte de red causado por activar una VPN no es un fallo: es una pausa.
+                    if (helper.isVpnBlocked() || VpnProxyDetector.isVpnOrProxyActive(applicationContext)) {
+                        pauseBecauseOfVpn(item)
+                        return false
+                    }
+                    return true
+                }
                 markDownloadFailed(item, e.message ?: "Error de descarga")
             }
         } finally {
@@ -764,16 +803,7 @@ class DownloadForegroundService : Service() {
 
     /** VPN o Proxy detectado a mitad de descarga: queda en pausa, con su notificación "En pausa". */
     private fun pauseBecauseOfVpn(item: DownloadItem) {
-        val live = helper.getItem(item.id) ?: item
-        val part = File(live.localFilePath + ".part")
-        val realBytes = if (part.exists()) part.length() else live.downloadedBytes
-        val paused = live.copy(
-            status = DownloadStatus.PAUSED,
-            downloadedBytes = realBytes,
-            speedBytesPerSec = 0L,
-            etaSeconds = 0L
-        )
-        helper.updateAndPersist(paused)
+        val paused = helper.markPausedByVpn(item.id) ?: return
         notificationManager.notify(
             pausedNid(item.id),
             NotificationUtils.buildPausedNotification(applicationContext, paused)
@@ -781,9 +811,14 @@ class DownloadForegroundService : Service() {
         AppToastManager.show("Descarga en pausa: desactiva la VPN o Proxy", ToastType.WARNING)
     }
 
-    private fun markDownloadFailed(item: DownloadItem, errorReason: String) {
+    private fun markDownloadFailed(item: DownloadItem, errorReason: String, byNetwork: Boolean = false) {
         val live = helper.getItem(item.id) ?: item
-        val failed = live.copy(status = DownloadStatus.FAILED, speedBytesPerSec = 0L, etaSeconds = 0L)
+        val failed = live.copy(
+            status = DownloadStatus.FAILED,
+            failedByNetwork = byNetwork,
+            speedBytesPerSec = 0L,
+            etaSeconds = 0L
+        )
         helper.updateAndPersist(failed)
         notificationManager.notify(
             failedNid(item.id),

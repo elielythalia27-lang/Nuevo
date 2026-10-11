@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -74,6 +75,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val repository = PeliculaRepository(application, apiService, preferences)
     val downloadHelper = DownloadHelper.getActiveInstance(application)
     private val networkMonitor = NetworkMonitor(application)
+    // Declarado antes del bloque init (que llama a loadPeliculas) para que su valor inicial no lo pise después.
+    private var loadJob: kotlinx.coroutines.Job? = null
 
     private fun calculateActiveDownloadsCount(items: List<DownloadItem>): Int {
         return items.count { it.status == DownloadStatus.DOWNLOADING }
@@ -160,7 +163,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         // Collect favorites
         viewModelScope.launch {
-            repository.favoriteIds.collectLatest { favs ->
+            repository.favoriteIds.distinctUntilChanged().collectLatest { favs ->
                 _uiState.update { state ->
                     val updated = state.copy(favoriteIds = favs)
                     applyFilter(updated)
@@ -264,7 +267,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadPeliculas(forceRefresh: Boolean = false) {
-        viewModelScope.launch {
+        // Una sola carga a la vez: una respuesta antigua no debe pisar a la más reciente.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             repository.getPeliculasFlow(forceRefresh).collectLatest { resource ->
                 when (resource) {
                     is Resource.Loading -> {
@@ -488,11 +493,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Si se borra el vídeo que figura en "Continuar viendo", el banner ya no debe apuntar a un archivo inexistente. */
+    private fun clearContinueWatchingFor(items: List<DownloadItem>) {
+        val current = _uiState.value.continueWatching ?: return
+        if (items.any { it.localFilePath == current.videoUrl }) clearContinueWatching()
+    }
+
     fun cancelDownload(item: DownloadItem) {
+        clearContinueWatchingFor(listOf(item))
         downloadHelper.cancelDownload(item)
     }
 
     fun deleteMultipleDownloads(items: List<DownloadItem>) {
+        clearContinueWatchingFor(items)
         downloadHelper.deleteMultipleDownloads(items)
     }
 

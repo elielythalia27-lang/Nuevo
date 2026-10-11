@@ -106,7 +106,11 @@ data class DownloadItem(
     val totalBytes: Long = 0L,
     val downloadedBytes: Long = 0L,
     val speedBytesPerSec: Long = 0L,
-    val etaSeconds: Long = 0L
+    val etaSeconds: Long = 0L,
+    /** true si la descarga se pausó sola porque se activó una VPN/proxy (se reanuda sola al quitarla). */
+    val pausedByVpn: Boolean = false,
+    /** true si falló por agotar los reintentos de red: se reintenta sola cuando vuelve la conexión. */
+    val failedByNetwork: Boolean = false
 ) {
     val formattedSpeed: String
         get() {

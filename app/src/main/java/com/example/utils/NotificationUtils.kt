@@ -26,6 +26,9 @@ object NotificationUtils {
     const val CHANNEL_ERROR_ID = "channel_download_error_v6"
 
     const val GROUP_KEY_DOWNLOADS = "group_key_downloads"
+
+    /** ID fijo de la notificación resumen del grupo (se publica una vez y se va actualizando). */
+    const val SUMMARY_NOTIFICATION_ID = 0x7FFF0000
     private const val GROUP_DOWNLOADS_ID = "group_download_management"
 
     /**
@@ -175,6 +178,42 @@ object NotificationUtils {
         }
     }
 
+    /** Momento en que cada descarga empezó a mostrarse en esta sesión (para "transcurrido/total"). */
+    private val sessionStart = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** Formato compacto como 1DM+: "25.0MB", "1.20GB", "512KB". */
+    fun compactSize(bytes: Long): String {
+        if (bytes <= 0L) return "0KB"
+        val kb = bytes / 1024.0
+        val mb = kb / 1024.0
+        val gb = mb / 1024.0
+        return when {
+            gb >= 1.0 -> String.format(Locale.US, "%.2fGB", gb)
+            mb >= 1.0 -> String.format(Locale.US, "%.1fMB", mb)
+            else -> String.format(Locale.US, "%.0fKB", kb)
+        }
+    }
+
+    /** "96.30KB/s" o "1.20MB/s" */
+    fun compactSpeed(bytesPerSec: Long): String {
+        if (bytesPerSec <= 0L) return "0KB/s"
+        val kb = bytesPerSec / 1024.0
+        return if (kb >= 1024.0) String.format(Locale.US, "%.2fMB/s", kb / 1024.0)
+        else String.format(Locale.US, "%.2fKB/s", kb)
+    }
+
+    /** "36s", "4m10s", "1h05m" */
+    fun compactTime(seconds: Long): String {
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val sec = seconds % 60
+        return when {
+            h > 0 -> "${h}h${m.toString().padStart(2, '0')}m"
+            m > 0 -> "${m}m${sec.toString().padStart(2, '0')}s"
+            else -> "${sec}s"
+        }
+    }
+
     /** "1h 05m", "4m 12s", "35s" */
     fun formatEta(seconds: Long): String {
         val h = seconds / 3600
@@ -242,17 +281,17 @@ object NotificationUtils {
         val remainingAll = (sumTotal - sumDone).coerceAtLeast(0L)
         val etaAll = if (totalSpeed > 2048L && remainingAll > 0L) remainingAll / totalSpeed else 0L
         val text = when {
-            indeterminate -> formatSpeed(totalSpeed)
-            etaAll > 0L -> "$overall% • ${formatSpeed(totalSpeed)} • ${formatEta(etaAll)}"
-            else -> "$overall% • ${formatSpeed(totalSpeed)}"
+            indeterminate -> compactSpeed(totalSpeed)
+            etaAll > 0L -> "$overall% | ${compactSpeed(totalSpeed)} | ${compactTime(etaAll)}"
+            else -> "$overall% | ${compactSpeed(totalSpeed)}"
         }
 
         val inbox = NotificationCompat.InboxStyle()
             .setBigContentTitle(title)
             .setSummaryText(text)
         active.take(5).forEach { item ->
-            val detail = if (item.totalBytes > 0L) "${item.progress}%" else formatByteSize(item.downloadedBytes)
-            inbox.addLine("${displayTitle(item)} • $detail")
+            val detail = if (item.totalBytes > 0L) "${item.progress}%" else compactSize(item.downloadedBytes)
+            inbox.addLine("${displayTitle(item)}  $detail")
         }
         if (count > 5) inbox.addLine("y ${count - 5} más…")
 
@@ -283,7 +322,7 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Cancelar todo",
+                "Parar todo",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_ALL, -1L)
             )
             .build()
@@ -304,36 +343,26 @@ object NotificationUtils {
         val title = displayTitle(item)
         val isIndeterminate = item.totalBytes <= 0L
 
-        val sizeStr = if (!isIndeterminate) {
-            "${formatByteSize(item.downloadedBytes)} de ${formatByteSize(item.totalBytes)}"
+        // Una sola línea, igual que 1DM+:  "10% | 25.0MB | 96.30KB/s | 36s/4m10s"
+        //   porcentaje | descargado | velocidad | tiempo transcurrido / tiempo total estimado
+        val now = System.currentTimeMillis()
+        val started = sessionStart.getOrPut(item.id) { now }
+        val elapsed = ((now - started) / 1000L).coerceAtLeast(0L)
+        val timeStr = if (eta > 0L) "${compactTime(elapsed)}/${compactTime(elapsed + eta)}" else compactTime(elapsed)
+        val line = if (isIndeterminate) {
+            "${compactSize(item.downloadedBytes)} | ${compactSpeed(speed)} | $timeStr"
         } else {
-            formatByteSize(item.downloadedBytes)
-        }
-        val speedStr = formatSpeed(speed)
-        val etaStr = when {
-            eta > 0L -> formatEta(eta)
-            speed <= 0L -> "Conectando…"
-            else -> "Calculando…"
+            "$progress% | ${compactSize(item.downloadedBytes)} | ${compactSpeed(speed)} | $timeStr"
         }
 
-        // Línea compacta (estilo IDM): "42% • 12.4 MB/s • 1m 20s"
-        val compact = if (isIndeterminate) "$sizeStr • $speedStr" else "$progress% • $speedStr • $etaStr"
-        // Vista expandida: una línea por dato
-        val expanded = buildString {
-            append(sizeStr)
-            if (!isIndeterminate) append("  ($progress%)")
-            append("\nVelocidad: ").append(speedStr)
-            if (!isIndeterminate) append("\nTiempo restante: ").append(etaStr)
-        }
-
+        // Sin BigTextStyle ni subtexto: así, dentro del grupo, cada descarga se ve como una fila
+        // compacta (nombre + barra de progreso) y al expandirla muestra la línea y los botones.
         return NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVibrate(longArrayOf(0L))
             .setSound(null)
             .setContentTitle(title)
-            .setContentText(compact)
-            .setSubText("Descargando")
-            .setStyle(NotificationCompat.BigTextStyle().setBigContentTitle(title).bigText(expanded))
+            .setContentText(line)
             .setSmallIcon(R.drawable.ic_notification_download)
             .setColor(0xFF00897B.toInt())
             .setProgress(100, if (isIndeterminate) 0 else progress.coerceIn(0, 100), isIndeterminate)
@@ -355,7 +384,7 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Cancelar",
+                "Parar",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
@@ -377,14 +406,18 @@ object NotificationUtils {
         } else {
             formatByteSize(item.downloadedBytes)
         }
-        val subtitle = "${item.progress}% • $sizeInfo • En pausa"
+        sessionStart.remove(item.id)
+        val subtitle = if (item.pausedByVpn) {
+            "${item.progress}% | ${compactSize(item.downloadedBytes)} | Desactiva la VPN o proxy para continuar"
+        } else {
+            "${item.progress}% | ${compactSize(item.downloadedBytes)} | En pausa"
+        }
 
         return NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentTitle(title)
             .setContentText(subtitle)
-            .setSubText("En pausa")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle))
+            .setSubText(if (item.pausedByVpn) "En pausa por VPN/proxy" else "En pausa")
             .setSmallIcon(R.drawable.ic_notification_pause)
             .setColor(0xFFF59E0B.toInt())
             .setProgress(100, item.progress, false)
@@ -403,7 +436,7 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Cancelar",
+                "Parar",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
@@ -424,6 +457,7 @@ object NotificationUtils {
         } else {
             formatByteSize(item.downloadedBytes)
         }
+        sessionStart.remove(item.id)
         val detail = "Se interrumpió • $sizeInfo. Reintenta para continuar donde quedó."
 
         return NotificationCompat.Builder(context, CHANNEL_ERROR_ID)
@@ -446,7 +480,7 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Cancelar",
+                "Parar",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
@@ -463,6 +497,7 @@ object NotificationUtils {
 
         val title = displayTitle(item)
         val sizeStr = formatByteSize(item.totalBytes.coerceAtLeast(item.downloadedBytes))
+        sessionStart.remove(item.id)
         val detail = "Descarga completa • $sizeStr"
 
         return NotificationCompat.Builder(context, CHANNEL_SUCCESS_ID)
