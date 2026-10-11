@@ -43,6 +43,15 @@ class DownloadUidtJobService : JobService() {
                     jobFinished(params, false)
                     return@launch
                 }
+                // Si el sistema reprograma este job (onStopJob devolvió true) el item ya quedó
+                // en PAUSED. Sin esta comprobación el job arrancaba y descargaba en silencio un
+                // vídeo que el usuario (o el propio sistema) había pausado, gastando datos sin
+                // consentimiento y sin notificación. Solo se descarga si está marcada DOWNLOADING;
+                // todas las rutas legítimas (iniciar, reanudar, recuperación) la marcan antes.
+                if (item.status != DownloadStatus.DOWNLOADING) {
+                    jobFinished(params, false)
+                    return@launch
+                }
 
                 val notification = NotificationUtils.buildProgressNotification(
                     applicationContext, item, item.progress, item.speedBytesPerSec, item.etaSeconds
@@ -79,6 +88,13 @@ class DownloadUidtJobService : JobService() {
             val helper = DownloadHelper.getActiveInstance(applicationContext)
             helper.markStoppedForUidt(itemId)
             val paused = helper.getItem(itemId)
+            if (paused == null) {
+                // Cancelada: el job la deja "detached" en la bandeja; hay que quitarla aquí, ya sin job.
+                try {
+                    (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                        .cancel(notificationId(itemId))
+                } catch (_: Exception) {}
+            }
             if (paused != null && paused.status == DownloadStatus.PAUSED) {
                 val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 manager.notify(
@@ -265,6 +281,17 @@ class DownloadUidtJobService : JobService() {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // Cancelar o pausar corta el socket a propósito y eso lanza una excepción de E/S.
+            // No es un fallo: antes publicaba "Descarga fallida" y volvía a insertar en la lista
+            // la descarga recién cancelada.
+            val stateNow = helper.getItem(item.id)
+            if (stateNow == null) {
+                try { notificationManager.cancel(notificationId(item.id)) } catch (_: Exception) {}
+                return false
+            }
+            if (!currentCoroutineContext().isActive || stateNow.status != DownloadStatus.DOWNLOADING) {
+                return false
+            }
             if (e is VpnBlockedException) {
                 pauseForVpn(item.id, helper, notificationManager)
                 return false

@@ -267,6 +267,13 @@ object NotificationUtils {
         val count = active.size
         val totalSpeed = active.sumOf { it.speedBytesPerSec }
 
+        // Solo quedan descargas en pausa: el resumen NO puede desaparecer. Si se cancela la
+        // notificación resumen de un grupo, Android borra también todas sus hijas (las "En pausa").
+        if (count == 0) {
+            val paused = items.filter { it.status == DownloadStatus.PAUSED }
+            if (paused.isNotEmpty()) return buildPausedSummaryNotification(context, paused)
+        }
+
         val known = active.filter { it.totalBytes > 0L }
         val sumTotal = known.sumOf { it.totalBytes }
         val sumDone = known.sumOf { it.downloadedBytes.coerceAtMost(it.totalBytes) }
@@ -322,7 +329,39 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Parar todo",
+                "Cancelar todo",
+                receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_ALL, -1L)
+            )
+            .build()
+    }
+
+    /** Resumen del grupo cuando no hay nada descargando pero sí descargas en pausa (no es "ongoing"). */
+    private fun buildPausedSummaryNotification(context: Context, paused: List<DownloadItem>): Notification {
+        val count = paused.size
+        val title = if (count == 1) "1 descarga en pausa" else "$count descargas en pausa"
+        val inbox = NotificationCompat.InboxStyle().setBigContentTitle(title)
+        paused.take(5).forEach { inbox.addLine("${displayTitle(it)}  ${it.progress}%") }
+        if (count > 5) inbox.addLine("y ${count - 5} más…")
+        return NotificationCompat.Builder(context, CHANNEL_PROGRESS_ID)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentTitle(title)
+            .setContentText("Toca para abrir Descargas")
+            .setStyle(inbox)
+            .setSmallIcon(R.drawable.ic_notification_pause)
+            .setColor(0xFFF59E0B.toInt())
+            .setContentIntent(createOpenDownloadsPendingIntent(context))
+            .setOngoing(false)
+            .setAutoCancel(false)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setGroup(GROUP_KEY_DOWNLOADS)
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Cancelar todo",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_ALL, -1L)
             )
             .build()
@@ -384,7 +423,7 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Parar",
+                "Cancelar",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
@@ -436,7 +475,7 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Parar",
+                "Cancelar",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()
@@ -480,7 +519,7 @@ object NotificationUtils {
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Parar",
+                "Cancelar",
                 receiverActionIntent(context, DownloadHelper.ACTION_CANCEL_DOWNLOAD, item.id)
             )
             .build()

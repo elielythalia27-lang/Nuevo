@@ -237,17 +237,20 @@ class DownloadHelper(
                 var lastPost = 0L
                 _liveDownloadsState.collect { list ->
                     val active = list.filter { it.status == DownloadStatus.DOWNLOADING }
+                    val paused = list.filter { it.status == DownloadStatus.PAUSED }
                     val now = System.currentTimeMillis()
                     try {
-                        if (active.isEmpty()) {
+                        if (active.isEmpty() && paused.isEmpty()) {
                             if (posted) {
+                                // Solo cuando NO queda ninguna notificación hija: cancelar el resumen
+                                // de un grupo borra también a todas sus hijas.
                                 notificationManager.cancel(NotificationUtils.SUMMARY_NOTIFICATION_ID)
                                 posted = false
                             }
-                        } else if (!posted || now - lastPost >= 1500L) {
+                        } else if (active.isEmpty() || !posted || now - lastPost >= 1500L) {
                             notificationManager.notify(
                                 NotificationUtils.SUMMARY_NOTIFICATION_ID,
-                                NotificationUtils.buildSummaryNotification(context, active)
+                                NotificationUtils.buildSummaryNotification(context, active + paused)
                             )
                             posted = true
                             lastPost = now

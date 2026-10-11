@@ -374,6 +374,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             SortOption.NAME_ZA -> list.sortedByDescending { it.safeTitle.lowercase() }
         }
 
+        // Blindaje anti-crash: LazyVerticalGrid usa it.id como key y lanza
+        // IllegalArgumentException si el servidor entrega dos items con el mismo id.
+        list = list.distinctBy { it.id }
+
         return state.copy(filteredPeliculas = list)
     }
 

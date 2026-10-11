@@ -16,7 +16,10 @@ data class Pelicula(
     val tp: String? = null
 ) {
     val id: String
-        get() = peli?.trim() ?: (nombre?.trim() ?: "")
+        get() = peli?.trim()?.takeIf { it.isNotEmpty() }
+            ?: url?.trim()?.takeIf { it.isNotEmpty() }
+            ?: nombre?.trim()?.takeIf { it.isNotEmpty() }
+            ?: ""
 
     val safeTitle: String
         get() = nombre?.trim().takeUnless { it.isNullOrEmpty() } ?: "Sin título"

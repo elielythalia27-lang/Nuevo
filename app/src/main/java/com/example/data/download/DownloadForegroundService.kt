@@ -116,8 +116,11 @@ class DownloadForegroundService : Service() {
                 val helper = DownloadHelper.getActiveInstance(context.applicationContext)
                 val item = helper.getItem(downloadId) ?: return
                 if (!DownloadUidtJobService.schedule(context, item)) {
-                    // Keep the item persisted; a later foreground/user action can retry.
-                    return
+                    // El sistema rechazó programar el UIDT: dejarlo en cola en vez de dejarlo
+                    // marcado como "descargando" sin motor detrás; se reintentará al liberarse
+                    // un turno o al volver a abrir la app.
+                    helper.updateAndPersist(item.copy(status = DownloadStatus.PENDING, speedBytesPerSec = 0L, etaSeconds = 0L))
+                    AppToastManager.show("No se pudo reanudar ahora. Quedó en cola.", ToastType.INFO)
                 }
                 return
             }
@@ -410,9 +413,7 @@ class DownloadForegroundService : Service() {
             val active = activeItems()
             if (active.isEmpty()) {
                 if (downloadJobs.isEmpty() && userStopping.isEmpty()) {
-                    foregroundStarted = false
-                    stopForegroundCompat()
-                    try { notificationManager.cancel(SUMMARY_NID) } catch (_: Exception) {}
+                    releaseForegroundKeepingGroup()
                 }
             } else {
                 val notif = NotificationUtils.buildSummaryNotification(applicationContext, active)
@@ -741,15 +742,36 @@ class DownloadForegroundService : Service() {
     }
 
     /** Cuando no queda nada activo ni en proceso de pausa/cancelación, suelta el primer plano y se detiene. */
+    /**
+     * Suelta el primer plano SIN borrar el grupo: si hubiera que cancelar el resumen mientras
+     * quedan descargas en pausa, Android borraría también las notificaciones "En pausa".
+     * Con descargas en pausa, el resumen pasa a ser una notificación normal (no ongoing).
+     */
+    private fun releaseForegroundKeepingGroup() {
+        val paused = helper.downloadsFlow.value.filter { it.status == DownloadStatus.PAUSED }
+        if (foregroundStarted) {
+            foregroundStarted = false
+            if (paused.isNotEmpty()) {
+                // DETACH deja la notificación en la bandeja; justo después se sustituye por el resumen de pausa
+                stopForeground(Service.STOP_FOREGROUND_DETACH)
+            } else {
+                stopForegroundCompat()
+            }
+        }
+        try {
+            if (paused.isNotEmpty()) {
+                notificationManager.notify(SUMMARY_NID, NotificationUtils.buildSummaryNotification(applicationContext, paused))
+            } else {
+                notificationManager.cancel(SUMMARY_NID)
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun stopIfIdle() {
         synchronized(notifLock) {
             val active = activeItems()
             if (active.isEmpty() && downloadJobs.isEmpty() && userStopping.isEmpty()) {
-                if (foregroundStarted) {
-                    foregroundStarted = false
-                    stopForegroundCompat()
-                }
-                try { notificationManager.cancel(SUMMARY_NID) } catch (_: Exception) {}
+                releaseForegroundKeepingGroup()
                 stopSelf()
             }
         }

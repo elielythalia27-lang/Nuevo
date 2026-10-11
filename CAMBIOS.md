@@ -13,6 +13,11 @@
 - Un corte de red causado por activar la VPN ya no cuenta como error ni gasta reintentos.
 - Al volver a la app desde segundo plano con VPN/proxy activo se vuelve a comprobar al instante y se muestra la pantalla de bloqueo.
 
+## Pausar / Cancelar (corregido tras probar en el móvil)
+- **Al pausar la segunda descarga desaparecían todas las notificaciones.** Al cancelar la notificación resumen de un grupo, Android borra también todas sus hijas (incluidas las "En pausa"). Ahora el resumen se mantiene mientras haya descargas en pausa (pasa a "N descargas en pausa", no ongoing) y solo se quita cuando no queda ninguna notificación del grupo. Aplica a Android < 14 (servicio) y ≥ 14 (jobs UIDT).
+- **Al pulsar Parar/Cancelar aparecía "Descarga fallida … 0 B" y la descarga volvía a la lista.** Cancelar corta el socket y eso lanzaba una excepción que se trataba como fallo. Ahora, si la descarga fue cancelada o pausada, no se marca como fallida ni se vuelve a insertar, y la notificación se retira.
+- Los botones se llaman **Cancelar** (y "Cancelar todo") en lugar de "Parar".
+
 ## Más correcciones
 - **Eliminar una descarga completada no borraba el vídeo** del almacenamiento (solo la quitaba de la lista). Ahora lo borra.
 - **«Cancelar todo» también borraba de la lista las descargas ya completadas.** Ahora solo afecta a las activas, en cola, en pausa o fallidas.
