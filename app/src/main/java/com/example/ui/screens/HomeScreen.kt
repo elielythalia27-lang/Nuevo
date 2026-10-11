@@ -1451,6 +1451,7 @@ private fun FeaturedHeroCarousel(
     if (pages.isEmpty()) return
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
+    val context = LocalContext.current
 
     // Auto-avance suave cada 5 s (solo si el carrusel está quieto)
     LaunchedEffect(pagerState.settledPage, pages.size) {
