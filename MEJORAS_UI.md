@@ -1,56 +1,46 @@
-# Download Free — Rediseño visual v1.3 (versionCode 4)
+# Download Free — Bottom navigation v1.4 (versionCode 5)
 
-## Nuevo bottom navigation
+## Rediseño basado en la referencia enviada
 
-`ui/components/AppBottomNav.kt` se rediseñó para las tres pestañas de la app:
+`ui/components/AppBottomNav.kt` ahora usa un rail flotante con una muesca cóncava en el centro (`CenterNotchShape`): el botón de Descargas se integra en la curva y sobresale 8 dp, inspirado en la silueta de la imagen. Se conservan solo las tres pestañas de Download Free: **Catálogo**, **Descargas** y **Ajustes**.
 
-- **Dock flotante tipo píldora** con 16 dp de margen lateral, separación del borde inferior y rail compacto de 64 dp. Fondo azul-negro `#0B1020` al 66% en tema oscuro, borde de 1 dp blanco al 8% y brillo superior discreto: vidrio tintado, sin borde grueso ni halo general.
-- **Indicador persistente** en turquesa translúcido (`#14B8A6` al 15%) que se desliza entre Catálogo, Descargas y Ajustes con spring. Todos los nombres permanecen visibles; inactivos usan iconos outline y texto gris azulado pequeño, activos iconos filled y texto turquesa.
-- **Descargas al centro**: botón circular de 52 dp elevado 8 dp sobre el rail. Se rellena de turquesa y recibe glow solo cuando está seleccionado; en reposo mantiene el icono outline, sin glow. Los iconos son de la misma familia Material Rounded/Outlined.
-- **Badge de cola**: número de descargas `DOWNLOADING + PENDING`; se oculta en cero y hace pop al aparecer o cambiar. El mismo criterio alimenta el contador de la pestaña de Descargas (`En curso/cola`), así ambos números coinciden. Pausadas y fallidas no se cuentan como transferencias activas ni en cola.
-- **Anillo de progreso** fino cuando hay transferencias `DOWNLOADING`; refleja el promedio del progreso de las descargas en curso y se actualiza con el estado que publica el ViewModel.
-- **Accesibilidad**: cada icono tiene descripción, las pestañas exponen estado seleccionado, el badge comunica el conteo y las áreas táctiles superan 48 dp. Hay háptica ligera al tocar. En tema oscuro se usa el teal pedido `#14B8A6`; en tema claro se oscurece a `#00695C` para conservar contraste AA.
-- **Reducir animaciones**: observa las escalas globales de animación de Android. Si están desactivadas, el indicador y los cambios de página pasan a estado inmediato y se omiten los rebotes/transiciones del badge.
-- **Pantalla de fondo**: degradado inferior de 176 dp para que las imágenes y tarjetas detrás del dock no queden visualmente cargadas; listas y grillas dejan 136 dp al final para poder desplazar el último elemento por encima de la barra.
+- Rail compacto de 64 dp, márgenes laterales de 16 dp, separación inferior y borde fino; el botón central es circular y queda elevado sobre la muesca.
+- Catálogo y Ajustes muestran icono y etiqueta de forma permanente. El centro mantiene su badge y anillo de progreso.
+- El indicador de selección continúa deslizándose con spring. El botón central solo recibe el color de énfasis y glow cuando Descargas está seleccionada; en reposo conserva un disco neutral con icono outline.
+- El badge cuenta `DOWNLOADING + PENDING`, se oculta en cero y coincide con el contador `En curso/cola` de la pantalla de Descargas. Las pausadas y fallidas no entran en ese conteo.
+- El anillo refleja el progreso medio de las transferencias activas; se mantienen hápticas, rebote de iconos, accesibilidad y respeto por **Quitar animaciones** del sistema.
 
-## Icono de aplicación — fondo blanco y teal
+## Respeto del tema escogido
 
-- El fondo del launcher ahora es blanco tanto en los recursos adaptativos como en las variantes por densidad.
-- El disco que antes era azul pasa a un degradado teal `#2DD4BF → #0F766E`, con el glifo de descarga blanco.
-- Se actualizaron los iconos cuadrados y redondos en mdpi, hdpi, xhdpi, xxhdpi y xxxhdpi, el icono monocromático para Android 13+ y los símbolos de splash para mantener la misma identidad teal.
+La barra ya no fija el teal ni el fondo por su cuenta. Obtiene los colores del `MaterialTheme.colorScheme` activo: `primary` para la selección, una tinta clara/oscura calculada por contraste sobre el primario para el botón y el badge, `onSurfaceVariant` para elementos inactivos, `surface` para el rail y `background` para el degradado inferior. Así sigue los temas oscuros/claros, los presets y los colores personalizados que se cambien en Ajustes. El icono de aplicación conserva su identidad de marca blanca/teal, independiente del color de énfasis elegido para la interfaz.
 
-## Se conservan de v1.2
+## Se conserva de v1.3
 
-- Entrada escalonada de las tarjetas del catálogo, feedback de presión en tarjetas y hápticas.
-- Confeti y doble tick al completar una descarga.
-- Repetir el toque en la pestaña activa vuelve el catálogo al inicio.
-- Sin carrusel hero ni elementos de interfaz de Favoritos, tal como se había pedido.
-- Bottom navigation permanece visible; no se oculta al desplazarse.
+- Degradado inferior y 136 dp de espacio final en listas/grillas para que el último elemento pueda pasar por encima del dock.
+- Retocar la pestaña activa vuelve el catálogo al inicio; la barra no desaparece al desplazarse.
+- Entrada escalonada de tarjetas, press-scale, hápticas y confeti al completar descargas.
+- Launcher de fondo blanco, disco teal, variantes adaptativas/redondas/monocromáticas y splash teal.
+- Sin carrusel hero ni interfaz de Favoritos.
 
-## Archivos tocados en v1.3
+## Archivos tocados en v1.4
 
 | Archivo | Cambio |
 |---|---|
-| `ui/components/AppBottomNav.kt` | Nuevo dock, iconos outline/filled, indicador spring, badge, progreso, háptica y preferencia de movimiento reducido. |
-| `MainActivity.kt` | Conteo compartido, progreso agregado, degradado inferior y navegación sin animación si el sistema la reduce. |
-| `ui/screens/DescargasScreen.kt` | Contador visible sincronizado con el badge y espacio inferior extra. |
-| `ui/screens/HomeScreen.kt` | Espacio final extra en ambas grillas. |
-| `ui/screens/AjustesScreen.kt` | Espacio final extra para no quedar bajo el dock. |
-| `data/model/Pelicula.kt` | Regla común `DownloadStatus.isInProgressOrQueued`. |
-| `res/drawable*`, `res/mipmap-*` | Launcher blanco/teal, capa monocromática y splash teal. |
-| `app/build.gradle.kts` | `versionCode = 4`, `versionName = "1.3"`. |
+| `ui/components/AppBottomNav.kt` | Muesca central cóncava, botón elevado y colores totalmente ligados al `MaterialTheme`. |
+| `MainActivity.kt` | Degradado inferior toma el fondo del tema actual. |
+| `app/build.gradle.kts` | `versionCode = 5`, `versionName = "1.4"`. |
+| `MEJORAS_UI.md` | Documentación de esta versión. |
 
 ## Verificación
 
-- Conteo del badge y pestaña de Descargas usan una sola regla de estados (`DOWNLOADING` y `PENDING`).
-- Se revisaron nombres de estados, callbacks del pager, descripciones accesibles, recursos de launcher y paddings de las listas/grillas.
-- Se hizo revisión estática de imports y balance de delimitadores Kotlin; **no se ejecutó Gradle ni se compiló**, según la indicación del usuario.
+- La selección, superficie, textos, botón, badge, anillo y degradado usan el esquema de color vigente.
+- Se revisaron el conteo compartido entre badge/pantalla, la geometría de la muesca, los estados de selección y los callbacks.
+- Se hizo revisión estática de Kotlin/XML y balance de delimitadores; **no se ejecutó Gradle ni se compiló**, según la indicación del usuario.
 
 ## Prueba manual sugerida
 
-1. Instala v1.3 y confirma que el launcher tenga fondo blanco y disco de descarga teal.
-2. Toca Catálogo, Descargas y Ajustes: verifica que la píldora se deslice, que los nombres sigan visibles y que Descargas quede elevada al centro.
-3. Inicia dos descargas y deja otra en espera: el badge y el contador `En curso/cola` deben coincidir; el anillo debe reflejar el progreso en movimiento.
-4. Pausa o falla una descarga: no debe contarse como activa/en cola. Al completar una, el badge debe decrementar y la pantalla conservar sus secciones de pausa/error.
-5. Activa **Quitar animaciones** en Accesibilidad/Opciones de desarrollador de Android y vuelve a tocar las pestañas: los cambios deben ser inmediatos, conservando la respuesta háptica.
-6. Desplázate hasta el final del catálogo, descargas y ajustes: el último elemento debe poder quedar por encima del dock.
+1. Abre la app en tema oscuro y claro: rail, texto y botón deben acompañar el tema.
+2. Cambia entre varios colores de énfasis en Ajustes: la píldora, el icono seleccionado, el badge y el anillo deben usar el color elegido.
+3. Toca cada pestaña: verifica el movimiento del indicador, la muesca central, las etiquetas, la háptica y el rebote; activa **Quitar animaciones** y confirma que el movimiento se desactive.
+4. Inicia descargas y deja una en cola: badge y contador `En curso/cola` deben coincidir, y el anillo debe actualizarse.
+5. Comprueba el launcher: fondo blanco y marca de descarga teal.

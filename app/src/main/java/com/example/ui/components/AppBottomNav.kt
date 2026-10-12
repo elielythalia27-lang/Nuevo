@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -17,6 +16,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -65,10 +66,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -86,12 +90,75 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.luminance
 
-private val DownloadFreeTeal = Color(0xFF14B8A6)
-private val DownloadFreeLightTeal = Color(0xFF00695C)
-private val NavigationInk = Color(0xFF0B1020)
+/** Concave center notch for the raised Downloads action, drawn into the floating rail itself. */
+private class CenterNotchShape(
+    private val cornerRadius: Dp = 32.dp,
+    private val notchHalfWidth: Dp = 46.dp,
+    private val notchDepth: Dp = 25.dp
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val radius = with(density) { cornerRadius.toPx() }.coerceAtMost(size.height / 2f)
+        val maxHalfWidth = (size.width / 2f - radius).coerceAtLeast(0f)
+        val halfWidth = with(density) { notchHalfWidth.toPx() }.coerceAtMost(maxHalfWidth)
+        val depth = with(density) { notchDepth.toPx() }.coerceAtMost(size.height * 0.58f)
+        val centerX = size.width / 2f
+
+        val path = Path().apply {
+            moveTo(radius, 0f)
+            lineTo(centerX - halfWidth, 0f)
+            cubicTo(
+                centerX - halfWidth * 0.52f, 0f,
+                centerX - halfWidth * 0.64f, depth,
+                centerX, depth
+            )
+            cubicTo(
+                centerX + halfWidth * 0.64f, depth,
+                centerX + halfWidth * 0.52f, 0f,
+                centerX + halfWidth, 0f
+            )
+            lineTo(size.width - radius, 0f)
+            quadraticTo(size.width, 0f, size.width, radius)
+            lineTo(size.width, size.height - radius)
+            quadraticTo(size.width, size.height, size.width - radius, size.height)
+            lineTo(radius, size.height)
+            quadraticTo(0f, size.height, 0f, size.height - radius)
+            lineTo(0f, radius)
+            quadraticTo(0f, 0f, radius, 0f)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
+
+private val CenterNotchDockShape = CenterNotchShape()
+
+/** Elige tinta clara/oscura con la mayor relación de contraste sobre el color primario elegido. */
+private fun Color.highContrastOnAccent(): Color {
+    val accentLuminance = this.luminance()
+    val white = Color.White
+    val darkInk = Color(0xFF0B1020)
+    fun contrastWith(candidateLuminance: Float): Float {
+        val lighter = maxOf(accentLuminance, candidateLuminance)
+        val darker = minOf(accentLuminance, candidateLuminance)
+        return (lighter + 0.05f) / (darker + 0.05f)
+    }
+    return if (contrastWith(white.luminance()) >= contrastWith(darkInk.luminance())) {
+        white
+    } else {
+        darkInk
+    }
+}
 
 enum class ScreenRoute(
     val route: String,
@@ -237,8 +304,9 @@ fun rememberHideOnScrollConnection(
 }
 
 /**
- * Three-item floating glass dock. The lateral tabs keep their labels visible, while the center
- * downloads action rises above the rail and carries the live queue badge and aggregate progress.
+ * Three-item floating dock with a concave center notch inspired by the user's reference image.
+ * Lateral labels stay visible; the raised downloads button carries the live queue badge and progress.
+ * All surface and accent colors come from the currently selected Material theme.
  */
 @Suppress("UNUSED_PARAMETER")
 @Composable
@@ -258,19 +326,17 @@ fun AppBottomNav(
         rememberReduceMotionEnabled()
     }
     val haptics = rememberHaptics()
-    val accentColor = if (isDarkTheme) DownloadFreeTeal else DownloadFreeLightTeal
-    val inactiveColor = if (isDarkTheme) Color(0xFF9BAABD) else Color(0xFF526174)
-    val dockColor = if (isDarkTheme) {
-        NavigationInk.copy(alpha = 0.66f)
-    } else {
-        Color.White.copy(alpha = 0.88f)
-    }
+    val colorScheme = MaterialTheme.colorScheme
+    // Use the user's selected app palette (including custom theme colors) for all selected states.
+    val accentColor = colorScheme.primary
+    val inactiveColor = colorScheme.onSurfaceVariant
+    val dockColor = colorScheme.surface.copy(alpha = if (isDarkTheme) 0.68f else 0.88f)
     val dockBorderColor = if (isDarkTheme) {
-        Color.White.copy(alpha = 0.08f)
+        colorScheme.onSurface.copy(alpha = 0.08f)
     } else {
-        Color(0xFF0F172A).copy(alpha = 0.10f)
+        colorScheme.outline.copy(alpha = 0.14f)
     }
-    val dockShape = RoundedCornerShape(32.dp)
+    val dockShape = CenterNotchDockShape
     val safePage = currentPage.coerceIn(0, ScreenRoute.entries.lastIndex)
     BoxWithConstraints(
         modifier = modifier
@@ -324,7 +390,7 @@ fun AppBottomNav(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = if (isDarkTheme) 0.045f else 0.24f),
+                                colorScheme.onSurface.copy(alpha = if (isDarkTheme) 0.055f else 0.025f),
                                 Color.Transparent
                             )
                         )
@@ -340,7 +406,7 @@ fun AppBottomNav(
                         .width(pillWidth)
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(accentColor.copy(alpha = 0.15f))
+                        .background(accentColor.copy(alpha = if (isDarkTheme) 0.15f else 0.12f))
                 )
 
                 Row(
@@ -481,12 +547,10 @@ private fun DockDownloadsButton(
     modifier: Modifier = Modifier
 ) {
     val iconScale = rememberSelectionBounce(isSelected, reducedMotion)
-    val contentOnAccent = if (isDarkTheme) Color(0xFF062522) else Color.White
-    val circleOutline = if (isDarkTheme) {
-        Color.White.copy(alpha = 0.10f)
-    } else {
-        Color(0xFF0F172A).copy(alpha = 0.12f)
-    }
+    val colorScheme = MaterialTheme.colorScheme
+    val contentOnAccent = accentColor.highContrastOnAccent()
+    val neutralCircleColor = colorScheme.surface
+    val circleOutline = colorScheme.outline.copy(alpha = if (isDarkTheme) 0.34f else 0.42f)
     val stateDescription = when (downloadsCount) {
         0 -> "Sin descargas en curso o en cola"
         1 -> "1 descarga en curso o en cola"
@@ -546,7 +610,7 @@ private fun DockDownloadsButton(
                         }
                     )
                     .clip(CircleShape)
-                    .background(if (isSelected) accentColor else Color.Transparent)
+                    .background(if (isSelected) accentColor else neutralCircleColor)
                     .then(
                         if (!isSelected) Modifier.border(1.dp, circleOutline, CircleShape)
                         else Modifier
@@ -605,8 +669,9 @@ private fun DownloadCountBadge(
     modifier: Modifier = Modifier
 ) {
     val badgeText = if (count > 99) "99+" else count.toString()
-    val badgeTextColor = if (isDarkTheme) Color(0xFF062522) else Color.White
-    val badgeBorder = if (isDarkTheme) NavigationInk else Color.White
+    val colorScheme = MaterialTheme.colorScheme
+    val badgeTextColor = accentColor.highContrastOnAccent()
+    val badgeBorder = if (isDarkTheme) colorScheme.background else colorScheme.surface
 
     AnimatedVisibility(
         visible = count > 0,
@@ -680,11 +745,9 @@ private fun DownloadProgressRing(
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val trackColor = if (isDarkTheme) {
-        Color.White.copy(alpha = 0.17f)
-    } else {
-        Color(0xFF0F172A).copy(alpha = 0.16f)
-    }
+    val trackColor = MaterialTheme.colorScheme.onSurface.copy(
+        alpha = if (isDarkTheme) 0.17f else 0.16f
+    )
 
     Canvas(modifier = modifier) {
         val strokeWidth = 1.8.dp.toPx()

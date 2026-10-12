@@ -31,8 +31,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
@@ -690,7 +688,7 @@ fun MainAppNavigation(
                     }
 
                     // Degradado inferior para suavizar el contenido que transcurre detrás del dock.
-                    val navFadeColor = if (isDark) Color(0xFF0B1020) else MaterialTheme.colorScheme.background
+                    val navFadeColor = MaterialTheme.colorScheme.background
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
