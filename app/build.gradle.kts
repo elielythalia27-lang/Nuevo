@@ -47,7 +47,7 @@ android {
         ?: "android"
       keyAlias = System.getenv("KEY_ALIAS")
         ?: System.getenv("RELEASE_KEY_ALIAS")
-        ?: if (keystoreFile.name == "release.keystore") "uploadkey" else "upload"
+        ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
         ?: System.getenv("RELEASE_KEY_PASSWORD")
         ?: "android"
