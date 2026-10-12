@@ -478,7 +478,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .testTag("movies_grid"),
-                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 136.dp),
                                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                                     verticalItemSpacing = 16.dp
                                 ) {
@@ -512,7 +512,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .testTag("movies_grid"),
-                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 136.dp),
                                     horizontalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else 14.dp),
                                     verticalArrangement = Arrangement.spacedBy(if (isListMode) 12.dp else 16.dp)
                                 ) {

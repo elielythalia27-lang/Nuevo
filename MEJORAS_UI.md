@@ -1,105 +1,56 @@
-# Download Free — Rediseño visual v1.2 (versionCode 3)
+# Download Free — Rediseño visual v1.3 (versionCode 4)
 
-> Segunda fase de rediseño, a partir del paquete v1.1. Se eliminaron el carrusel hero y la UI de
-> favoritos (a petición del usuario) y se aplicó una pasada completa de identidad visual:
-> barra de navegación de diseño propio, iconos de otro estilo, animaciones visibles y launcher nuevo.
+## Nuevo bottom navigation
 
----
+`ui/components/AppBottomNav.kt` se rediseñó para las tres pestañas de la app:
 
-## 1. Barra de navegación única (diseño propio) 🚀
+- **Dock flotante tipo píldora** con 16 dp de margen lateral, separación del borde inferior y rail compacto de 64 dp. Fondo azul-negro `#0B1020` al 66% en tema oscuro, borde de 1 dp blanco al 8% y brillo superior discreto: vidrio tintado, sin borde grueso ni halo general.
+- **Indicador persistente** en turquesa translúcido (`#14B8A6` al 15%) que se desliza entre Catálogo, Descargas y Ajustes con spring. Todos los nombres permanecen visibles; inactivos usan iconos outline y texto gris azulado pequeño, activos iconos filled y texto turquesa.
+- **Descargas al centro**: botón circular de 52 dp elevado 8 dp sobre el rail. Se rellena de turquesa y recibe glow solo cuando está seleccionado; en reposo mantiene el icono outline, sin glow. Los iconos son de la misma familia Material Rounded/Outlined.
+- **Badge de cola**: número de descargas `DOWNLOADING + PENDING`; se oculta en cero y hace pop al aparecer o cambiar. El mismo criterio alimenta el contador de la pestaña de Descargas (`En curso/cola`), así ambos números coinciden. Pausadas y fallidas no se cuentan como transferencias activas ni en cola.
+- **Anillo de progreso** fino cuando hay transferencias `DOWNLOADING`; refleja el promedio del progreso de las descargas en curso y se actualiza con el estado que publica el ViewModel.
+- **Accesibilidad**: cada icono tiene descripción, las pestañas exponen estado seleccionado, el badge comunica el conteo y las áreas táctiles superan 48 dp. Hay háptica ligera al tocar. En tema oscuro se usa el teal pedido `#14B8A6`; en tema claro se oscurece a `#00695C` para conservar contraste AA.
+- **Reducir animaciones**: observa las escalas globales de animación de Android. Si están desactivadas, el indicador y los cambios de página pasan a estado inmediato y se omiten los rebotes/transiciones del badge.
+- **Pantalla de fondo**: degradado inferior de 176 dp para que las imágenes y tarjetas detrás del dock no queden visualmente cargadas; listas y grillas dejan 136 dp al final para poder desplazar el último elemento por encima de la barra.
 
-`AppBottomNav` reescrito por completo (`ui/components/AppBottomNav.kt`):
+## Icono de aplicación — fondo blanco y teal
 
-- **Dock flotante de vidrio**: cápsula redondeada (24 dp) despegada de los bordes, translúcida en
-  oscuro/claro, con borde luminoso y glow del color primario por debajo.
-- **Pestaña activa = píldora morfeante**: pasa de círculo compacto (46 dp) a cápsula ancha (96 dp)
-  con degradado del color primario; la etiqueta ("Catálogo", "Descargas", "Ajustes") se expande con
-  `expandHorizontally` dentro de la píldora, estilo pill de apps premium.
-- **Muesca luminosa viajera**: barra degradada de 3.5 dp en el borde superior que se desliza con
-  muelle hasta la pestaña activa.
-- **Icono con rebote elástico** (`Animatable` + `DampingRatioMediumBouncy`) al ganar la selección y
-  **respiración sutil** mientras está activa.
-- **Badge de descargas activas** con onda expansiva + pulso; el icono de la pestaña se convierte en
-  la **flecha de descarga animada estilo sistema** (`SystemDownloadAnimatedIcon`, conservada).
-- **Nueva función**: re-tocar la pestaña ya activa devuelve el catálogo al inicio
-  (`scrollToTopTick` en `MainActivity` → `HomeScreen`).
-- El cambio de página usa **muelle suave** en el pager (en vez del tween plano).
-- La barra **nunca desaparece** (decisión previa del usuario, se mantiene).
+- El fondo del launcher ahora es blanco tanto en los recursos adaptativos como en las variantes por densidad.
+- El disco que antes era azul pasa a un degradado teal `#2DD4BF → #0F766E`, con el glifo de descarga blanco.
+- Se actualizaron los iconos cuadrados y redondos en mdpi, hdpi, xhdpi, xxhdpi y xxxhdpi, el icono monocromático para Android 13+ y los símbolos de splash para mantener la misma identidad teal.
 
-## 2. Animaciones que se notan ✨
+## Se conservan de v1.2
 
-| Animación | Dónde |
-|---|---|
-| **Entrada escalonada** (`StaggeredAppear`, fade + subida + escala, cascada por oleadas) | Todas las tarjetas del catálogo, en ambos modos de grilla (masonry 2 col y compacta/lista). |
-| **Press-scale** (`Modifier.pressScale`, se hunde con el dedo y vuelve con muelle) | 3 tarjetas de Descargas (activa, en cola, descargada), fila "Ubicación de descargas" en Ajustes. |
-| Confeti al completar descarga | Se mantiene de la fase anterior. |
-| Hápticas en acciones | Se mantienen (chips, Play/Descargar de la ficha, nav, pausa/reanudar/cancelar/reintentar, gestos del player). |
+- Entrada escalonada de las tarjetas del catálogo, feedback de presión en tarjetas y hápticas.
+- Confeti y doble tick al completar una descarga.
+- Repetir el toque en la pestaña activa vuelve el catálogo al inicio.
+- Sin carrusel hero ni elementos de interfaz de Favoritos, tal como se había pedido.
+- Bottom navigation permanece visible; no se oculta al desplazarse.
 
-Componente nuevo: `ui/components/Interactions.kt` (`pressScale` + `StaggeredAppear`), sin
-dependencias nuevas (solo Compose).
-
-## 3. Iconos con estilo propio 🔷
-
-- **Migración global a `Icons.Rounded`** (set bold de esquinas redondeadas, estética tipo Cubacel
-  con trazos gruesos): ~70 usos en 15 archivos — catálogo, descargas, ajustes, player, diálogos,
-  toasts, VPN screen, banners y la barra de navegación.
-- Verificado: cada icono usado tiene su import del paquete `rounded`/`automirrored.rounded`, y la
-  dependencia `material-icons-extended` ya está en el build.
-- **Contenedores duotone en Ajustes**: los cuadros con tinte plano ahora son **círculos con color
-  semántico** — carpeta verde `#10B981`, descargas azul `#2A7DE1`, notificaciones cian `#06B6D4`,
-  batería ámbar `#F59E0B`, auto-inicio violeta `#8B5CF6` (los que indican estado activo conservan
-  su verde condicional).
-- Limpieza: 17 imports de iconos muertos eliminados.
-
-## 4. Launcher y splash nuevos 📱
-
-- **Diseño**: badge circular azul degradado (`#2A7DE1 → #1B59A7`) con glifo blanco de descarga de
-  trazo grueso y extremos redondeados, sobre fondo **navy de la marca** (`#0B1120`) — coherente con
-  la paleta real de la app (el anterior era teal 3D sobre blanco).
-- `ic_launcher_foreground.xml` (vector adaptive, con `monochrome` para iconos temáticos Android 13+).
-- `ic_launcher_background.xml` navy, idéntico en modo día/noche.
-- **PNGs regenerados en las 5 densidades** (mdpi→xxxhdpi, square + round) con supermuestreo ×4.
-- **Splash** (`ic_splash_icon_light/dark.xml`) con el mismo badge, a juego.
-
-## 5. Eliminado en esta fase (petición explícita) 🗑️
-
-- **Carrusel hero** (`FeaturedHeroCarousel`) y su helper — quitados de `HomeScreen.kt` e imports.
-- **UI de favoritos**: corazón en póster y ficha, chip "Favoritos" del `FilterBar`, estado vacío de
-  favoritos, wiring en `MainActivity`. *El backend del ViewModel (`toggleFavorite`, `favoriteIds`,
-  `onlyFavorites`) permanece intacto pero sin uso — no afecta.*
-
----
-
-## Archivos tocados en esta fase
+## Archivos tocados en v1.3
 
 | Archivo | Cambio |
 |---|---|
-| `ui/components/AppBottomNav.kt` | **Reescrito** — dock de vidrio con píldora morfeante, muesca, rebotes. |
-| `ui/components/Interactions.kt` | **NUEVO** — `pressScale` + `StaggeredAppear`. |
-| `ui/screens/HomeScreen.kt` | Sin carrusel/favoritos; entrada escalonada; volver-arriba. |
-| `ui/screens/DescargasScreen.kt` | Press-scale en 3 tarjetas; iconos rounded. |
-| `ui/screens/AjustesScreen.kt` | Círculos duotone; press-scale en carpeta; iconos rounded. |
-| `ui/components/FilterBar.kt` | Sin chip de favoritos; iconos rounded. |
-| `ui/components/PeliculaCard.kt` | Sin corazón; iconos rounded; limpieza. |
-| `ui/player/*.kt`, `VpnBlockedScreen`, `CustomToast`, `BatteryOptimization*`, `PermissionRequestDialog`, `ContinueWatchingBanner` | Iconos rounded. |
-| `MainActivity.kt` | Scroll-arriba al re-tocar tab; muelle en pager; sin favoritos. |
-| `res/drawable*` + `res/mipmap-*` | Launcher/splash nuevos + PNGs 5 densidades. |
-| `app/build.gradle.kts` | `versionCode = 3`, `versionName = "1.2"`. |
+| `ui/components/AppBottomNav.kt` | Nuevo dock, iconos outline/filled, indicador spring, badge, progreso, háptica y preferencia de movimiento reducido. |
+| `MainActivity.kt` | Conteo compartido, progreso agregado, degradado inferior y navegación sin animación si el sistema la reduce. |
+| `ui/screens/DescargasScreen.kt` | Contador visible sincronizado con el badge y espacio inferior extra. |
+| `ui/screens/HomeScreen.kt` | Espacio final extra en ambas grillas. |
+| `ui/screens/AjustesScreen.kt` | Espacio final extra para no quedar bajo el dock. |
+| `data/model/Pelicula.kt` | Regla común `DownloadStatus.isInProgressOrQueued`. |
+| `res/drawable*`, `res/mipmap-*` | Launcher blanco/teal, capa monocromática y splash teal. |
+| `app/build.gradle.kts` | `versionCode = 4`, `versionName = "1.3"`. |
 
-## Verificaciones (sin compilar, según lo acordado)
+## Verificación
 
-- Balance de llaves/paréntesis/corchetes en **todos** los `.kt` ✔
-- Cada icono `Icons.Rounded.*` usado tiene su import; cero imports de iconos muertos ✔
-- Sin restos de carrusel/favoritos en la UI; `haptics` sin instancias huérfanas ✔
-- `ScreenRoute.entries` (Kotlin 2.2.10) y `material-icons-extended` confirmados ✔
-- Firmas nuevas con valores por defecto (`scrollToTopTick`, `pressScale`, `StaggeredAppear`) ✔
+- Conteo del badge y pestaña de Descargas usan una sola regla de estados (`DOWNLOADING` y `PENDING`).
+- Se revisaron nombres de estados, callbacks del pager, descripciones accesibles, recursos de launcher y paddings de las listas/grillas.
+- Se hizo revisión estática de imports y balance de delimitadores Kotlin; **no se ejecutó Gradle ni se compiló**, según la indicación del usuario.
 
-## Cómo probar
+## Prueba manual sugerida
 
-1. **Abre la app**: launcher y splash nuevos (badge azul, glifo bold).
-2. **Catálogo**: las tarjetas entran en cascada; desliza entre pestañas con muelle.
-3. **Barra inferior**: toca cada pestaña (píldora que crece, muesca que viaja, rebote del icono);
-   re-toca la activa → vuelve al inicio; inicia una descarga y mira la flecha animada + badge.
-4. **Descargas**: pulsa y mantén/mantén el dedo sobre una tarjeta → se hunde con muelle.
-5. **Ajustes**: círculos de colores por sección; toca "Ubicación de descargas" → presión elástica.
-6. Completa una descarga → confeti + doble vibración (de la fase anterior).
+1. Instala v1.3 y confirma que el launcher tenga fondo blanco y disco de descarga teal.
+2. Toca Catálogo, Descargas y Ajustes: verifica que la píldora se deslice, que los nombres sigan visibles y que Descargas quede elevada al centro.
+3. Inicia dos descargas y deja otra en espera: el badge y el contador `En curso/cola` deben coincidir; el anillo debe reflejar el progreso en movimiento.
+4. Pausa o falla una descarga: no debe contarse como activa/en cola. Al completar una, el badge debe decrementar y la pantalla conservar sus secciones de pausa/error.
+5. Activa **Quitar animaciones** en Accesibilidad/Opciones de desarrollador de Android y vuelve a tocar las pestañas: los cambios deben ser inmediatos, conservando la respuesta háptica.
+6. Desplázate hasta el final del catálogo, descargas y ajustes: el último elemento debe poder quedar por encima del dock.

@@ -1,30 +1,37 @@
 package com.example.ui.components
 
+import android.content.Context
+import android.database.ContentObserver
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -39,13 +46,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,23 +65,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.graphicsLayer
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.contrastingTextColor
+
+private val DownloadFreeTeal = Color(0xFF14B8A6)
+private val DownloadFreeLightTeal = Color(0xFF00695C)
+private val NavigationInk = Color(0xFF0B1020)
 
 enum class ScreenRoute(
     val route: String,
@@ -80,17 +100,64 @@ enum class ScreenRoute(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
-    HOME("home", "Catálogo", 0, Icons.Rounded.Movie, Icons.Rounded.Movie),
-    DOWNLOADS("downloads", "Descargas", 1, Icons.Rounded.CloudDownload, Icons.Rounded.CloudDownload),
-    SETTINGS("settings", "Ajustes", 2, Icons.Rounded.Tune, Icons.Rounded.Tune)
+    HOME("home", "Catálogo", 0, Icons.Rounded.Movie, Icons.Outlined.Movie),
+    DOWNLOADS("downloads", "Descargas", 1, Icons.Rounded.CloudDownload, Icons.Outlined.CloudDownload),
+    SETTINGS("settings", "Ajustes", 2, Icons.Rounded.Tune, Icons.Outlined.Tune)
 }
 
 /**
- * BottomBarScrollBehavior:
- * Tracks vertical scroll movements on the container wrapping the HorizontalPager.
- * Completely ignores horizontal movements (e.g. horizontal swipes in pager).
- * Keeps nav bar visible when at the end of the list (atEnd = true).
+ * Shared preference used by Compose animations in the navigation. Android's "Remove animations"
+ * setting writes zero to the global animator/transition scales; observing those settings lets the
+ * dock switch to snap transitions immediately, even if the preference changes while the app is open.
  */
+@Composable
+fun rememberReduceMotionEnabled(): Boolean {
+    val context = LocalContext.current
+    var reduceMotion by remember(context) {
+        mutableStateOf(readReduceMotionPreference(context))
+    }
+
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                reduceMotion = readReduceMotionPreference(context)
+            }
+        }
+        val resolver = context.contentResolver
+        val preferenceUris = listOf(
+            Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
+            Settings.Global.getUriFor(Settings.Global.TRANSITION_ANIMATION_SCALE),
+            Settings.Global.getUriFor(Settings.Global.WINDOW_ANIMATION_SCALE)
+        ).distinct()
+        preferenceUris.forEach { resolver.registerContentObserver(it, false, observer) }
+
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+
+    return reduceMotion
+}
+
+private fun readReduceMotionPreference(context: Context): Boolean = runCatching {
+    val resolver = context.contentResolver
+    val animatorScale = Settings.Global.getFloat(
+        resolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f
+    )
+    val transitionScale = Settings.Global.getFloat(
+        resolver,
+        Settings.Global.TRANSITION_ANIMATION_SCALE,
+        1f
+    )
+    val windowScale = Settings.Global.getFloat(
+        resolver,
+        Settings.Global.WINDOW_ANIMATION_SCALE,
+        1f
+    )
+    animatorScale <= 0f || transitionScale <= 0f || windowScale <= 0f
+}.getOrDefault(false)
+
+/** Keeps the bottom navigation visible; scroll callbacks are retained for existing screen APIs. */
 class BottomBarScrollBehavior(private val thresholdPx: Float = 0f) : NestedScrollConnection {
     var isVisible by mutableStateOf(true)
         private set
@@ -98,7 +165,6 @@ class BottomBarScrollBehavior(private val thresholdPx: Float = 0f) : NestedScrol
     var isChangingPage by mutableStateOf(false)
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-        // BottomNavigation never disappears as requested ("quita eso de que el bottomnavigation desaparezca")
         if (!isVisible) isVisible = true
         return Offset.Zero
     }
@@ -109,11 +175,8 @@ class BottomBarScrollBehavior(private val thresholdPx: Float = 0f) : NestedScrol
 }
 
 /**
- * NestedScrollConnection that tracks vertical scroll movements:
- * - Hides nav bar on vertical scroll down (> thresholdPx, e.g. 10px).
- * - Reveals nav bar on vertical scroll up (> thresholdPx).
- * - Does NOT reveal nav bar when reaching the bottom of the list.
- * - Always keeps nav bar visible when at the top (position 0) or if content cannot scroll.
+ * Legacy scroll connection retained for compatibility with screens that still expose this API.
+ * The app's dock itself remains visible, as requested.
  */
 @Composable
 fun rememberHideOnScrollConnection(
@@ -131,46 +194,30 @@ fun rememberHideOnScrollConnection(
             private var accumulatedDelta = 0f
 
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // Rule 1: Depende ÚNICAMENTE de la dirección del scroll VERTICAL
                 val deltaY = available.y
-
-                // Rule 5(d): Si la pantalla no tiene suficiente contenido para desplazarse
                 if (!currentCanScrollBackward() && !currentCanScrollForward()) {
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
                     return Offset.Zero
                 }
-
-                // Rule 5(a): Si está en la parte superior (posición 0), forzar visible
                 if (!currentCanScrollBackward()) {
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
-                    if (deltaY < 0) {
-                        accumulatedDelta += deltaY
-                        if (accumulatedDelta < -thresholdPx) {
-                            currentOnVisibilityChange(false)
-                            accumulatedDelta = 0f
-                        }
-                    }
                     return Offset.Zero
                 }
-
-                // Reset accumulation when reversing scroll direction
-                if ((deltaY > 0 && accumulatedDelta < 0) || (deltaY < 0 && accumulatedDelta > 0)) {
+                if ((deltaY > 0f && accumulatedDelta < 0f) ||
+                    (deltaY < 0f && accumulatedDelta > 0f)
+                ) {
                     accumulatedDelta = 0f
                 }
                 accumulatedDelta += deltaY
-
-                // Rule 3: Scroll hacia abajo (más allá del umbral) -> ocultar la barra
                 if (accumulatedDelta < -thresholdPx) {
                     currentOnVisibilityChange(false)
                     accumulatedDelta = 0f
                 } else if (accumulatedDelta > thresholdPx) {
-                    // Rule 3: Scroll hacia arriba (más allá del umbral) -> mostrarla
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
                 }
-
                 return Offset.Zero
             }
 
@@ -179,7 +226,6 @@ fun rememberHideOnScrollConnection(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                // Rule 4 & 5(a): Solo reaparece forzadamente si el scroll llegó a la parte superior (posición 0).
                 if (!currentCanScrollBackward()) {
                     currentOnVisibilityChange(true)
                     accumulatedDelta = 0f
@@ -191,12 +237,10 @@ fun rememberHideOnScrollConnection(
 }
 
 /**
- * Dock de navegación flotante con diseño propio de Download Free:
- * - Cápsula de vidrio despegada de los bordes, con brillo superior y glow del color activo.
- * - Pestaña activa: píldora morfeante con degradado del color primario + etiqueta que se expande.
- * - Icono con rebote elástico al seleccionar y muesca luminosa que viaja por el borde superior.
- * - Badge de descargas activas con onda expansiva y flecha animada estilo sistema.
+ * Three-item floating glass dock. The lateral tabs keep their labels visible, while the center
+ * downloads action rises above the rail and carries the live queue badge and aggregate progress.
  */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun AppBottomNav(
     currentPage: Int,
@@ -204,453 +248,499 @@ fun AppBottomNav(
     downloadsCount: Int,
     isDarkTheme: Boolean = true,
     isVisible: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    downloadProgress: Float? = null,
+    systemReduceMotion: Boolean? = null
 ) {
+    val reducedMotion = if (systemReduceMotion != null) {
+        systemReduceMotion
+    } else {
+        rememberReduceMotionEnabled()
+    }
     val haptics = rememberHaptics()
-    val activeColor = MaterialTheme.colorScheme.primary
-    val inactiveColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val dockBg = if (isDarkTheme) Color(0xFF0F172A).copy(alpha = 0.93f) else Color(0xFFFFFFFF).copy(alpha = 0.96f)
-    val dockBorderColor = if (isDarkTheme) Color(0xFF334155).copy(alpha = 0.55f) else Color(0xFFCBD5E1).copy(alpha = 0.70f)
-    val dockShape = RoundedCornerShape(24.dp)
+    val accentColor = if (isDarkTheme) DownloadFreeTeal else DownloadFreeLightTeal
+    val inactiveColor = if (isDarkTheme) Color(0xFF9BAABD) else Color(0xFF526174)
+    val dockColor = if (isDarkTheme) {
+        NavigationInk.copy(alpha = 0.66f)
+    } else {
+        Color.White.copy(alpha = 0.88f)
+    }
+    val dockBorderColor = if (isDarkTheme) {
+        Color.White.copy(alpha = 0.08f)
+    } else {
+        Color(0xFF0F172A).copy(alpha = 0.10f)
+    }
+    val dockShape = RoundedCornerShape(32.dp)
+    val safePage = currentPage.coerceIn(0, ScreenRoute.entries.lastIndex)
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+            .height(76.dp)
+    ) {
+        val cellWidth = maxWidth / 3
 
-    val motionAnimSpec = tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
-    val navOffsetY by animateFloatAsState(
-        targetValue = if (isVisible) 0f else 150f,
-        animationSpec = motionAnimSpec,
-        label = "nav_offset_y"
-    )
-    val navAlpha by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0f,
-        animationSpec = motionAnimSpec,
-        label = "nav_alpha"
-    )
+        // One persistent indicator glides across all three slots; on Downloads its exposed edges
+        // frame the circular action instead of replacing it with a second, competing button.
+        val targetPillWidth = if (safePage == ScreenRoute.DOWNLOADS.pageIndex) {
+            66.dp
+        } else {
+            (cellWidth - 8.dp).coerceAtMost(104.dp).coerceAtLeast(64.dp)
+        }
+        val targetPillX = cellWidth * safePage + (cellWidth - targetPillWidth) / 2
+        val pillWidth by animateDpAsState(
+            targetValue = targetPillWidth,
+            animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.78f, stiffness = 430f),
+            label = "nav_selection_width"
+        )
+        val pillX by animateDpAsState(
+            targetValue = targetPillX,
+            animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.78f, stiffness = 430f),
+            label = "nav_selection_x"
+        )
 
-    if (navAlpha > 0.02f) {
+        // The rail is 64dp high; the 52dp center button starts 8dp above it.
         Box(
-            modifier = modifier
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
-                .graphicsLayer {
-                    translationY = navOffsetY
-                    alpha = navAlpha
-                }
+                .height(64.dp)
+                .shadow(
+                    elevation = 16.dp,
+                    shape = dockShape,
+                    ambientColor = Color.Black.copy(alpha = 0.30f),
+                    spotColor = Color.Black.copy(alpha = 0.28f)
+                )
+                .clip(dockShape)
+                .background(dockColor)
+                .border(1.dp, dockBorderColor, dockShape)
+                .testTag("bottom_nav")
         ) {
-            // Halo de color bajo el dock (glow de la pestaña activa)
+            // Subtle top sheen gives the translucent surface a glass finish without a heavy rim.
             Box(
                 modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer { alpha = 0.55f }
-                    .shadow(
-                        elevation = 26.dp,
-                        shape = dockShape,
-                        ambientColor = activeColor.copy(alpha = 0.55f),
-                        spotColor = activeColor.copy(alpha = 0.55f)
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = if (isDarkTheme) 0.045f else 0.24f),
+                                Color.Transparent
+                            )
+                        )
                     )
-                    .clip(dockShape)
-                    .background(Color.Transparent)
             )
 
-            // Cuerpo del dock: vidrio redondeado con borde luminoso
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(66.dp)
-                    .shadow(
-                        elevation = 14.dp,
-                        shape = dockShape,
-                        ambientColor = Color.Black.copy(alpha = 0.35f),
-                        spotColor = activeColor.copy(alpha = 0.35f)
-                    )
-                    .clip(dockShape)
-                    .background(dockBg)
-                    .border(1.dp, dockBorderColor, dockShape)
-                    .testTag("bottom_nav")
-            ) {
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val cellWidth = maxWidth / 3
-                    val notchWidth = 26.dp
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val railCellWidth = maxWidth / 3
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = pillX, y = 8.dp)
+                        .width(pillWidth)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(accentColor.copy(alpha = 0.15f))
+                )
 
-                    // Muesca luminosa que viaja por el borde superior hasta la pestaña activa
-                    val notchX by animateDpAsState(
-                        targetValue = cellWidth * currentPage + (cellWidth - notchWidth) / 2,
-                        animationSpec = spring(
-                            dampingRatio = 0.72f,
-                            stiffness = 380f
-                        ),
-                        label = "notch_x"
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DockSideNavItem(
+                        screen = ScreenRoute.HOME,
+                        isSelected = safePage == ScreenRoute.HOME.pageIndex,
+                        accentColor = accentColor,
+                        inactiveColor = inactiveColor,
+                        reducedMotion = reducedMotion,
+                        onNavigate = onNavigate,
+                        haptics = haptics,
+                        modifier = Modifier
+                            .width(railCellWidth)
+                            .fillMaxHeight()
                     )
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset(x = notchX)
-                            .padding(top = 0.dp)
-                            .width(notchWidth)
-                            .height(3.5.dp)
-                            .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        activeColor.copy(alpha = 0.25f),
-                                        activeColor,
-                                        activeColor.copy(alpha = 0.25f)
-                                    )
-                                )
-                            )
+                            .width(railCellWidth)
+                            .fillMaxHeight()
                     )
-
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        ScreenRoute.entries.forEach { screen ->
-                            val isSelected = currentPage == screen.pageIndex
-                            DockNavItem(
-                                screen = screen,
-                                isSelected = isSelected,
-                                isDarkTheme = isDarkTheme,
-                                activeColor = activeColor,
-                                inactiveColor = inactiveColor,
-                                downloadsCount = downloadsCount,
-                                onNavigate = onNavigate,
-                                haptics = haptics,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                            )
-                        }
-                    }
+                    DockSideNavItem(
+                        screen = ScreenRoute.SETTINGS,
+                        isSelected = safePage == ScreenRoute.SETTINGS.pageIndex,
+                        accentColor = accentColor,
+                        inactiveColor = inactiveColor,
+                        reducedMotion = reducedMotion,
+                        onNavigate = onNavigate,
+                        haptics = haptics,
+                        modifier = Modifier
+                            .width(railCellWidth)
+                            .fillMaxHeight()
+                    )
                 }
             }
         }
+
+        DockDownloadsButton(
+            isSelected = safePage == ScreenRoute.DOWNLOADS.pageIndex,
+            downloadsCount = downloadsCount.coerceAtLeast(0),
+            downloadProgress = downloadProgress?.coerceIn(0f, 1f),
+            accentColor = accentColor,
+            inactiveColor = inactiveColor,
+            isDarkTheme = isDarkTheme,
+            reducedMotion = reducedMotion,
+            onNavigate = onNavigate,
+            haptics = haptics,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .width(cellWidth)
+                .height(76.dp)
+        )
     }
 }
 
 @Composable
-private fun DockNavItem(
+private fun DockSideNavItem(
     screen: ScreenRoute,
     isSelected: Boolean,
-    isDarkTheme: Boolean,
-    activeColor: Color,
+    accentColor: Color,
     inactiveColor: Color,
-    downloadsCount: Int,
+    reducedMotion: Boolean,
     onNavigate: (Int) -> Unit,
     haptics: AppHaptics,
     modifier: Modifier = Modifier
 ) {
-    val isDownloadsTab = screen == ScreenRoute.DOWNLOADS
-    val hasActiveDownloads = isDownloadsTab && downloadsCount > 0
-    val pillShape = RoundedCornerShape(18.dp)
-
-    // Píldora morfeante: círculo compacto cuando está inactiva, ancha con etiqueta al activarse
-    val pillWidth by animateDpAsState(
-        targetValue = if (isSelected) 96.dp else 46.dp,
-        animationSpec = spring(dampingRatio = 0.68f, stiffness = 420f),
-        label = "pill_width"
+    val iconScale = rememberSelectionBounce(isSelected, reducedMotion)
+    val iconTint by animateColorAsState(
+        targetValue = if (isSelected) accentColor else inactiveColor,
+        animationSpec = if (reducedMotion) snap() else tween(180),
+        label = "${screen.route}_icon_tint"
     )
-    val pillColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor else Color.Transparent,
-        animationSpec = tween(260, easing = FastOutSlowInEasing),
-        label = "pill_color"
+    val labelTint by animateColorAsState(
+        targetValue = if (isSelected) accentColor else inactiveColor,
+        animationSpec = if (reducedMotion) snap() else tween(180),
+        label = "${screen.route}_label_tint"
     )
-
-    // Rebote elástico del icono al ganar la selección
-    val iconBounce = remember { Animatable(1f) }
-    LaunchedEffect(isSelected) {
-        if (isSelected) {
-            iconBounce.snapTo(0.62f)
-            iconBounce.animateTo(
-                1f,
-                spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
-        }
-    }
-
-    // Respiración sutil del icono activo
-    val breath = rememberInfiniteTransition(label = "dock_item_breath")
-    val breathScale by breath.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dock_breath"
-    )
-
-    // Onda expansiva del badge de descargas
-    val ripple = rememberInfiniteTransition(label = "dock_badge_ripple")
-    val rippleScale by ripple.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "dock_ripple_scale"
-    )
-    val rippleAlpha by ripple.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "dock_ripple_alpha"
-    )
-    val pulseScale by ripple.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dock_pulse"
-    )
-
-    val contentColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.contrastingTextColor() else inactiveColor,
-        animationSpec = tween(260, easing = FastOutSlowInEasing),
-        label = "dock_item_content"
-    )
-    val dockBg = if (isDarkTheme) Color(0xFF0F172A) else Color.White
 
     Box(
         modifier = modifier
             .testTag("bottom_nav_item_${screen.pageIndex}")
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null
+                indication = null,
+                onClickLabel = "Abrir ${screen.title}",
+                role = Role.Tab
             ) {
                 haptics.tick()
                 onNavigate(screen.pageIndex)
-            },
+            }
+            .semantics { selected = isSelected },
         contentAlignment = Alignment.Center
     ) {
-        // Píldora con degradado + glow propio
-        Box(
-            modifier = Modifier
-                .width(pillWidth)
-                .height(46.dp)
-                .shadow(
-                    elevation = if (isSelected) 10.dp else 0.dp,
-                    shape = pillShape,
-                    ambientColor = Color.Transparent,
-                    spotColor = activeColor.copy(alpha = 0.5f)
-                )
-                .clip(pillShape)
-                .background(
-                    if (isSelected) {
-                        Brush.horizontalGradient(
-                            listOf(
-                                activeColor,
-                                activeColor.copy(alpha = 0.72f)
-                            )
-                        )
-                    } else {
-                        Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                contentDescription = screen.title,
+                tint = iconTint,
+                modifier = Modifier
+                    .size(21.dp)
+                    .graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
                     }
-                ),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = screen.title,
+                modifier = Modifier.clearAndSetSemantics { },
+                color = labelTint,
+                fontSize = if (isSelected) 11.sp else 10.5.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip
+            )
+        }
+    }
+}
+
+@Composable
+private fun DockDownloadsButton(
+    isSelected: Boolean,
+    downloadsCount: Int,
+    downloadProgress: Float?,
+    accentColor: Color,
+    inactiveColor: Color,
+    isDarkTheme: Boolean,
+    reducedMotion: Boolean,
+    onNavigate: (Int) -> Unit,
+    haptics: AppHaptics,
+    modifier: Modifier = Modifier
+) {
+    val iconScale = rememberSelectionBounce(isSelected, reducedMotion)
+    val contentOnAccent = if (isDarkTheme) Color(0xFF062522) else Color.White
+    val circleOutline = if (isDarkTheme) {
+        Color.White.copy(alpha = 0.10f)
+    } else {
+        Color(0xFF0F172A).copy(alpha = 0.12f)
+    }
+    val stateDescription = when (downloadsCount) {
+        0 -> "Sin descargas en curso o en cola"
+        1 -> "1 descarga en curso o en cola"
+        else -> "$downloadsCount descargas en curso o en cola"
+    }
+
+    Column(
+        modifier = modifier
+            .testTag("bottom_nav_item_${ScreenRoute.DOWNLOADS.pageIndex}")
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClickLabel = "Abrir Descargas",
+                role = Role.Tab
+            ) {
+                haptics.tick()
+                onNavigate(ScreenRoute.DOWNLOADS.pageIndex)
+            }
+            .semantics {
+                selected = isSelected
+                this.stateDescription = stateDescription
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Top
+    ) {
+        Box(
+            modifier = Modifier.size(60.dp),
             contentAlignment = Alignment.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (hasActiveDownloads) {
-                        // Flecha de descarga animada estilo sistema mientras hay descargas activas
-                        SystemDownloadAnimatedIcon(
-                            tint = contentColor,
-                            modifier = Modifier.size(23.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = screen.selectedIcon,
-                            contentDescription = screen.title,
-                            tint = contentColor,
-                            modifier = Modifier
-                                .size(23.dp)
-                                .graphicsLayer {
-                                    scaleX = iconBounce.value * (if (isSelected) breathScale else 1f)
-                                    scaleY = iconBounce.value * (if (isSelected) breathScale else 1f)
-                                }
-                        )
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = isSelected,
-                    enter = expandHorizontally(
-                        animationSpec = tween(280, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(220)),
-                    exit = shrinkHorizontally(
-                        animationSpec = tween(180, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(140))
-                ) {
-                    Row {
-                        Spacer(modifier = Modifier.width(7.dp))
-                        Text(
-                            text = screen.title,
-                            color = contentColor,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            style = androidx.compose.ui.text.TextStyle(
-                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(
-                                    includeFontPadding = false
-                                )
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                    }
-                }
+            if (downloadProgress != null) {
+                val ringProgress by animateFloatAsState(
+                    targetValue = downloadProgress,
+                    animationSpec = if (reducedMotion) snap() else tween(240),
+                    label = "active_download_progress_ring"
+                )
+                DownloadProgressRing(
+                    progress = ringProgress,
+                    accentColor = accentColor,
+                    isDarkTheme = isDarkTheme,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
-            // Badge de descargas activas sobre el extremo del icono
-            if (hasActiveDownloads) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(x = 2.dp, y = 5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .scale(rippleScale)
-                            .clip(CircleShape)
-                            .background(activeColor.copy(alpha = rippleAlpha))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .scale(pulseScale)
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(activeColor)
-                            .border(1.5.dp, dockBg, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (downloadsCount > 99) "99+" else downloadsCount.toString(),
-                            color = activeColor.contrastingTextColor(),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Black,
-                            textAlign = TextAlign.Center,
-                            style = androidx.compose.ui.text.TextStyle(
-                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(
-                                    includeFontPadding = false
-                                ),
-                                lineHeightStyle = LineHeightStyle(
-                                    alignment = LineHeightStyle.Alignment.Center,
-                                    trim = LineHeightStyle.Trim.Both
-                                ),
-                                lineHeight = 10.sp
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .then(
+                        if (isSelected) {
+                            Modifier.shadow(
+                                elevation = 16.dp,
+                                shape = CircleShape,
+                                ambientColor = accentColor.copy(alpha = 0.52f),
+                                spotColor = accentColor.copy(alpha = 0.62f)
                             )
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .clip(CircleShape)
+                    .background(if (isSelected) accentColor else Color.Transparent)
+                    .then(
+                        if (!isSelected) Modifier.border(1.dp, circleOutline, CircleShape)
+                        else Modifier
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isSelected) {
+                        ScreenRoute.DOWNLOADS.selectedIcon
+                    } else {
+                        ScreenRoute.DOWNLOADS.unselectedIcon
+                    },
+                    contentDescription = ScreenRoute.DOWNLOADS.title,
+                    tint = if (isSelected) contentOnAccent else inactiveColor,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer {
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        }
+                )
+            }
+
+            DownloadCountBadge(
+                count = downloadsCount,
+                accentColor = accentColor,
+                isDarkTheme = isDarkTheme,
+                reducedMotion = reducedMotion,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 2.dp, y = 1.dp)
+            )
+        }
+
+        Text(
+            text = ScreenRoute.DOWNLOADS.title,
+            modifier = Modifier
+                .height(16.dp)
+                .padding(top = 1.dp)
+                .clearAndSetSemantics { },
+            color = if (isSelected) accentColor else inactiveColor,
+            fontSize = 10.sp,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+@Composable
+private fun DownloadCountBadge(
+    count: Int,
+    accentColor: Color,
+    isDarkTheme: Boolean,
+    reducedMotion: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val badgeText = if (count > 99) "99+" else count.toString()
+    val badgeTextColor = if (isDarkTheme) Color(0xFF062522) else Color.White
+    val badgeBorder = if (isDarkTheme) NavigationInk else Color.White
+
+    AnimatedVisibility(
+        visible = count > 0,
+        modifier = modifier,
+        enter = if (reducedMotion) {
+            EnterTransition.None
+        } else {
+            scaleIn(
+                initialScale = 0.55f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeIn(animationSpec = tween(130))
+        },
+        exit = if (reducedMotion) {
+            ExitTransition.None
+        } else {
+            scaleOut(targetScale = 0.70f, animationSpec = tween(100)) +
+                fadeOut(animationSpec = tween(90))
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(accentColor)
+                .border(1.5.dp, badgeBorder, CircleShape)
+                .clearAndSetSemantics { },
+            contentAlignment = Alignment.Center
+        ) {
+            AnimatedContent(
+                targetState = badgeText,
+                transitionSpec = {
+                    if (reducedMotion) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        (
+                            scaleIn(
+                                initialScale = 0.68f,
+                                animationSpec = spring(
+                                    dampingRatio = 0.72f,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            ) + fadeIn(animationSpec = tween(110))
+                        ) togetherWith (
+                            scaleOut(targetScale = 0.72f, animationSpec = tween(90)) +
+                                fadeOut(animationSpec = tween(80))
                         )
                     }
-                }
+                },
+                label = "download_count_pop"
+            ) { displayedCount ->
+                Text(
+                    text = displayedCount,
+                    color = badgeTextColor,
+                    fontSize = if (displayedCount.length > 2) 7.5.sp else 9.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
             }
         }
     }
 }
 
-/**
- * Animated downward download arrow icon modeled after the Android system download indicator.
- * Displays a stationary bottom tray and a downward moving arrow with continuous looping animation.
- */
 @Composable
-fun SystemDownloadAnimatedIcon(
-    tint: Color,
+private fun DownloadProgressRing(
+    progress: Float,
+    accentColor: Color,
+    isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "system_download_arrow")
-    val animProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "system_download_anim"
-    )
+    val trackColor = if (isDarkTheme) {
+        Color.White.copy(alpha = 0.17f)
+    } else {
+        Color(0xFF0F172A).copy(alpha = 0.16f)
+    }
 
-    Canvas(modifier = modifier.size(24.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 2.dp.toPx()
-
-        // 1. System Tray at bottom: |_|
-        val trayLeft = w * 0.20f
-        val trayRight = w * 0.80f
-        val trayBottom = h * 0.82f
-        val lipHeight = 3.5.dp.toPx()
-
-        // Tray base line
-        drawLine(
-            color = tint,
-            start = Offset(trayLeft, trayBottom),
-            end = Offset(trayRight, trayBottom),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
+    Canvas(modifier = modifier) {
+        val strokeWidth = 1.8.dp.toPx()
+        val diameter = size.minDimension - strokeWidth
+        val arcSize = Size(diameter, diameter)
+        val arcTopLeft = Offset(
+            x = (size.width - diameter) / 2f,
+            y = (size.height - diameter) / 2f
         )
-        // Left lip
-        drawLine(
-            color = tint,
-            start = Offset(trayLeft, trayBottom),
-            end = Offset(trayLeft, trayBottom - lipHeight),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
+        drawArc(
+            color = trackColor,
+            startAngle = -90f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
         )
-        // Right lip
-        drawLine(
-            color = tint,
-            start = Offset(trayRight, trayBottom),
-            end = Offset(trayRight, trayBottom - lipHeight),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-
-        // 2. Animated Downward Arrow: moves from top towards tray, fading in and then fading out
-        val startY = h * 0.20f
-        val endY = h * 0.65f
-        val arrowTipY = startY + (endY - startY) * animProgress
-
-        val alpha = when {
-            animProgress < 0.20f -> (animProgress / 0.20f).coerceIn(0f, 1f)
-            animProgress > 0.80f -> ((1f - animProgress) / 0.20f).coerceIn(0f, 1f)
-            else -> 1f
-        }
-        val arrowColor = tint.copy(alpha = alpha)
-
-        val centerX = w * 0.5f
-        val stemLength = 8.dp.toPx()
-        val arrowHeadWidth = 4.5.dp.toPx()
-        val arrowHeadHeight = 4.5.dp.toPx()
-
-        // Vertical arrow shaft
-        drawLine(
-            color = arrowColor,
-            start = Offset(centerX, arrowTipY - stemLength),
-            end = Offset(centerX, arrowTipY),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        // Left arrowhead wing
-        drawLine(
-            color = arrowColor,
-            start = Offset(centerX - arrowHeadWidth, arrowTipY - arrowHeadHeight),
-            end = Offset(centerX, arrowTipY),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        // Right arrowhead wing
-        drawLine(
-            color = arrowColor,
-            start = Offset(centerX + arrowHeadWidth, arrowTipY - arrowHeadHeight),
-            end = Offset(centerX, arrowTipY),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
+        drawArc(
+            color = accentColor,
+            startAngle = -90f,
+            sweepAngle = 360f * progress.coerceIn(0f, 1f),
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
         )
     }
+}
+
+@Composable
+private fun rememberSelectionBounce(
+    isSelected: Boolean,
+    reducedMotion: Boolean
+): Float {
+    val scale = remember { Animatable(1f) }
+    LaunchedEffect(isSelected, reducedMotion) {
+        if (!isSelected || reducedMotion) {
+            scale.snapTo(1f)
+        } else {
+            scale.snapTo(1f)
+            scale.animateTo(
+                targetValue = 1.15f,
+                animationSpec = spring(
+                    dampingRatio = 0.62f,
+                    stiffness = 720f
+                )
+            )
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.70f,
+                    stiffness = 760f
+                )
+            )
+        }
+    }
+    return scale.value
 }

@@ -129,11 +129,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.data.model.DownloadItem
 import com.example.data.model.DownloadStatus
+import com.example.data.model.isInProgressOrQueued
 import com.example.data.model.formatByteSize
 import com.example.data.model.formatDownloadSpeed
 import com.example.ui.components.ConfettiOverlay
 import com.example.ui.components.SleekLinearProgressBar
-import com.example.ui.components.SystemDownloadAnimatedIcon
 import com.example.ui.components.pressScale
 import com.example.ui.components.rememberHaptics
 import com.example.ui.components.shimmerEffect
@@ -233,6 +233,10 @@ fun DescargasScreen(
             it.status == DownloadStatus.PENDING ||
             it.status == DownloadStatus.FAILED
         }
+    }
+    // Mismo conteo que el badge del dock: descargas en curso más las que esperan turno.
+    val activeQueuedCount = remember(downloads) {
+        downloads.count { it.status.isInProgressOrQueued }
     }
 
     val downloadedList = remember(downloads) {
@@ -417,10 +421,13 @@ fun DescargasScreen(
                                     tint = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textSecondary
                                 )
                                 Text(
-                                    text = "Activas (${activeList.size})",
+                                    text = "En curso/cola ($activeQueuedCount)",
                                     fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 14.sp,
-                                    color = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textSecondary
+                                    fontSize = 13.sp,
+                                    color = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textSecondary,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Clip
                                 )
                             }
                         }
@@ -862,7 +869,7 @@ private fun ActiveDownloadsTab(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("active_downloads_list"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 136.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Speed indicator card
@@ -1370,7 +1377,7 @@ private fun DownloadedTab(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("downloaded_movies_list"),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 136.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Header row when not in selection mode

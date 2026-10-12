@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -73,9 +74,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.data.model.DownloadStatus
+import com.example.data.model.isInProgressOrQueued
 import com.example.data.model.Pelicula
 import com.example.data.model.ThemeMode
 import com.example.ui.components.AppBottomNav
+import com.example.ui.components.rememberReduceMotionEnabled
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -316,6 +319,21 @@ fun MainAppNavigation(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val reduceMotionEnabled = rememberReduceMotionEnabled()
+    val navDownloadsCount = remember(uiState.downloads) {
+        uiState.downloads.count { it.status.isInProgressOrQueued }
+    }
+    val navDownloadProgress = remember(uiState.downloads) {
+        val running = uiState.downloads.filter { it.status == DownloadStatus.DOWNLOADING }
+        if (running.isEmpty()) {
+            null
+        } else {
+            running.map { it.progress.coerceIn(0, 100) / 100f }
+                .average()
+                .toFloat()
+                .coerceIn(0f, 1f)
+        }
+    }
 
     val requiredPermissions = remember { PermissionHelper.getRequiredAppPermissions() }
     var pendingDownloadPelicula by remember { mutableStateOf<Pelicula?>(null) }
@@ -491,10 +509,14 @@ fun MainAppNavigation(
                 BackHandler {
                     if (pagerState.settledPage != 0) {
                         coroutineScope.launch {
-                            pagerState.animateScrollToPage(
-                                page = 0,
-                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                            )
+                            if (reduceMotionEnabled) {
+                                pagerState.scrollToPage(0)
+                            } else {
+                                pagerState.animateScrollToPage(
+                                    page = 0,
+                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                )
+                            }
                         }
                     } else {
                         showExitAppDialog = true
@@ -540,10 +562,14 @@ fun MainAppNavigation(
                                     onRefresh = { viewModel.loadPeliculas(forceRefresh = true) },
                                     onOpenSettings = {
                                         coroutineScope.launch {
-                                            pagerState.animateScrollToPage(
-                                                page = 2,
-                                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                                            )
+                                            if (reduceMotionEnabled) {
+                                                pagerState.scrollToPage(2)
+                                            } else {
+                                                pagerState.animateScrollToPage(
+                                                    page = 2,
+                                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                                )
+                                            }
                                         }
                                     },
                                     onDismissContinueWatching = { viewModel.clearContinueWatching() },
@@ -587,10 +613,14 @@ fun MainAppNavigation(
                                     onRetryAllFailed = { viewModel.retryAllFailedDownloads() },
                                     onExploreClick = {
                                         coroutineScope.launch {
-                                            pagerState.animateScrollToPage(
-                                                page = 0,
-                                                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                                            )
+                                            if (reduceMotionEnabled) {
+                                                pagerState.scrollToPage(0)
+                                            } else {
+                                                pagerState.animateScrollToPage(
+                                                    page = 0,
+                                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                                )
+                                            }
                                         }
                                     },
                                     isDarkTheme = isDark,
@@ -657,7 +687,26 @@ fun MainAppNavigation(
                         }
                     }
 
-                    // Floating Modern Navigation Pill Bar over the content
+                    // Degradado inferior para suavizar el contenido que transcurre detrás del dock.
+                    val navFadeColor = if (isDark) Color(0xFF0B1020) else MaterialTheme.colorScheme.background
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(176.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0f to Color.Transparent,
+                                        0.32f to navFadeColor.copy(alpha = if (isDark) 0.82f else 0.28f),
+                                        0.50f to navFadeColor.copy(alpha = if (isDark) 0.96f else 0.72f),
+                                        1f to navFadeColor
+                                    )
+                                )
+                            )
+                    )
+
+                    // Floating glass navigation dock over the content
                     AppBottomNav(
                         currentPage = pagerState.targetPage,
                         onNavigate = { targetPage ->
@@ -667,16 +716,22 @@ fun MainAppNavigation(
                                 scrollToTopTick++
                             }
                             coroutineScope.launch {
-                                pagerState.animateScrollToPage(
-                                    page = targetPage,
-                                    animationSpec = spring(
-                                        dampingRatio = 0.86f,
-                                        stiffness = 380f
+                                if (reduceMotionEnabled) {
+                                    pagerState.scrollToPage(targetPage)
+                                } else {
+                                    pagerState.animateScrollToPage(
+                                        page = targetPage,
+                                        animationSpec = spring(
+                                            dampingRatio = 0.86f,
+                                            stiffness = 380f
+                                        )
                                     )
-                                )
+                                }
                             }
                         },
-                        downloadsCount = uiState.activeDownloadsCount,
+                        downloadsCount = navDownloadsCount,
+                        downloadProgress = navDownloadProgress,
+                        systemReduceMotion = reduceMotionEnabled,
                         isDarkTheme = isDark,
                         isVisible = barBehavior.isVisible,
                         modifier = Modifier.align(Alignment.BottomCenter)
@@ -695,7 +750,7 @@ fun MainAppNavigation(
                         },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 76.dp)
+                            .padding(bottom = 124.dp)
                     )
 
                     // Hoja inferior interactiva de permisos y ajustes ("Mantén tus descargas activas")

@@ -198,6 +198,10 @@ enum class DownloadStatus {
     CANCELLED
 }
 
+/** Cuenta solo trabajo en curso y elementos que esperan turno (no pausados ni fallidos). */
+val DownloadStatus.isInProgressOrQueued: Boolean
+    get() = this == DownloadStatus.DOWNLOADING || this == DownloadStatus.PENDING
+
 enum class SortOption(val displayName: String) {
     NAME_AZ("Nombre (A - Z)"),
     NAME_ZA("Nombre (Z - A)")

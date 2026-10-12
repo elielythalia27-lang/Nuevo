@@ -6,7 +6,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Badge circular azul -->
+    <!-- Badge circular teal -->
     <path
         android:pathData="M54,25 A29,29 0 1,1 53.99,25 Z">
         <aapt:attr name="android:fillColor">
@@ -16,8 +16,8 @@
                 android:endX="54"
                 android:endY="83"
                 android:type="linear">
-                <item android:color="#FF2A7DE1" android:offset="0.0" />
-                <item android:color="#FF1B59A7" android:offset="1.0" />
+                <item android:color="#FF2DD4BF" android:offset="0.0" />
+                <item android:color="#FF0F766E" android:offset="1.0" />
             </gradient>
         </aapt:attr>
     </path>
