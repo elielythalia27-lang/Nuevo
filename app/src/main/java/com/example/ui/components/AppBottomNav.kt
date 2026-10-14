@@ -14,9 +14,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -330,11 +330,11 @@ fun AppBottomNav(
     // Use the user's selected app palette (including custom theme colors) for all selected states.
     val accentColor = colorScheme.primary
     val inactiveColor = colorScheme.onSurfaceVariant
-    val dockColor = colorScheme.surface.copy(alpha = if (isDarkTheme) 0.68f else 0.88f)
+    val dockColor = colorScheme.surface.copy(alpha = if (isDarkTheme) 0.78f else 0.91f)
     val dockBorderColor = if (isDarkTheme) {
-        colorScheme.onSurface.copy(alpha = 0.08f)
+        colorScheme.onSurface.copy(alpha = 0.13f)
     } else {
-        colorScheme.outline.copy(alpha = 0.14f)
+        colorScheme.outline.copy(alpha = 0.20f)
     }
     val dockShape = CenterNotchDockShape
     val safePage = currentPage.coerceIn(0, ScreenRoute.entries.lastIndex)
@@ -347,13 +347,9 @@ fun AppBottomNav(
     ) {
         val cellWidth = maxWidth / 3
 
-        // One persistent indicator glides across all three slots; on Downloads its exposed edges
-        // frame the circular action instead of replacing it with a second, competing button.
-        val targetPillWidth = if (safePage == ScreenRoute.DOWNLOADS.pageIndex) {
-            66.dp
-        } else {
-            (cellWidth - 8.dp).coerceAtMost(104.dp).coerceAtLeast(64.dp)
-        }
+        // El indicador recorre el rail para las pestañas laterales; en Descargas se oculta para
+        // dejar que el botón central elevado marque la selección sin una cápsula debajo.
+        val targetPillWidth = (cellWidth - 10.dp).coerceAtMost(112.dp).coerceAtLeast(64.dp)
         val targetPillX = cellWidth * safePage + (cellWidth - targetPillWidth) / 2
         val pillWidth by animateDpAsState(
             targetValue = targetPillWidth,
@@ -364,6 +360,12 @@ fun AppBottomNav(
             targetValue = targetPillX,
             animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.78f, stiffness = 430f),
             label = "nav_selection_x"
+        )
+        // No se dibuja una cápsula detrás del botón central: provocaba el óvalo pequeño bajo la muesca.
+        val indicatorAlpha by animateFloatAsState(
+            targetValue = if (safePage == ScreenRoute.DOWNLOADS.pageIndex) 0f else 1f,
+            animationSpec = if (reducedMotion) snap() else tween(160),
+            label = "nav_selection_alpha"
         )
 
         // The rail is 64dp high; the 52dp center button starts 8dp above it.
@@ -402,11 +404,17 @@ fun AppBottomNav(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .offset(x = pillX, y = 8.dp)
+                        .offset(x = pillX, y = 10.dp)
                         .width(pillWidth)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(accentColor.copy(alpha = if (isDarkTheme) 0.15f else 0.12f))
+                        .height(44.dp)
+                        .graphicsLayer { alpha = indicatorAlpha }
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(accentColor.copy(alpha = if (isDarkTheme) 0.19f else 0.12f))
+                        .border(
+                            width = 1.dp,
+                            color = accentColor.copy(alpha = if (isDarkTheme) 0.30f else 0.24f),
+                            shape = RoundedCornerShape(18.dp)
+                        )
                 )
 
                 Row(
@@ -611,9 +619,10 @@ private fun DockDownloadsButton(
                     )
                     .clip(CircleShape)
                     .background(if (isSelected) accentColor else neutralCircleColor)
-                    .then(
-                        if (!isSelected) Modifier.border(1.dp, circleOutline, CircleShape)
-                        else Modifier
+                    .border(
+                        width = 1.dp,
+                        color = if (isSelected) contentOnAccent.copy(alpha = 0.34f) else circleOutline,
+                        shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {

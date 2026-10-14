@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.io.File
+import com.example.utils.PermissionHelper
 import com.example.utils.StoragePathUtils
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Settings
@@ -158,12 +159,10 @@ fun AjustesScreen(
     wifiOnly: Boolean = false,
     onWifiOnlyChange: (Boolean) -> Unit = {},
     isBatteryExempt: Boolean = false,
-    onRequestBatteryExemption: () -> Unit = {},
+    onBatteryExemptionChange: (Boolean) -> Unit = {},
     onOpenAutoStartSettings: () -> Unit = {},
     notificationsGranted: Boolean = true,
     onRequestNotifications: () -> Unit = {},
-    autoStartConfigured: Boolean = false,
-    onAutoStartConfiguredChange: (Boolean) -> Unit = {},
     storageGranted: Boolean = false,
     onRequestStorage: () -> Unit = {},
     barBehavior: com.example.ui.components.BottomBarScrollBehavior? = null,
@@ -904,7 +903,7 @@ fun AjustesScreen(
                                             color = textPrimary
                                         )
                                         Text(
-                                            text = if (notificationsGranted) "Activo: ver progreso y control en segundo plano" else "Requerido para control de descargas",
+                                            text = if (notificationsGranted) "Activo; ajusta Mostrar en pantalla de bloqueo en Android" else "Requerido para control de descargas",
                                             fontSize = 12.sp,
                                             color = textSecondary
                                         )
@@ -912,28 +911,15 @@ fun AjustesScreen(
                                 }
 
                                 if (notificationsGranted) {
-                                    Surface(
-                                        shape = RoundedCornerShape(50),
-                                        color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
+                                    TextButton(
+                                        onClick = { PermissionHelper.openNotificationSettings(context) },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Check,
-                                                contentDescription = "Activo",
-                                                tint = Color(0xFF10B981),
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = "Activo",
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF10B981)
-                                            )
-                                        }
+                                        Text(
+                                            text = "Ajustes",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 } else {
                                     Button(
@@ -988,51 +974,47 @@ fun AjustesScreen(
                                             color = textPrimary
                                         )
                                         Text(
-                                            text = if (isBatteryExempt) "Sin restricciones: descargas continuas" else "Optimizado: el sistema puede pausar la descarga",
+                                            text = if (isBatteryExempt) "Exención estándar de Android activa" else "Optimizada: Android puede limitar descargas en segundo plano",
                                             fontSize = 12.sp,
                                             color = textSecondary
                                         )
                                     }
                                 }
 
-                                if (isBatteryExempt) {
-                                    Surface(
-                                        shape = RoundedCornerShape(50),
-                                        color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
+                                val batteryAccent = MaterialTheme.colorScheme.primary
+                                val isBrightBatteryAccent = (0.299f * batteryAccent.red + 0.587f * batteryAccent.green + 0.114f * batteryAccent.blue) > 0.65f
+                                Switch(
+                                    checked = isBatteryExempt,
+                                    onCheckedChange = onBatteryExemptionChange,
+                                    thumbContent = if (isBatteryExempt) {
+                                        {
                                             Icon(
                                                 imageVector = Icons.Rounded.Check,
-                                                contentDescription = "Sin restricciones",
-                                                tint = Color(0xFF10B981),
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = "Sin restricciones",
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF10B981)
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize),
+                                                tint = if (isBrightBatteryAccent) Color.White else batteryAccent
                                             )
                                         }
-                                    }
-                                } else {
-                                    Button(
-                                        onClick = onRequestBatteryExemption,
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    ) {
-                                        Text("Configurar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
+                                    } else null,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = if (isBrightBatteryAccent) Color(0xFF0F172A) else Color.White,
+                                        checkedTrackColor = batteryAccent,
+                                        checkedBorderColor = if (isBrightBatteryAccent) Color(0xFF64748B) else Color.Transparent,
+                                        uncheckedThumbColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                        uncheckedTrackColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0),
+                                        uncheckedBorderColor = if (isDarkTheme) Color(0xFF475569) else Color(0xFFCBD5E1)
+                                    )
+                                )
                             }
+                            Text(
+                                text = "Android confirma el cambio. Para desactivarla, elige Download Free en la lista del sistema y vuelve; aquí se mostrará el estado real.",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 54.dp, end = 8.dp),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                color = textSecondary
+                            )
 
                             HorizontalDivider(color = dividerColor)
 
@@ -1051,16 +1033,13 @@ fun AjustesScreen(
                                         modifier = Modifier
                                             .size(40.dp)
                                             .clip(CircleShape)
-                                            .background(
-                                                if (autoStartConfigured) Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
-                                                else MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)
-                                            ),
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.18f else 0.10f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.RocketLaunch,
                                             contentDescription = null,
-                                            tint = if (autoStartConfigured) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -1089,56 +1068,27 @@ fun AjustesScreen(
                                             }
                                         }
                                         Text(
-                                            text = if (autoStartConfigured) "Configurado en ajustes de tu teléfono" else "Recomendado para Xiaomi, Redmi y HyperOS",
+                                            text = "Opcional; la app no puede verificarlo en todos los fabricantes.",
                                             fontSize = 12.sp,
                                             color = textSecondary
                                         )
                                     }
                                 }
 
-                                if (autoStartConfigured) {
-                                    Surface(
-                                        shape = RoundedCornerShape(50),
-                                        color = Color(0xFF10B981).copy(alpha = if (isDarkTheme) 0.20f else 0.12f)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Check,
-                                                contentDescription = "Configurado",
-                                                tint = Color(0xFF10B981),
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = "Listo",
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF10B981)
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    Button(
-                                        onClick = {
-                                            onAutoStartConfiguredChange(true)
-                                            onOpenAutoStartSettings()
-                                        },
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.25f else 0.15f),
-                                            contentColor = MaterialTheme.colorScheme.primary
-                                        )
-                                    ) {
-                                        Text(
-                                            text = "Ajustes",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                Button(
+                                    onClick = onOpenAutoStartSettings,
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDarkTheme) 0.25f else 0.15f),
+                                        contentColor = MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Ajustes",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }

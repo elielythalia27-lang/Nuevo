@@ -17,8 +17,8 @@ android {
     applicationId = "downloadfree.eliel"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.4"
+    versionCode = 7
+    versionName = "1.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -47,7 +47,7 @@ android {
         ?: "android"
       keyAlias = System.getenv("KEY_ALIAS")
         ?: System.getenv("RELEASE_KEY_ALIAS")
-        ?: "upload"
+        ?: if (keystoreFile.name == "release.keystore") "uploadkey" else "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
         ?: System.getenv("RELEASE_KEY_PASSWORD")
         ?: "android"

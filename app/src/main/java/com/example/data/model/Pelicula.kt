@@ -113,7 +113,9 @@ data class DownloadItem(
     /** true si la descarga se pausó sola porque se activó una VPN/proxy (se reanuda sola al quitarla). */
     val pausedByVpn: Boolean = false,
     /** true si falló por agotar los reintentos de red: se reintenta sola cuando vuelve la conexión. */
-    val failedByNetwork: Boolean = false
+    val failedByNetwork: Boolean = false,
+    /** Motivo breve y visible cuando una descarga no se pudo completar; ausente en registros antiguos. */
+    val failureReason: String? = null
 ) {
     val formattedSpeed: String
         get() {

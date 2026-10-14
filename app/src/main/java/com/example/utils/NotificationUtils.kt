@@ -75,6 +75,7 @@ object NotificationUtils {
                 description = "Alertas de conexión o almacenamiento"
                 setShowBadge(true)
                 enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
             notificationManager.createNotificationChannels(
@@ -319,6 +320,7 @@ object NotificationUtils {
             .setWhen(0L)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setGroup(GROUP_KEY_DOWNLOADS)
             .setGroupSummary(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
@@ -356,6 +358,7 @@ object NotificationUtils {
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setGroup(GROUP_KEY_DOWNLOADS)
             .setGroupSummary(true)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
@@ -463,6 +466,7 @@ object NotificationUtils {
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .setAutoCancel(false)
             .setOngoing(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setShowWhen(false)
             .setWhen(0L)
             .setSortKey("download_${item.id}")
@@ -497,7 +501,16 @@ object NotificationUtils {
             formatByteSize(item.downloadedBytes)
         }
         sessionStart.remove(item.id)
-        val detail = "Se interrumpió • $sizeInfo. Reintenta para continuar donde quedó."
+        val reason = item.failureReason
+            ?.replace('\n', ' ')
+            ?.replace('\r', ' ')
+            ?.takeIf { it.isNotBlank() }
+            ?.take(100)
+        val detail = buildString {
+            append("Se interrumpió • $sizeInfo.")
+            if (reason != null) append(" Motivo: $reason.")
+            append(" Reintenta para continuar donde quedó.")
+        }
 
         return NotificationCompat.Builder(context, CHANNEL_ERROR_ID)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -510,6 +523,7 @@ object NotificationUtils {
             .setContentIntent(createOpenDownloadsPendingIntent(context))
             .setAutoCancel(true)
             .setOngoing(false)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setSortKey("download_${item.id}")
             .addAction(
@@ -557,6 +571,7 @@ object NotificationUtils {
             .setWhen(System.currentTimeMillis())
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setSortKey("download_${item.id}")
             .addAction(
                 android.R.drawable.ic_media_play,

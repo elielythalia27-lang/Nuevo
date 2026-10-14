@@ -1,46 +1,46 @@
-# Download Free — Bottom navigation v1.4 (versionCode 5)
+# Download Free — revisión y mejoras v1.6 (versionCode 7)
 
-## Rediseño basado en la referencia enviada
+## Navegación inferior
 
-`ui/components/AppBottomNav.kt` ahora usa un rail flotante con una muesca cóncava en el centro (`CenterNotchShape`): el botón de Descargas se integra en la curva y sobresale 8 dp, inspirado en la silueta de la imagen. Se conservan solo las tres pestañas de Download Free: **Catálogo**, **Descargas** y **Ajustes**.
+- El botón central de Descargas conserva la muesca cóncava y el relieve, pero ya no dibuja una cápsula detrás: esa franja quedaba visible como un óvalo pequeño bajo el botón.
+- El indicador deslizante con spring se mantiene en Catálogo/Ajustes, ahora como cápsula de selección más legible con borde y color del tema. Se desvanece al seleccionar Descargas; allí la selección la marca el botón elevado, su contorno/glow y la etiqueta.
+- Se conserva el dock flotante, sus márgenes, el fade, las etiquetas, badge, anillo de progreso, hápticas, accesibilidad y reducción de movimiento.
 
-- Rail compacto de 64 dp, márgenes laterales de 16 dp, separación inferior y borde fino; el botón central es circular y queda elevado sobre la muesca.
-- Catálogo y Ajustes muestran icono y etiqueta de forma permanente. El centro mantiene su badge y anillo de progreso.
-- El indicador de selección continúa deslizándose con spring. El botón central solo recibe el color de énfasis y glow cuando Descargas está seleccionada; en reposo conserva un disco neutral con icono outline.
-- El badge cuenta `DOWNLOADING + PENDING`, se oculta en cero y coincide con el contador `En curso/cola` de la pantalla de Descargas. Las pausadas y fallidas no entran en ese conteo.
-- El anillo refleja el progreso medio de las transferencias activas; se mantienen hápticas, rebote de iconos, accesibilidad y respeto por **Quitar animaciones** del sistema.
+## Permiso de batería y Ajustes
 
-## Respeto del tema escogido
+- La exención estándar de Android se consulta al iniciar y al volver a la app; se vuelve a leer tras el resultado de Ajustes y con una segunda comprobación breve para fabricantes que aplican el cambio con retraso.
+- Ajustes muestra un interruptor ligado al estado real de `PowerManager.isIgnoringBatteryOptimizations()`. Para activarla se pide confirmación al sistema; para desactivarla se abre la lista de optimización de Android. La app no puede conceder ni revocar ese acceso silenciosamente.
+- La hoja de permisos respeta “No volver a mostrar” y el intervalo de recordatorio; ya no hay un efecto de inicio que anulaba esa elección. No aparece mientras hay transferencias activas o en cola.
+- “Inicio automático” de fabricantes se presenta como opcional y no se marca falsamente como verificado al abrir una pantalla del fabricante; Android no ofrece una comprobación uniforme para ese ajuste.
 
-La barra ya no fija el teal ni el fondo por su cuenta. Obtiene los colores del `MaterialTheme.colorScheme` activo: `primary` para la selección, una tinta clara/oscura calculada por contraste sobre el primario para el botón y el badge, `onSurfaceVariant` para elementos inactivos, `surface` para el rail y `background` para el degradado inferior. Así sigue los temas oscuros/claros, los presets y los colores personalizados que se cambien en Ajustes. El icono de aplicación conserva su identidad de marca blanca/teal, independiente del color de énfasis elegido para la interfaz.
+## Notificaciones en pantalla de bloqueo
 
-## Se conserva de v1.3
+- Los avisos de progreso, pausa, resumen, error y finalización declaran explícitamente visibilidad pública para la pantalla de bloqueo; el canal de errores también recibe esa visibilidad al crearse.
+- En Ajustes, el control de Notificaciones abre los ajustes de notificación de Android y orienta a revisar “Mostrar en pantalla de bloqueo”. No se cambian los IDs de canal para preservar las preferencias del usuario.
+- Android y el fabricante siguen teniendo la última palabra: permiso/canal desactivado, ocultar notificaciones en bloqueo, modo No molestar o filtros de pantalla pueden impedir mostrarlas. La app no fuerza ni evita esas preferencias.
 
-- Degradado inferior y 136 dp de espacio final en listas/grillas para que el último elemento pueda pasar por encima del dock.
-- Retocar la pestaña activa vuelve el catálogo al inicio; la barra no desaparece al desplazarse.
-- Entrada escalonada de tarjetas, press-scale, hápticas y confeti al completar descargas.
-- Launcher de fondo blanco, disco teal, variantes adaptativas/redondas/monocromáticas y splash teal.
-- Sin carrusel hero ni interfaz de Favoritos.
+## Descargas: revisión estática y correcciones
 
-## Archivos tocados en v1.4
+- Corregido el reanudar desde una notificación en Android 14+: ahora pasa por la cola del `DownloadHelper`, valida red/VPN/Wi‑Fi/concurrencia y marca la descarga como activa antes de programar el UIDT. Antes el JobService recibía un elemento `PAUSED` y lo descartaba.
+- Cuando Android detiene un UIDT para reintentarlo, se conserva el estado y el progreso necesarios para que JobScheduler pueda continuar desde el `.part`; una pausa o cancelación del usuario sigue siendo respetada.
+- La carga de DataStore se espera antes de decidir duplicados y límite de concurrencia al iniciar una descarga.
+- Si Android rechaza el inicio del servicio en versiones anteriores a 14, la descarga vuelve a `PENDING`, se informa al usuario y no se muestra un falso aviso de “Descarga iniciada”.
+- Si se borró fuera de la app un archivo marcado como completado, se permite descargarlo otra vez desde el catálogo.
+- La finalización del `.part` ya no borra un archivo final previo si la promoción/copia falla; usa un archivo temporal y verifica el tamaño.
+- Los fallos guardan un motivo breve que aparece en la tarjeta y notificación. Al reintentar se limpia el motivo anterior.
+- Al reintentar o eliminar, también se limpian notificaciones obsoletas de completado/fallo.
 
-| Archivo | Cambio |
-|---|---|
-| `ui/components/AppBottomNav.kt` | Muesca central cóncava, botón elevado y colores totalmente ligados al `MaterialTheme`. |
-| `MainActivity.kt` | Degradado inferior toma el fondo del tema actual. |
-| `app/build.gradle.kts` | `versionCode = 5`, `versionName = "1.4"`. |
-| `MEJORAS_UI.md` | Documentación de esta versión. |
+## Verificación y límites
 
-## Verificación
+- Revisión estática de los flujos de inicio/pausa/reanudación/cancelación/cola, estados UIDT y notificaciones; balance de delimitadores Kotlin y XML bien formado.
+- **No se ejecutó Gradle ni se compiló**, de acuerdo con la indicación previa. Tampoco se pudo hacer una prueba en dispositivo/emulador; la validación final de permisos y descargas debe hacerse en Android.
 
-- La selección, superficie, textos, botón, badge, anillo y degradado usan el esquema de color vigente.
-- Se revisaron el conteo compartido entre badge/pantalla, la geometría de la muesca, los estados de selección y los callbacks.
-- Se hizo revisión estática de Kotlin/XML y balance de delimitadores; **no se ejecutó Gradle ni se compiló**, según la indicación del usuario.
+## Pruebas manuales recomendadas
 
-## Prueba manual sugerida
-
-1. Abre la app en tema oscuro y claro: rail, texto y botón deben acompañar el tema.
-2. Cambia entre varios colores de énfasis en Ajustes: la píldora, el icono seleccionado, el badge y el anillo deben usar el color elegido.
-3. Toca cada pestaña: verifica el movimiento del indicador, la muesca central, las etiquetas, la háptica y el rebote; activa **Quitar animaciones** y confirma que el movimiento se desactive.
-4. Inicia descargas y deja una en cola: badge y contador `En curso/cola` deben coincidir, y el anillo debe actualizarse.
-5. Comprueba el launcher: fondo blanco y marca de descarga teal.
+1. En Ajustes > Notificaciones > Ajustes, permitir avisos y activar “Mostrar en pantalla de bloqueo” para Progreso, Completadas y Errores; probar una descarga con el móvil bloqueado.
+2. Seleccionar Catálogo, Descargas y Ajustes: confirmar que no queda el óvalo bajo Descargas y que las cápsulas laterales se distinguen en tema claro/oscuro.
+3. En Ajustes, activar la exención, aceptar en Android y volver: el interruptor debe reflejarla. Desactivarla desde la lista del sistema y volver: debe quedar apagado.
+4. Iniciar una descarga, pausarla y reanudarla desde la app y desde su notificación; verificar también la cola y “Solo Wi-Fi”.
+5. Dejar que Android detenga un trabajo UIDT o cambiar la conectividad: al reprogramarse debe continuar desde el progreso guardado.
+6. Probar un error HTTP/sin red y confirmar que el motivo se vea; reintentar y comprobar que el texto se limpie.
+7. Borrar manualmente un vídeo completado y volver a pulsar Descargar desde el catálogo.

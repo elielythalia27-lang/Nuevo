@@ -106,19 +106,47 @@ class DownloadHelper(
             if (!part.exists()) return false
             val expected = part.length()
             if (expected <= 0L) return false
-            try { if (dest.exists()) dest.delete() } catch (_: Exception) {}
-            if (part.renameTo(dest) && dest.exists() && dest.length() == expected) return true
+            // Nunca borrar/sobrescribir un archivo final previo: un fallo al promover el .part
+            // no debe destruir una descarga válida que ya existía en esa ruta.
+            if (dest.exists()) {
+                if (dest.length() > 0L) return false
+                try {
+                    if (!dest.delete() && dest.exists()) return false
+                } catch (_: Exception) {
+                    return false
+                }
+            }
+            try { dest.parentFile?.mkdirs() } catch (_: Exception) {}
+            if (part.renameTo(dest)) {
+                return dest.exists() && dest.length() == expected
+            }
+
+            val staging = File(dest.absolutePath + ".finalizing")
             return try {
-                part.copyTo(dest, overwrite = true)
-                if (dest.length() == expected) {
+                if (staging.exists()) staging.delete()
+                part.copyTo(staging, overwrite = true)
+                if (staging.length() != expected || dest.exists()) {
+                    staging.delete()
+                    return false
+                }
+                if (!staging.renameTo(dest)) {
+                    if (dest.exists()) {
+                        staging.delete()
+                        return false
+                    }
+                    staging.copyTo(dest, overwrite = false)
+                    staging.delete()
+                }
+                if (dest.exists() && dest.length() == expected) {
                     part.delete()
                     true
                 } else {
-                    dest.delete()
+                    try { dest.delete() } catch (_: Exception) {}
+                    try { staging.delete() } catch (_: Exception) {}
                     false
                 }
             } catch (_: Exception) {
-                try { dest.delete() } catch (_: Exception) {}
+                try { staging.delete() } catch (_: Exception) {}
                 false
             }
         }
@@ -433,21 +461,27 @@ class DownloadHelper(
         return _liveDownloadsState.value.none { it.id == id }
     }
 
-    /** Called when Android stops a UIDT job. Persist a resumable state. */
-    fun markStoppedForUidt(id: String) {
-        val item = getItem(id) ?: return
-        if (item.status == DownloadStatus.DOWNLOADING) {
-            val part = File(item.localFilePath + ".part")
-            val bytes = if (part.exists()) part.length() else item.downloadedBytes
-            val progress = if (item.totalBytes > 0L) ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99) else item.progress
-            updateAndPersist(item.copy(
-                status = DownloadStatus.PAUSED,
-                downloadedBytes = bytes,
-                progress = progress,
-                speedBytesPerSec = 0L,
-                etaSeconds = 0L
-            ))
+    /** Persiste el progreso al detenerse un UIDT; conserva DOWNLOADING si el sistema lo reintentará. */
+    fun markStoppedForUidt(id: String, keepRunningForSystemRetry: Boolean): DownloadItem? {
+        val item = getItem(id) ?: return null
+        if (item.status != DownloadStatus.DOWNLOADING) return item
+
+        val part = File(item.localFilePath + ".part")
+        val bytes = if (part.exists()) part.length() else item.downloadedBytes
+        val progress = if (item.totalBytes > 0L) {
+            ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99)
+        } else {
+            item.progress
         }
+        val stopped = item.copy(
+            status = if (keepRunningForSystemRetry) DownloadStatus.DOWNLOADING else DownloadStatus.PAUSED,
+            downloadedBytes = bytes,
+            progress = progress,
+            speedBytesPerSec = 0L,
+            etaSeconds = 0L
+        )
+        updateAndPersist(stopped)
+        return stopped
     }
 
     fun updateItemState(item: DownloadItem) {
@@ -525,7 +559,8 @@ class DownloadHelper(
                             etaSeconds = etaSeconds,
                             status = DownloadStatus.DOWNLOADING,
                             pausedByVpn = false,
-                            failedByNetwork = false
+                            failedByNetwork = false,
+                            failureReason = null
                         )
                     }
                 } else item
@@ -576,6 +611,7 @@ class DownloadHelper(
         }
 
         scope.launch(Dispatchers.IO) {
+            awaitLoaded()
             val isWifiOnlyPref = try { preferences.wifiOnly.first() } catch (_: Exception) { false }
             if (isWifiOnlyPref && !NetworkUtils.isWifiOrEthernet(context)) {
                 AppToastManager.show("Solo Wi-Fi activado. Conéctate a Wi-Fi para descargar.", ToastType.ERROR)
@@ -635,8 +671,9 @@ class DownloadHelper(
                 preferences.addOrUpdateDownload(downloadItem)
 
                 if (initialStatus == DownloadStatus.DOWNLOADING) {
-                    DownloadForegroundService.startDownload(context, downloadItem)
-                    AppToastManager.show("Descarga iniciada", ToastType.SUCCESS)
+                    if (DownloadForegroundService.startDownload(context, downloadItem)) {
+                        AppToastManager.show("Descarga iniciada", ToastType.SUCCESS)
+                    }
                 } else {
                     AppToastManager.show("En cola (máximo $maxLimit descargas activas)", ToastType.INFO)
                 }
@@ -716,12 +753,22 @@ class DownloadHelper(
                 val activeCount = currentList.count { it.status == DownloadStatus.DOWNLOADING && it.id != item.id }
 
                 if (activeCount >= maxLimit) {
-                    val pendingItem = item.copy(status = DownloadStatus.PENDING, pausedByVpn = false)
+                    val pendingItem = item.copy(
+                        status = DownloadStatus.PENDING,
+                        pausedByVpn = false,
+                        failedByNetwork = false,
+                        failureReason = null
+                    )
                     updateItemState(pendingItem)
                     preferences.addOrUpdateDownload(pendingItem)
                     AppToastManager.show("En cola: máximo $maxLimit descargas activas", ToastType.INFO)
                 } else {
-                    val resumingItem = item.copy(status = DownloadStatus.DOWNLOADING, pausedByVpn = false)
+                    val resumingItem = item.copy(
+                        status = DownloadStatus.DOWNLOADING,
+                        pausedByVpn = false,
+                        failedByNetwork = false,
+                        failureReason = null
+                    )
                     updateItemState(resumingItem)
                     preferences.addOrUpdateDownload(resumingItem)
                     DownloadForegroundService.resumeDownload(context, item.id)
@@ -815,7 +862,12 @@ class DownloadHelper(
                     AppToastManager.show("Límite de $limit descargas alcanzado. Espera a que termine una descarga.", ToastType.WARNING)
                     return@launch
                 }
-                val resuming = download.copy(status = DownloadStatus.DOWNLOADING, pausedByVpn = false)
+                val resuming = download.copy(
+                    status = DownloadStatus.DOWNLOADING,
+                    pausedByVpn = false,
+                    failedByNetwork = false,
+                    failureReason = null
+                )
                 updateItemState(resuming)
                 preferences.addOrUpdateDownload(resuming)
                 DownloadForegroundService.startDownload(context, resuming)
@@ -847,7 +899,12 @@ class DownloadHelper(
 
                 for (item in pausedOrPending) {
                     if (activeCount < limit) {
-                        val resuming = item.copy(status = DownloadStatus.DOWNLOADING, pausedByVpn = false)
+                        val resuming = item.copy(
+                            status = DownloadStatus.DOWNLOADING,
+                            pausedByVpn = false,
+                            failedByNetwork = false,
+                            failureReason = null
+                        )
                         updateItemState(resuming)
                         preferences.addOrUpdateDownload(resuming)
                         DownloadForegroundService.startDownload(context, resuming)
@@ -893,6 +950,7 @@ class DownloadHelper(
                             status = DownloadStatus.DOWNLOADING,
                             pausedByVpn = false,
                             failedByNetwork = false,
+                            failureReason = null,
                             speedBytesPerSec = 0L,
                             etaSeconds = 0L
                         )
@@ -906,6 +964,7 @@ class DownloadHelper(
                             status = DownloadStatus.PENDING,
                             pausedByVpn = false,
                             failedByNetwork = false,
+                            failureReason = null,
                             speedBytesPerSec = 0L,
                             etaSeconds = 0L
                         )

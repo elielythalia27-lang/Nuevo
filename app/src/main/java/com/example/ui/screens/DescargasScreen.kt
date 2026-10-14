@@ -1638,14 +1638,21 @@ fun ActiveDownloadingCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = if (isFailed) "Error de conexión" else item.formattedSpeed,
+                            text = if (isFailed) {
+                                item.failureReason?.takeIf { it.isNotBlank() } ?: "No se pudo completar"
+                            } else {
+                                item.formattedSpeed
+                            },
+                            modifier = Modifier.weight(1f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = when {
                                 isFailed -> Color(0xFFEF4444)
                                 isPaused -> Color(0xFFF59E0B)
                                 else -> MaterialTheme.colorScheme.primary
-                            }
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "${item.progress}%",

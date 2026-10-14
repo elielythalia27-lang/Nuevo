@@ -1,5 +1,6 @@
 package com.example.utils
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -36,33 +37,39 @@ object BatteryOptimizationHelper {
     }
 
     /**
-     * Solicita la exención de optimización de batería.
-     * Intenta primero el diálogo directo ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS con el paquete de la app.
-     * Si no está disponible o falla, abre la pantalla general ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS.
+     * Devuelve las pantallas del sistema adecuadas para cambiar la exención real.
+     * Para activar, intenta primero el diálogo específico; para desactivar, abre la lista
+     * del sistema (Android no permite revocar esta exención directamente desde una app).
      */
-    fun requestIgnoreBatteryOptimizations(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            try {
-                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = Uri.parse("package:${context.packageName}")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } catch (e: Exception) {
-                Log.w(TAG, "ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS failed, trying settings screen fallback", e)
-                try {
-                    val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(fallbackIntent)
-                } catch (fallbackEx: Exception) {
-                    Log.e(TAG, "ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS also failed, opening app details", fallbackEx)
-                    openAppDetailsSettings(context)
-                }
-            }
-        } else {
-            openAppDetailsSettings(context)
+    fun getBatterySettingsIntents(context: Context, enableExemption: Boolean): List<Intent> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return emptyList()
+
+        val packageUri = Uri.fromParts("package", context.packageName, null)
+        val batteryList = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        val appDetails = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = packageUri
         }
+        if (!enableExemption) return listOf(batteryList, appDetails)
+
+        val requestExemption = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = packageUri
+        }
+        return listOf(requestExemption, batteryList, appDetails)
+    }
+
+    /** Compatibilidad para llamadas fuera de Compose; la UI principal usa ActivityResultLauncher. */
+    fun requestIgnoreBatteryOptimizations(context: Context) {
+        val intents = getBatterySettingsIntents(context, enableExemption = true)
+        for (intent in intents) {
+            try {
+                if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo abrir ${intent.action}; probando la siguiente pantalla", e)
+            }
+        }
+        openAppDetailsSettings(context)
     }
 
     /**
@@ -71,8 +78,8 @@ object BatteryOptimizationHelper {
     fun openAppDetailsSettings(context: Context) {
         try {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                data = Uri.fromParts("package", context.packageName, null)
+                if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (e: Exception) {

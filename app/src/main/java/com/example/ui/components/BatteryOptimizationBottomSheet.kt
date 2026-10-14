@@ -65,7 +65,6 @@ fun BatteryOptimizationBottomSheet(
     notificationsGranted: Boolean,
     storageGranted: Boolean,
     batteryExempt: Boolean,
-    autoStartConfigured: Boolean,
     onRequestNotifications: () -> Unit,
     onRequestStorage: () -> Unit,
     onRequestBatteryExemption: () -> Unit,
@@ -209,7 +208,7 @@ fun BatteryOptimizationBottomSheet(
             // 3. Tarjeta: Batería sin restricciones
             PermissionCheckRowCard(
                 title = "Batería sin restricciones",
-                subtitle = "Evita que el sistema detenga la descarga al apagar la pantalla.",
+                subtitle = "Exención estándar de Android; algunos fabricantes pueden aplicar controles propios.",
                 isReady = batteryExempt,
                 pendingIcon = Icons.Rounded.BatteryAlert,
                 isDarkTheme = isDarkTheme,
@@ -275,7 +274,7 @@ fun BatteryOptimizationBottomSheet(
                             }
                         }
                         Text(
-                            text = "Recomendado en Xiaomi/Redmi para descargas de fondo.",
+                            text = "Opcional; la app no puede verificarlo en todos los fabricantes.",
                             fontSize = 11.5.sp,
                             color = textSecondary
                         )
@@ -286,7 +285,7 @@ fun BatteryOptimizationBottomSheet(
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = if (autoStartConfigured) "Listo" else "Ajustes",
+                            text = "Ajustes",
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary

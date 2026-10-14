@@ -37,17 +37,23 @@ class DownloadUidtJobService : JobService() {
 
         val job = scope.launch {
             try {
-                withTimeoutOrNull(2500L) { helper.awaitLoaded() }
+                val loaded = withTimeoutOrNull(15_000L) {
+                    helper.awaitLoaded()
+                    true
+                } ?: false
+                if (!loaded) {
+                    // No perder el trabajo por una lectura lenta de DataStore al iniciar proceso.
+                    jobFinished(params, true)
+                    return@launch
+                }
                 val item = helper.getItem(itemId)
                 if (item == null) {
                     jobFinished(params, false)
                     return@launch
                 }
-                // Si el sistema reprograma este job (onStopJob devolvió true) el item ya quedó
-                // en PAUSED. Sin esta comprobación el job arrancaba y descargaba en silencio un
-                // vídeo que el usuario (o el propio sistema) había pausado, gastando datos sin
-                // consentimiento y sin notificación. Solo se descarga si está marcada DOWNLOADING;
-                // todas las rutas legítimas (iniciar, reanudar, recuperación) la marcan antes.
+                // Solo se ejecuta un elemento marcado DOWNLOADING: una pausa o cancelación del
+                // usuario cambia el estado antes de cancelar el job; un stop del sistema conserva
+                // DOWNLOADING para que JobScheduler pueda reintentarlo desde el archivo parcial.
                 if (item.status != DownloadStatus.DOWNLOADING) {
                     jobFinished(params, false)
                     return@launch
@@ -81,29 +87,39 @@ class DownloadUidtJobService : JobService() {
 
     override fun onStopJob(params: JobParameters): Boolean {
         jobs.remove(params.jobId)?.cancel()
-        val itemId = params.extras.getString(EXTRA_ITEM_ID)
-        if (itemId != null) {
-            try { connections.remove(itemId)?.disconnect() } catch (_: Exception) {}
-            // State is persisted continuously, so a system stop can safely resume later.
-            val helper = DownloadHelper.getActiveInstance(applicationContext)
-            helper.markStoppedForUidt(itemId)
-            val paused = helper.getItem(itemId)
-            if (paused == null) {
-                // Cancelada: el job la deja "detached" en la bandeja; hay que quitarla aquí, ya sin job.
-                try {
-                    (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager)
-                        .cancel(notificationId(itemId))
-                } catch (_: Exception) {}
-            }
-            if (paused != null && paused.status == DownloadStatus.PAUSED) {
-                val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                manager.notify(
-                    notificationId(itemId),
-                    NotificationUtils.buildPausedNotification(applicationContext, paused)
+        val itemId = params.extras.getString(EXTRA_ITEM_ID) ?: return false
+        try { connections.remove(itemId)?.disconnect() } catch (_: Exception) {}
+
+        val helper = DownloadHelper.getActiveInstance(applicationContext)
+        val wasDownloading = helper.getItem(itemId)?.status == DownloadStatus.DOWNLOADING
+        // Un alto del sistema debe seguir marcado como activo para que el UIDT reprogramado
+        // continúe desde el .part. Las pausas/cancelaciones del usuario ya cambiaron el estado antes.
+        val stopped = helper.markStoppedForUidt(
+            itemId,
+            keepRunningForSystemRetry = wasDownloading
+        )
+        val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        if (stopped == null) {
+            // Cancelada: el job la deja "detached" en la bandeja; hay que quitarla aquí, ya sin job.
+            try { manager.cancel(notificationId(itemId)) } catch (_: Exception) {}
+        } else if (stopped.status == DownloadStatus.PAUSED) {
+            manager.notify(
+                notificationId(itemId),
+                NotificationUtils.buildPausedNotification(applicationContext, stopped)
+            )
+        } else if (wasDownloading) {
+            manager.notify(
+                notificationId(itemId),
+                NotificationUtils.buildProgressNotification(
+                    applicationContext,
+                    stopped,
+                    stopped.progress,
+                    0L,
+                    0L
                 )
-            }
+            )
         }
-        return true
+        return wasDownloading
     }
 
     /**
@@ -125,6 +141,7 @@ class DownloadUidtJobService : JobService() {
                     val failed = live.copy(
                         status = DownloadStatus.FAILED,
                         failedByNetwork = true,
+                        failureReason = "Conexión inestable. Toca Reintentar.",
                         speedBytesPerSec = 0L,
                         etaSeconds = 0L
                     )
@@ -270,6 +287,8 @@ class DownloadUidtJobService : JobService() {
                 progress = 100,
                 downloadedBytes = destination.length(),
                 totalBytes = destination.length(),
+                failedByNetwork = false,
+                failureReason = null,
                 speedBytesPerSec = 0L,
                 etaSeconds = 0L
             )
@@ -307,7 +326,13 @@ class DownloadUidtJobService : JobService() {
             }
             val live = helper.getItem(item.id) ?: item
             if (live.status != DownloadStatus.PAUSED) {
-                val failed = live.copy(status = DownloadStatus.FAILED, speedBytesPerSec = 0L, etaSeconds = 0L)
+                val failed = live.copy(
+                    status = DownloadStatus.FAILED,
+                    failedByNetwork = false,
+                    failureReason = e.message?.take(160) ?: "No se pudo completar la descarga.",
+                    speedBytesPerSec = 0L,
+                    etaSeconds = 0L
+                )
                 helper.updateAndPersist(failed)
                 notificationManager.notify(
                     notificationId(item.id),

@@ -65,8 +65,8 @@ class DownloadForegroundService : Service() {
             return true
         }
 
-        fun startDownload(context: Context, item: DownloadItem) {
-            if (blockedByVpn(context, item.id)) return
+        fun startDownload(context: Context, item: DownloadItem): Boolean {
+            if (blockedByVpn(context, item.id)) return false
             // Android 14+: long user-initiated downloads use UIDT instead of
             // a dataSync foreground service, avoiding Android 15's 6-hour quota.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -74,8 +74,9 @@ class DownloadForegroundService : Service() {
                     val helper = DownloadHelper.getActiveInstance(context.applicationContext)
                     helper.updateAndPersist(item.copy(status = DownloadStatus.PENDING, speedBytesPerSec = 0L, etaSeconds = 0L))
                     AppToastManager.show("Android no permitió iniciar la transferencia en segundo plano. Se reintentará cuando sea posible.", ToastType.INFO)
+                    return false
                 }
-                return
+                return true
             }
 
             val intent = Intent(context, DownloadForegroundService::class.java).apply {
@@ -88,7 +89,19 @@ class DownloadForegroundService : Service() {
                 putExtra("extra_type", item.type)
                 putExtra("extra_cover_url", item.coverUrl)
             }
-            startForegroundServiceCompat(context, intent)
+            if (!startForegroundServiceCompat(context, intent)) {
+                DownloadHelper.getActiveInstance(context.applicationContext).updateAndPersist(
+                    item.copy(
+                        status = DownloadStatus.PENDING,
+                        speedBytesPerSec = 0L,
+                        etaSeconds = 0L,
+                        failureReason = "Android no permitió iniciar el servicio."
+                    )
+                )
+                AppToastManager.show("Android bloqueó el inicio en segundo plano; quedó en cola.", ToastType.WARNING)
+                return false
+            }
+            return true
         }
 
         fun pauseDownload(context: Context, downloadId: String) {
@@ -115,6 +128,12 @@ class DownloadForegroundService : Service() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 val helper = DownloadHelper.getActiveInstance(context.applicationContext)
                 val item = helper.getItem(downloadId) ?: return
+                // Las acciones desde una notificación llegan aquí sin pasar por el ViewModel.
+                // Cambiar primero el estado es imprescindible: el UIDT rechaza ejecutar un item PAUSED.
+                if (item.status != DownloadStatus.DOWNLOADING) {
+                    helper.resumeDownload(item)
+                    return
+                }
                 if (!DownloadUidtJobService.schedule(context, item)) {
                     // El sistema rechazó programar el UIDT: dejarlo en cola en vez de dejarlo
                     // marcado como "descargando" sin motor detrás; se reintentará al liberarse
@@ -128,7 +147,20 @@ class DownloadForegroundService : Service() {
                 action = ACTION_RESUME_DOWNLOAD
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            startForegroundServiceCompat(context, intent)
+            if (!startForegroundServiceCompat(context, intent)) {
+                val helper = DownloadHelper.getActiveInstance(context.applicationContext)
+                helper.getItem(downloadId)?.let { current ->
+                    helper.updateAndPersist(
+                        current.copy(
+                            status = DownloadStatus.PENDING,
+                            speedBytesPerSec = 0L,
+                            etaSeconds = 0L,
+                            failureReason = "Android no permitió reanudar el servicio."
+                        )
+                    )
+                }
+                AppToastManager.show("Android bloqueó la reanudación; quedó en cola.", ToastType.WARNING)
+            }
         }
 
         fun cancelDownload(context: Context, downloadId: String, localFilePath: String? = null) {
@@ -249,14 +281,18 @@ class DownloadForegroundService : Service() {
 
         private fun progressNidStatic(id: String): Int = (id.hashCode() and 0x0FFFFFFF) + 1
 
-        private fun startForegroundServiceCompat(context: Context, intent: Intent) {
-            try {
+        private fun startForegroundServiceCompat(context: Context, intent: Intent): Boolean {
+            return try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(intent)
                 } else {
                     context.startService(intent)
                 }
-            } catch (_: Exception) {}
+                true
+            } catch (error: Exception) {
+                Log.e("DownloadService", "No se pudo iniciar el servicio de descarga", error)
+                false
+            }
         }
 
         /**
@@ -442,11 +478,14 @@ class DownloadForegroundService : Service() {
             return@synchronized
         }
 
-        // Solo se quita la notificación "Fallida". La de pausa comparte ID con la de progreso.
+        // Retirar restos del intento anterior antes de publicar el nuevo progreso.
         notificationManager.cancel(failedNid(item.id))
+        notificationManager.cancel(doneNid(item.id))
 
         val running = item.copy(
             status = DownloadStatus.DOWNLOADING,
+            failedByNetwork = false,
+            failureReason = null,
             speedBytesPerSec = 0L,
             etaSeconds = 0L
         )
@@ -800,6 +839,8 @@ class DownloadForegroundService : Service() {
             progress = 100,
             downloadedBytes = finalSize,
             totalBytes = finalSize,
+            failedByNetwork = false,
+            failureReason = null,
             speedBytesPerSec = 0L,
             etaSeconds = 0L
         )
@@ -838,6 +879,7 @@ class DownloadForegroundService : Service() {
         val failed = live.copy(
             status = DownloadStatus.FAILED,
             failedByNetwork = byNetwork,
+            failureReason = errorReason.take(160),
             speedBytesPerSec = 0L,
             etaSeconds = 0L
         )
@@ -910,6 +952,7 @@ class DownloadForegroundService : Service() {
                 helper.removeItem(id)
                 notificationManager.cancel(progressNid(id))
                 notificationManager.cancel(pausedNid(id))
+                notificationManager.cancel(doneNid(id))
                 notificationManager.cancel(failedNid(id))
                 // El hilo ya terminó (join), así que nadie sigue escribiendo: se borra el archivo parcial
                 if (!localFilePath.isNullOrBlank()) {

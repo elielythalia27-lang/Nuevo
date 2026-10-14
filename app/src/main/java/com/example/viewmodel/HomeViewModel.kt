@@ -422,16 +422,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     resumeDownload(existing)
                     return
                 }
-                DownloadStatus.DOWNLOADING, DownloadStatus.PENDING, DownloadStatus.COMPLETED -> {
-                    return
+                DownloadStatus.COMPLETED -> {
+                    val completedFile = File(existing.localFilePath)
+                    if (completedFile.exists() && completedFile.length() > 0L) return
+                    // El archivo pudo borrarse desde el gestor del teléfono; permitir recuperarlo.
                 }
+                DownloadStatus.DOWNLOADING, DownloadStatus.PENDING -> return
                 else -> Unit
             }
         }
 
         _uiState.update { state ->
             val isAlreadyActive = state.downloads.any {
-                it.id == pelicula.id && it.status != DownloadStatus.CANCELLED
+                it.id == pelicula.id &&
+                    it.status != DownloadStatus.CANCELLED &&
+                    it.status != DownloadStatus.COMPLETED
             }
             if (isAlreadyActive) return@update state
 

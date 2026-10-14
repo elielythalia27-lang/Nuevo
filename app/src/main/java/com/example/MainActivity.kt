@@ -81,6 +81,7 @@ import com.example.data.model.Pelicula
 import com.example.data.model.ThemeMode
 import com.example.ui.components.AppBottomNav
 import com.example.ui.components.rememberReduceMotionEnabled
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -351,12 +352,49 @@ fun MainAppNavigation(
         mutableStateOf(PermissionHelper.hasStoragePermission(context))
     }
 
+    fun refreshDevicePermissionStates() {
+        isBatteryExempt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+        hasNotificationsPermission = PermissionHelper.hasNotificationPermission(context)
+        hasStoragePermission = PermissionHelper.hasStoragePermission(context)
+    }
+
+    var batterySettingsReturnCount by remember { mutableIntStateOf(0) }
+    val batterySettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshDevicePermissionStates()
+        batterySettingsReturnCount++
+    }
+
+    fun openBatterySettings(enableExemption: Boolean) {
+        viewModel.setBatteryOptLastPromptTimestamp(System.currentTimeMillis())
+        val intents = BatteryOptimizationHelper.getBatterySettingsIntents(context, enableExemption)
+        for (intent in intents) {
+            try {
+                batterySettingsLauncher.launch(intent)
+                return
+            } catch (_: Exception) {
+                // Intenta la pantalla general de optimización y, por último, Información de la app.
+            }
+        }
+        refreshDevicePermissionStates()
+        Toast.makeText(context, "No se pudieron abrir los ajustes de batería de Android.", Toast.LENGTH_LONG).show()
+    }
+
+    LaunchedEffect(batterySettingsReturnCount) {
+        if (batterySettingsReturnCount > 0) {
+            // Algunos fabricantes aplican el cambio después de devolver el resultado de Ajustes.
+            delay(250L)
+            refreshDevicePermissionStates()
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
+                refreshDevicePermissionStates()
+            }
             if (event == Lifecycle.Event.ON_RESUME) {
-                isBatteryExempt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
-                hasNotificationsPermission = PermissionHelper.hasNotificationPermission(context)
-                hasStoragePermission = PermissionHelper.hasStoragePermission(context)
                 viewModel.recoverDownloadsWhenVisible()
             }
         }
@@ -368,23 +406,31 @@ fun MainAppNavigation(
 
     val batteryOptDontShowAgain by viewModel.batteryOptDontShowAgain.collectAsStateWithLifecycle(initialValue = false)
     val batteryOptLastPromptTimestamp by viewModel.batteryOptLastPromptTimestamp.collectAsStateWithLifecycle(initialValue = 0L)
-    val autoStartConfigured by viewModel.autoStartConfigured.collectAsStateWithLifecycle(initialValue = false)
     val showBatteryDownloadNotice by viewModel.showBatteryDownloadNotice.collectAsStateWithLifecycle()
 
     var showBatteryBottomSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(isBatteryExempt, hasNotificationsPermission, hasStoragePermission, batteryOptDontShowAgain, batteryOptLastPromptTimestamp, uiState.activeDownloadsCount) {
+    LaunchedEffect(
+        isBatteryExempt,
+        hasNotificationsPermission,
+        hasStoragePermission,
+        batteryOptDontShowAgain,
+        batteryOptLastPromptTimestamp,
+        uiState.downloads
+    ) {
         val hasPendingSettings = !isBatteryExempt || !hasNotificationsPermission || !hasStoragePermission
-        if (hasPendingSettings && !batteryOptDontShowAgain && uiState.activeDownloadsCount == 0) {
-            val now = System.currentTimeMillis()
-            val threeDaysMs = 3L * 24L * 60L * 60L * 1000L
-            val shouldShow = batteryOptLastPromptTimestamp == 0L || (now - batteryOptLastPromptTimestamp >= threeDaysMs)
-            if (shouldShow) {
-                showBatteryBottomSheet = true
-            }
-        } else if (!hasPendingSettings) {
-            showBatteryBottomSheet = false
-        }
+        val hasDownloadWork = uiState.downloads.any { it.status.isInProgressOrQueued }
+        val now = System.currentTimeMillis()
+        val threeDaysMs = 3L * 24L * 60L * 60L * 1000L
+        val promptIntervalElapsed = batteryOptLastPromptTimestamp == 0L ||
+            now - batteryOptLastPromptTimestamp >= threeDaysMs
+
+        // Actualiza tanto al aparecer como al desaparecer el permiso; respeta el "no volver a mostrar"
+        // y no interrumpe una descarga o una cola activa.
+        showBatteryBottomSheet = hasPendingSettings &&
+            !batteryOptDontShowAgain &&
+            !hasDownloadWork &&
+            promptIntervalElapsed
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -413,12 +459,6 @@ fun MainAppNavigation(
                 viewModel.startDownload(it)
                 pendingDownloadPelicula = null
             }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        if (!PermissionHelper.hasAllRequiredPermissions(context)) {
-            showBatteryBottomSheet = true
         }
     }
 
@@ -660,19 +700,16 @@ fun MainAppNavigation(
                                     wifiOnly = uiState.wifiOnly,
                                     onWifiOnlyChange = { viewModel.setWifiOnly(it) },
                                     isBatteryExempt = isBatteryExempt,
-                                    onRequestBatteryExemption = {
-                                        BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                                    onBatteryExemptionChange = { enableExemption ->
+                                        openBatterySettings(enableExemption)
                                     },
                                     onOpenAutoStartSettings = {
-                                        viewModel.setAutoStartConfigured(true)
                                         BatteryOptimizationHelper.openAutoStartOrAppDetails(context)
                                     },
                                     notificationsGranted = hasNotificationsPermission,
                                     onRequestNotifications = {
                                         permissionLauncher.launch(requiredPermissions.toTypedArray())
                                     },
-                                    autoStartConfigured = autoStartConfigured,
-                                    onAutoStartConfiguredChange = { viewModel.setAutoStartConfigured(it) },
                                     storageGranted = hasStoragePermission,
                                     onRequestStorage = {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -745,7 +782,7 @@ fun MainAppNavigation(
                         isDarkTheme = isDark,
                         onAllowClick = {
                             viewModel.dismissBatteryDownloadNotice()
-                            BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                            openBatterySettings(enableExemption = true)
                         },
                         onDismiss = {
                             viewModel.dismissBatteryDownloadNotice()
@@ -762,7 +799,6 @@ fun MainAppNavigation(
                             notificationsGranted = hasNotificationsPermission,
                             storageGranted = hasStoragePermission,
                             batteryExempt = isBatteryExempt,
-                            autoStartConfigured = autoStartConfigured,
                             onRequestNotifications = {
                                 permissionLauncher.launch(requiredPermissions.toTypedArray())
                             },
@@ -774,10 +810,9 @@ fun MainAppNavigation(
                                 }
                             },
                             onRequestBatteryExemption = {
-                                BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                                openBatterySettings(enableExemption = true)
                             },
                             onOpenAutoStart = {
-                                viewModel.setAutoStartConfigured(true)
                                 BatteryOptimizationHelper.openAutoStartOrAppDetails(context)
                             },
                             onDismissClick = { dontShowAgain ->
